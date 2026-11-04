@@ -174,7 +174,7 @@ docker compose up -d
 | 项 | 说明 |
 |---|---|
 | 物理打印机验证 | 本机未连接打印机，打印链路通过模拟 CUPS 命令验证；交付到 NAS 后需做真机测试 |
-| Docker 镜像构建 | 本机 Docker daemon（OrbStack）不可用，未执行实际 `docker build`；Dockerfile 与入口脚本已完成 |
+| Docker 镜像构建 | Docker daemon 可用，但本机访问 Docker Hub 拉取基础镜像超时，未完成实际 `docker build`；Dockerfile 与入口脚本已完成，需在可访问镜像源的构建机验证 |
 | 扫描 | P1 收尾项，当前为占位接口；brscan4 驱动打包后补全 |
 | 备份/恢复 | 规划在 P1.1 |
 | HEIC / TIFF / WPS | 后续版本（P1 核心格式为 PDF/JPEG/PNG/WebP/Office/PostScript） |

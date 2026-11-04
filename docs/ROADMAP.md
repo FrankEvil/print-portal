@@ -55,7 +55,7 @@
 
 ### 系统与部署
 
-- [x] 一体化 CUPS 容器（Dockerfile / compose 已提供，本机 Docker daemon 不可用未实测）
+- [x] 一体化 CUPS 容器（Dockerfile / compose 已提供；本机 Docker Hub 拉取超时，未完成镜像构建验证）
 - [x] 端口 8088 / 8631
 - [x] USB 挂载
 - [x] 配置持久化
