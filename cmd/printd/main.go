@@ -20,6 +20,7 @@ import (
 	"github.com/liuzhaojun/print-portal/internal/driver"
 	"github.com/liuzhaojun/print-portal/internal/job"
 	"github.com/liuzhaojun/print-portal/internal/printer"
+	"github.com/liuzhaojun/print-portal/internal/scan"
 	"github.com/liuzhaojun/print-portal/internal/storage"
 )
 
@@ -61,6 +62,7 @@ func main() {
 	printerService := printer.NewService(store, cupsClient)
 	driverService := driver.NewService(store, cupsClient, cfg.DataDir)
 	discoveryService := discovery.NewService(store, cupsClient)
+	scanService := scan.NewService(store, cfg.DataDir, cups.ExecRunner{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -78,7 +80,7 @@ func main() {
 		}
 	}()
 
-	server := api.New(cfg, store, cupsClient, jobManager, printerService, driverService, discoveryService, logger)
+	server := api.New(cfg, store, cupsClient, jobManager, printerService, driverService, discoveryService, scanService, logger)
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           server.Handler(),

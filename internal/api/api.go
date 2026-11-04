@@ -20,6 +20,7 @@ import (
 	"github.com/liuzhaojun/print-portal/internal/driver"
 	"github.com/liuzhaojun/print-portal/internal/job"
 	"github.com/liuzhaojun/print-portal/internal/printer"
+	"github.com/liuzhaojun/print-portal/internal/scan"
 	"github.com/liuzhaojun/print-portal/internal/storage"
 )
 
@@ -32,6 +33,7 @@ type Server struct {
 	printers  *printer.Service
 	drivers   *driver.Service
 	discovery *discovery.Service
+	scans     *scan.Service
 	logger    *log.Logger
 	mux       *http.ServeMux
 }
@@ -44,6 +46,7 @@ func New(
 	printers *printer.Service,
 	drivers *driver.Service,
 	discoverySvc *discovery.Service,
+	scanSvc *scan.Service,
 	logger *log.Logger,
 ) *Server {
 	s := &Server{
@@ -54,6 +57,7 @@ func New(
 		printers:  printers,
 		drivers:   drivers,
 		discovery: discoverySvc,
+		scans:     scanSvc,
 		logger:    logger,
 		mux:       http.NewServeMux(),
 	}
@@ -74,6 +78,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/jobs/{id}/retry", s.handleRetryJob)
 	s.mux.HandleFunc("GET /api/scanners", s.handleScanners)
 	s.mux.HandleFunc("POST /api/scan", s.handleScan)
+	s.mux.HandleFunc("GET /api/scans/{id}", s.handleGetScan)
+	s.mux.HandleFunc("GET /api/scans/{id}/download", s.handleDownloadScan)
 
 	// Admin API (ADMIN_TOKEN).
 	s.admin("GET /api/admin/overview", s.handleOverview)

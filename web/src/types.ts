@@ -117,3 +117,20 @@ export interface Device {
 export interface ApiError {
   error: { code: string; message: string }
 }
+
+export interface Scanner {
+  name: string
+  uri: string
+}
+
+export interface ScanJob {
+  id: number
+  scanner: string
+  filename: string
+  format: string
+  resolution: number
+  color_mode: string
+  status: string
+  created_at: string
+  updated_at: string
+}

@@ -68,8 +68,14 @@ exit 0
 EOF
 cat > "$FAKE/scanimage" <<'EOF'
 #!/bin/sh
-echo "no scanners" >&2
-exit 1
+case "$*" in
+  *" -L"*) echo "device \`test:dev1' is a Test Scanner" ;;
+  *"--output-file="*)
+    out=$(echo "$*" | sed -n 's/.*--output-file=\([^ ]*\).*/\1/p')
+    printf '%%PDF-1.4\n' > "$out"
+    ;;
+  *) exit 0 ;;
+esac
 EOF
 for tool in cupsenable cupsdisable cupsaccept cupsreject cancel pkill; do
   printf '#!/bin/sh\nexit 0\n' > "$FAKE/$tool"
@@ -181,6 +187,16 @@ curl -fsS "http://127.0.0.1:18088/api/admin/jobs" -H "X-Admin-Token: testtoken" 
 
 echo "== app logs =="
 curl -fsS "http://127.0.0.1:18088/api/admin/logs" -H "X-Admin-Token: testtoken" | grep -q '"lines"' || fail "app logs"
+
+echo "== scanners =="
+curl -fsS "http://127.0.0.1:18088/api/scanners" | grep -q 'Test Scanner' || fail "scanners"
+
+echo "== scan and download =="
+SCAN=$(curl -fsS -X POST "http://127.0.0.1:18088/api/scan" -H 'Content-Type: application/json' \
+  -d '{"scanner":"test:dev1","format":"pdf","resolution":300,"color_mode":"color"}')
+echo "$SCAN" | grep -q '"status":"completed"' || fail "scan status"
+SCAN_ID=$(echo "$SCAN" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+curl -fsS "http://127.0.0.1:18088/api/scans/$SCAN_ID/download" | grep -q '%PDF' || fail "scan download"
 
 echo "== unauthorized admin =="
 CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18088/api/admin/overview")

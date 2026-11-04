@@ -60,7 +60,7 @@ web/src/views/ScanView.vue      扫描（P1 收尾占位）
 | 9 | 暂停/恢复/取消/测试打印 | ✅ 实现 | 双队列操作 + 内置测试页 PDF |
 | 10 | 显示 CUPS 版本、状态、队列、任务 | ✅ 实现 | `/api/admin/cups/status`、任务列表 |
 | 11 | 设备发现并创建队列 | ✅ 实现 | `lpinfo -v` 发现 + 自动匹配驱动；mDNS 由 CUPS/avahi 后端支持 |
-| 12 | 扫描仪发现并扫描 PDF | ⏳ P1 收尾 | 接口占位；USB 扫描依赖 brscan4，未通过则顺延 P1.1 |
+| 12 | 扫描仪发现并扫描 PDF | ✅ 实现（驱动待验证） | 扫描页 + `/api/scan` + 预览/下载；USB 扫描依赖 brscan4，容器内打包验证待做 |
 | 13 | CUPS 配置修改校验/备份/回滚 | ✅ 实现 | `cupsd -t` 校验、时间戳备份、reload 失败自动恢复 |
 | 14 | 重启容器配置与任务历史不丢 | ✅ 配置就绪 | SQLite/PPD/drivers 均在持久卷；未在本机 Docker 实测 |
 | 15 | 局域网外不可访问 | ✅ 部署配置 | compose 绑定内网 IP，CUPS 仅监听内网端口 |
@@ -191,7 +191,7 @@ docker compose up -d
 |---|---|
 | 物理打印机验证 | 本机未连接打印机，打印链路通过模拟 CUPS 命令验证；交付到 NAS 后需做真机测试 |
 | Docker 镜像构建 | Docker daemon 可用，但本机访问 Docker Hub 拉取基础镜像超时，未完成实际 `docker build`；Dockerfile 与入口脚本已完成，需在可访问镜像源的构建机验证 |
-| 扫描 | P1 收尾项，当前为占位接口；brscan4 驱动打包后补全 |
+| 扫描 | 扫描服务/页面/API 已实现；USB 扫描所需 brscan4 驱动的容器内打包与真机验证待做 |
 | 备份/恢复 | 规划在 P1.1 |
 | HEIC / TIFF / WPS | 后续版本（P1 核心格式为 PDF/JPEG/PNG/WebP/Office/PostScript） |
 | 英文界面 | 后续版本（P1 中文 + 深色模式） |

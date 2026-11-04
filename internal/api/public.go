@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/liuzhaojun/print-portal/internal/scan"
 	"github.com/liuzhaojun/print-portal/internal/storage"
 )
 
@@ -299,7 +300,50 @@ func (s *Server) handleScanners(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
-	writeError(w, http.StatusNotImplemented, "not_implemented", "扫描功能为 P1 收尾项，待 brscan4 驱动验证")
+	var params scan.Params
+	if err := decodeJSON(r, &params); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+	job, err := s.scans.Scan(ctx, params)
+	if err != nil {
+		writeError(w, http.StatusConflict, "scan_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, job)
+}
+
+func (s *Server) handleGetScan(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", err.Error())
+		return
+	}
+	job, err := s.store.GetScanJob(id)
+	if err != nil || job == nil {
+		writeError(w, http.StatusNotFound, "not_found", "scan not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
+func (s *Server) handleDownloadScan(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", err.Error())
+		return
+	}
+	job, path, err := s.scans.File(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", err.Error())
+		return
+	}
+	if r.URL.Query().Get("inline") != "1" {
+		w.Header().Set("Content-Disposition", "attachment; filename=\""+job.Filename+"\"")
+	}
+	http.ServeFile(w, r, path)
 }
 
 func sanitizeFilename(name string) string {

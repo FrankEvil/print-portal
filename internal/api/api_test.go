@@ -21,6 +21,7 @@ import (
 	"github.com/liuzhaojun/print-portal/internal/driver"
 	"github.com/liuzhaojun/print-portal/internal/job"
 	"github.com/liuzhaojun/print-portal/internal/printer"
+	"github.com/liuzhaojun/print-portal/internal/scan"
 	"github.com/liuzhaojun/print-portal/internal/storage"
 )
 
@@ -75,6 +76,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *storage.Store) {
 		printer.NewService(store, cupsClient),
 		driver.NewService(store, cupsClient, dir),
 		discovery.NewService(store, cupsClient),
+		scan.NewService(store, dir, testRunner{}),
 		log.New(io.Discard, "", 0))
 	ts := httptest.NewServer(server.Handler())
 	t.Cleanup(func() { ts.Close(); store.Close() })

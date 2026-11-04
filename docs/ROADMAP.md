@@ -42,9 +42,9 @@
 
 - [x] USB/IPP/mDNS 打印机发现（CUPS lpinfo）
 - [x] 自动匹配驱动并创建 PPD+RAW 队列
-- [ ] 扫描仪发现（P1 收尾项）
-- [ ] 扫描 PDF/JPEG/PNG（USB 扫描依赖 brscan4，未通过则顺延 P1.1）
-- [ ] 扫描预览/下载
+- [x] 扫描仪发现（`scanimage -L`，P1 收尾项）
+- [x] 扫描 PDF/JPEG/PNG（代码完成；USB 扫描依赖 brscan4，容器内驱动验证待做）
+- [x] 扫描预览/下载
 
 ### 驱动管理
 
