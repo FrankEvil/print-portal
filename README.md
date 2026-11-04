@@ -19,6 +19,7 @@
 - [路线图](docs/ROADMAP.md)
 - [部署说明](docs/DEPLOYMENT.md)
 - [技术决策记录](docs/DECISIONS.md)
+- [新工作区交接](docs/HANDOFF.md)
 
 ## 当前状态
 
