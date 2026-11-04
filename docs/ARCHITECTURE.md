@@ -10,7 +10,7 @@
 │ print-portal 容器                        │
 │                                          │
 │  Vue 3 前端（embed 到 Go 二进制）        │
-│        │ REST + SSE                      │
+│        │ REST + 轮询                     │
 │        ▼                                 │
 │  Go printd 服务                          │
 │   ├── 打印 API / 管理 API                │
@@ -38,7 +38,7 @@
 
 - 提供 REST API 和静态前端
 - 校验/保存配置
-- 管理打印任务状态机
+- 管理打印任务状态机和异步队列 worker
 - 调用转换器
 - 调用 CUPS 命令/IPP
 - 设备发现、扫描编排
@@ -71,7 +71,9 @@ internal/config/     配置
   - `/admin/settings` 设置
   - `/admin/logs` 日志
   - `/scan` 扫描
-- 手机优先、PWA、深色模式、中英文
+- 响应式：手机/平板/桌面 Chrome 共用一套代码，桌面宽屏左右分栏
+- 统一设计系统：颜色/字号/间距/圆角/阴影 token 化，组件复用
+- 深色模式、中英文；PWA 可选
 
 ### 2.3 CUPS
 
@@ -82,9 +84,21 @@ internal/config/     配置
 - PPD/RAW 队列的 URI 相同，但队列类型不同
 - USB backend 加 `flock`，跨队列串行化
 
+### 2.4 驱动管理
+
+- 驱动分三层：内置驱动（镜像只读）、驱动包（上传安装/卸载）、PPD（手动上传）
+- `drivers` 表记录驱动包元信息和状态；型号索引从 `lpinfo -m` + foomatic 实时读取，不落库
+- 状态检测：解析 PPD 的 `*cupsFilter` / `*cupsFilter2`，检查 `/usr/lib/cups/filter/` 过滤器是否存在 → `ready` / `degraded` / `missing`；保守判定，过滤器与 foomatic 数据任一缺失即 `degraded`
+- 驱动持久化：上传的驱动包与 PPD 存 `/app/data/drivers/`，容器启动时重放安装并重新检测
+- 卸载保护：打印机正在使用该驱动的 PPD 时拒绝卸载（409）
+- 自动匹配：网络 IPP Everywhere → `lpadmin -m everywhere`；USB 读取 1284DeviceID 的 MFG/MDL → 匹配 PPD；匹配不到 → 型号搜索或上传 PPD
+- 默认只预装开源可再分发驱动（brlaser、cups-filters），闭源驱动由用户上传
+
 ## 3. 打印数据流
 
-### 3.1 网页 PPD 打印
+### 3.1 网页 PPD 打印（异步队列）
+
+提交阶段只做校验、落盘和入队，立即返回 `202 + job_id`；以下转换与提交在后台 worker 中执行。
 
 ```text
 浏览器上传
@@ -128,9 +142,36 @@ USB backend（不经过过滤器）
 - 转换在独立子进程中执行，设置超时/内存限制
 - 超时或失败返回明确错误，不占用打印队列
 
+### 3.4 异步任务队列
+
+- `POST /api/print` 只做校验、落盘、写 `jobs` 表（`pending`），返回 `202 Accepted` + `job_id`，不等待转换和 CUPS
+- 后台单 worker 串行处理：`pending → converting → submitted → queued → printing → completed`
+- 失败进入 `failed` 并记录 `error_message`，支持重试
+- 服务重启时把 `converting` 状态的孤儿任务重置为 `pending`
+- 前端轮询 `GET /api/jobs/{id}` 获取状态（活动任务 1–2 秒一次）；轮询仅用于界面展示，提交成功即结束本次交互，页面关闭不影响后台任务
+- 单打印机、单 worker，任务按创建顺序串行处理，天然串行化 USB 访问；允许连续提交多个任务排队；后续可扩展转换并发
+
+### 3.5 队列分层（应用队列 vs CUPS 队列）
+
+系统有两层队列，职责不同，缺一不可：
+
+| 层 | 归属 | 负责 |
+|---|---|---|
+| 应用任务队列 | printd 自己维护（SQLite `jobs` + 单 worker） | 接单、格式转换（LibreOffice/Ghostscript）、打印参数持久化、重试、历史记录 |
+| CUPS 打印队列 | CUPS（`cupsd`） | 排队调度、过滤器链（pdftoraster 等）、USB backend 输出、打印机状态 |
+
+流程：`POST /api/print` 写入应用队列 → worker 转换 PDF → `lp -d <ppd_queue>` 提交 CUPS → 记录 `cups_job_id` → 轮询 `lpstat` 把 CUPS 状态回写应用任务。
+
+- 执行状态以 CUPS 为准，应用层只做映射与展示
+- 取消/暂停需同时作用于两层：先 `cancel` CUPS 任务，再更新应用任务状态
+- CUPS 的 `PreserveJobHistory` 只影响 CUPS 侧历史；应用历史以 SQLite 为准
+- 本地客户端直连 PPD/RAW 的任务同样存在于 CUPS，管理页任务列表需合并展示（来源标记为「本地」）
+- 无法只依赖 CUPS：Office/图片转换、原始参数、重试策略都不是 CUPS 的职责
+- 无法只维护应用队列：实际调度、IPP、过滤器链和 USB 输出必须由 CUPS 完成
+
 ## 4. 打印机与队列模型
 
-P1 只做单打印机，但数据结构支持多台：
+P1 支持多台打印机（数据结构与 UI 均支持多台）：
 
 ```text
 Printer
@@ -196,9 +237,10 @@ CUPS 系统参数：
 - 扫描仪：`scanimage -L`、`airscan-discover`
 - 发现结果缓存到 `discovered_devices`
 - 添加时自动选择驱动：
-  - IPP Everywhere → `-m everywhere`
-  - Brother USB → brlaser PPD
-  - 其他 → `lpinfo -m` 推荐
+  - IPP Everywhere → `-m everywhere`（免驱动）
+  - USB → 读取 1284DeviceID（MFG/MDL），在驱动索引中匹配 PPD
+  - 匹配不到 → 型号搜索（`lpinfo -m`）或手动上传 PPD
+- 驱动状态检测与安装管理见 2.4
 
 ## 7. 单用户与安全
 

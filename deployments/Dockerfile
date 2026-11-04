@@ -1,8 +1,7 @@
 # syntax=docker/dockerfile:1
 # -----------------------------------------------------------------------------
-# Print Portal 一体化镜像（草案）
+# Print Portal 一体化镜像
 # 包含：Vue 静态资源 + Go 服务 + CUPS + 打印驱动 + 文档转换工具
-# 说明：这是 P1 的部署骨架，CUPS 配置/入口脚本还需要在实现阶段完善。
 # -----------------------------------------------------------------------------
 
 FROM node:22-alpine AS web
@@ -14,7 +13,8 @@ RUN pnpm build
 
 FROM golang:1.23-bookworm AS build
 WORKDIR /src
-COPY go.mod ./
+COPY go.mod go.sum ./
+RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/printd ./cmd/printd
@@ -28,6 +28,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cups-filters \
     cups-ipp-utils \
     printer-driver-brlaser \
+    foomatic-db \
+    foomatic-db-compressed-ppds \
+    foomatic-db-engine \
+    imagemagick \
+    img2pdf \
     ghostscript \
     poppler-utils \
     libreoffice-core-nogui \
@@ -51,6 +56,7 @@ RUN chmod +x /entrypoint.sh
 ENV PRINTD_ADDR=:8088
 ENV CUPS_SERVER=127.0.0.1:8631
 ENV PRINT_PORTAL_STATIC=/opt/print-portal/web
+ENV PRINT_PORTAL_DATA=/app/data
 
 EXPOSE 8088 8631
 ENTRYPOINT ["/entrypoint.sh"]

@@ -1,3 +1,6 @@
+# Local toolchain
+.tools/
+
 # Go
 /printd
 /dist/
@@ -9,6 +12,7 @@
 web/node_modules/
 web/dist/
 web/.vite/
+.pnpm-store/
 
 # Local data
 data/

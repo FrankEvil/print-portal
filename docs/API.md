@@ -15,7 +15,7 @@
 {
   "error": {
     "code": "invalid_file_type",
-    "message": "仅支持 PDF、JPEG、PNG、Office 文档"
+    "message": "仅支持 PDF、JPEG、PNG、WebP、Office 文档、PostScript"
   }
 }
 ```
@@ -56,7 +56,7 @@
 
 ### POST `/api/print`
 
-上传并提交打印。只能提交到 PPD 队列。
+上传并提交打印。只能提交到 PPD 队列。异步接口：校验并落盘后立即返回，转换和提交 CUPS 由后台队列执行。
 
 `multipart/form-data` 字段：
 
@@ -72,26 +72,30 @@
 | `color_mode` | string | `monochrome` / `color` |
 | `scaling` | string | `auto` / `fit` / `fill` / `none` |
 
-响应：
+响应：`202 Accepted`
 
 ```json
 {
   "job_id": 123,
-  "status": "converting",
+  "status": "pending",
   "filename": "test.pdf",
   "printer": "Brother DCP-7060D"
 }
 ```
 
+前端通过 `GET /api/jobs/{id}` 轮询任务状态，不阻塞等待打印完成。
+
 ### GET `/api/jobs`
 
 当前任务和最近历史。
 
-查询参数：`status`、`limit`、`offset`。
+查询参数：`status`、`source`（`web`/`local`）、`limit`、`offset`。
+
+任务对象包含 `source` 字段；本地任务（`local`）无原文件，详情不提供预览。
 
 ### GET `/api/jobs/{id}`
 
-任务详情。
+任务详情。Web 任务包含打印参数与预览地址；本地任务仅含 CUPS 元数据（队列、用户、大小、状态时间线），无文件内容。
 
 ### DELETE `/api/jobs/{id}`
 
@@ -122,23 +126,27 @@
 
 ### 打印机配置
 
-#### GET `/api/admin/printer`
+#### GET `/api/admin/printers`
 
-返回单打印机配置（P1 单打印机）：
+返回打印机列表（P1 只有一台）：
 
 ```json
 {
-  "id": 1,
-  "name": "Brother DCP-7060D",
-  "model": "brother-dcp-7060d",
-  "ppd_queue": "Brother-7060d",
-  "raw_queue": "Brother-7060d-raw",
-  "device_uri": "usb://Brother/DCP-7060D?serial=...",
-  "is_default": true
+  "printers": [
+    {
+      "id": 1,
+      "name": "Brother DCP-7060D",
+      "model": "brother-dcp-7060d",
+      "ppd_queue": "Brother-7060d",
+      "raw_queue": "Brother-7060d-raw",
+      "device_uri": "usb://Brother/DCP-7060D?serial=...",
+      "is_default": true
+    }
+  ]
 }
 ```
 
-#### PUT `/api/admin/printer`
+#### PUT `/api/admin/printers/{name}`
 
 更新打印机配置；后端同步执行 `lpadmin`。
 
@@ -153,14 +161,13 @@
 }
 ```
 
-#### POST `/api/admin/printer/test`
+#### POST `/api/admin/printers/{name}/test`
 
 打印测试页。
 
 ### 打印机状态/操作
 
-- `GET /api/admin/printers`：列表（含 PPD/RAW 队列）
-- `POST /api/admin/printers`：新增
+- `POST /api/admin/printers`：新增（P1 单打印机，已存在时返回 `409`）
 - `PUT /api/admin/printers/{name}`：修改
 - `DELETE /api/admin/printers/{name}`：删除
 - `POST /api/admin/printers/{name}/pause`
@@ -184,6 +191,15 @@
   "mode": "ppd+raw"
 }
 ```
+
+### 驱动管理
+
+- `GET /api/admin/drivers`：驱动列表（名称、版本、类型、状态、型号数、许可证）
+- `POST /api/admin/drivers/install`：上传安装驱动包（deb / tar.gz）或 PPD
+- `POST /api/admin/drivers/{id}/uninstall`：卸载驱动包（内置不可卸载）
+- `POST /api/admin/drivers/{id}/refresh`：重新检测状态
+- `GET /api/admin/drivers/models?q=`：搜索支持型号（分页）
+- `GET /api/admin/drivers/{id}/models`：某驱动支持的型号
 
 ### CUPS 控制台
 

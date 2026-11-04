@@ -23,7 +23,11 @@
 
 ## 当前状态
 
-项目刚初始化：文档和脚手架完成，业务代码尚未实现。
+P1 主体功能已实现：响应式打印页、异步任务队列、打印机管理（PPD + RAW 双队列）、驱动管理、CUPS 控制台、任务管理、设置与日志。
+
+- 扫描：P1 收尾项（USB 扫描依赖 brscan4，未通过则顺延 P1.1）
+- 备份/恢复：P1.1
+- 详细交付说明与测试记录见 [docs/DELIVERY.md](docs/DELIVERY.md)
 
 ## 目录
 
@@ -43,15 +47,20 @@ docs/                产品、架构、API 文档
 - Docker（部署 CUPS 容器时需要）
 
 ```bash
-# 后端
+# 后端（需要 Go 1.23+）
 go run ./cmd/printd
 
 # 前端
 cd web
 pnpm install
 pnpm dev
+
+# 测试
+go test ./...
+./scripts/integration_test.sh
+cd web && pnpm typecheck && pnpm build
 ```
 
 ## License
 
-待定（建议 Apache-2.0 或 MIT，见 `docs/DECISIONS.md`）。
+[Apache License 2.0](LICENSE)

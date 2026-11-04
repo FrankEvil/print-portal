@@ -1,0 +1,343 @@
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { api } from '../api'
+import { toast } from '../toast'
+import type { Job, PPDOption, Printer } from '../types'
+import StatusBadge from '../components/StatusBadge.vue'
+
+const printers = ref<Printer[]>([])
+const selectedPrinter = ref<number | null>(null)
+const ppdOptions = ref<PPDOption[]>([])
+const file = ref<File | null>(null)
+const fileUrl = ref('')
+const dragging = ref(false)
+const submitting = ref(false)
+const jobs = ref<Job[]>([])
+
+const form = ref({
+  page_range: '',
+  duplex: 'one-sided',
+  copies: 1,
+  paper_size: 'A4',
+  orientation: 'portrait',
+  color_mode: 'monochrome',
+  scaling: 'auto',
+})
+
+let pollTimer: number | undefined
+
+const isPdf = computed(() => file.value?.name.toLowerCase().endsWith('.pdf'))
+const isImage = computed(() => {
+  const n = file.value?.name.toLowerCase() || ''
+  return ['.jpg', '.jpeg', '.png', '.webp'].some((ext) => n.endsWith(ext))
+})
+const hasPrinters = computed(() => printers.value.length > 0)
+
+const paperChoices = computed(() => {
+  const opt = ppdOptions.value.find((o) => o.keyword === 'PageSize' || /page size/i.test(o.text))
+  if (opt && opt.choices.length) return opt.choices
+  return ['A4', 'A5', 'Letter']
+})
+
+const supportsColor = computed(() => ppdOptions.value.some((o) => /color/i.test(o.keyword) || /color/i.test(o.text)))
+
+async function loadPPDOptions() {
+  if (!selectedPrinter.value) return
+  try {
+    const res = await api.get<{ options: PPDOption[] }>(`/api/printers/${selectedPrinter.value}/ppd-options`)
+    ppdOptions.value = res.options
+    if (!supportsColor.value) form.value.color_mode = 'monochrome'
+    if (!paperChoices.value.includes(form.value.paper_size)) form.value.paper_size = paperChoices.value[0] || 'A4'
+  } catch {
+    ppdOptions.value = []
+  }
+}
+
+watch(selectedPrinter, loadPPDOptions)
+
+async function loadPrinters() {
+  try {
+    const res = await api.get<{ printers: Printer[] }>('/api/printers')
+    printers.value = res.printers
+    if (!selectedPrinter.value && res.printers.length) {
+      const def = res.printers.find((p) => p.is_default) || res.printers[0]
+      selectedPrinter.value = def.id
+    }
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+async function loadJobs() {
+  try {
+    const res = await api.get<{ jobs: Job[] }>('/api/jobs?limit=8')
+    jobs.value = res.jobs
+    syncPolling()
+  } catch {
+    /* silent */
+  }
+}
+
+function syncPolling() {
+  const active = jobs.value.some((j) =>
+    ['pending', 'converting', 'submitted', 'queued', 'printing'].includes(j.status),
+  )
+  if (active && !pollTimer) pollTimer = window.setInterval(loadJobs, 2000)
+  if (!active && pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = undefined
+  }
+}
+
+function setFile(f: File | null) {
+  if (fileUrl.value) URL.revokeObjectURL(fileUrl.value)
+  file.value = f
+  fileUrl.value = f ? URL.createObjectURL(f) : ''
+}
+
+function onFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (input.files?.length) setFile(input.files[0])
+  input.value = ''
+}
+
+function onDrop(e: DragEvent) {
+  dragging.value = false
+  const f = e.dataTransfer?.files?.[0]
+  if (f) setFile(f)
+}
+
+async function submit() {
+  if (!file.value) return toast.error('请先选择文件')
+  if (!selectedPrinter.value) return toast.error('请先选择打印机')
+  submitting.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file.value)
+    fd.append('printer_id', String(selectedPrinter.value))
+    for (const [k, v] of Object.entries(form.value)) fd.append(k, String(v))
+    const res = await api.upload<{ job_id: number; printer: string }>('/api/print', fd)
+    toast.success(`已提交打印任务 #${res.job_id}（${res.printer}）`)
+    setFile(null)
+    await loadJobs()
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function cancelJob(id: number) {
+  try {
+    await api.del(`/api/jobs/${id}`)
+    toast.success(`任务 #${id} 已取消`)
+    await loadJobs()
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+async function retryJob(id: number) {
+  try {
+    const res = await api.post<{ job_id: number }>(`/api/jobs/${id}/retry`)
+    toast.success(`已重新提交为任务 #${res.job_id}`)
+    await loadJobs()
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function formatTime(iso: string) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+}
+
+onMounted(async () => {
+  await loadPrinters()
+  await loadPPDOptions()
+  await loadJobs()
+})
+
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
+  if (fileUrl.value) URL.revokeObjectURL(fileUrl.value)
+})
+</script>
+
+<template>
+  <main class="page">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <div>
+          <div class="brand-name">Print Portal</div>
+          <div class="brand-sub">局域网打印门户</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a href="/" class="router-link-active">打印</a>
+        <a href="/scan">扫描</a>
+        <a href="/admin">管理</a>
+      </nav>
+    </header>
+
+    <div v-if="!hasPrinters" class="card">
+      <div class="empty">
+        还没有配置打印机。请先进入
+        <router-link to="/admin/printers">管理 → 打印机</router-link>
+        添加设备。
+      </div>
+    </div>
+
+    <div v-else class="print-layout">
+      <section class="card">
+        <div class="section-head">
+          <div>
+            <h2 class="card-title">选择文件</h2>
+            <p class="card-desc">支持 PDF、图片、Word / Excel / PPT、PostScript，单次一个文件</p>
+          </div>
+        </div>
+
+        <label
+          class="dropzone"
+          :class="{ dragging }"
+          @dragover.prevent="dragging = true"
+          @dragleave.prevent="dragging = false"
+          @drop.prevent="onDrop"
+        >
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.ps" @change="onFileChange" />
+          <template v-if="!file">
+            <div class="dropzone-icon">＋</div>
+            <div><strong>拖拽文件到这里</strong>，或点击选择</div>
+            <div class="file-sub">最大 200MB</div>
+          </template>
+          <template v-else>
+            <div class="file-card" style="width: 100%">
+              <div class="file-thumb">
+                <img v-if="isImage && fileUrl" :src="fileUrl" alt="" />
+                <span v-else>{{ isPdf ? 'PDF' : 'DOC' }}</span>
+              </div>
+              <div class="file-meta">
+                <div class="file-name">{{ file.name }}</div>
+                <div class="file-sub">{{ formatSize(file.size) }} · 点击可更换文件</div>
+              </div>
+            </div>
+          </template>
+        </label>
+
+        <div v-if="file && (isPdf || isImage)" style="margin-top: 16px">
+          <iframe v-if="isPdf" :src="fileUrl" style="width: 100%; height: 360px; border: 1px solid var(--line); border-radius: 12px"></iframe>
+          <img v-else :src="fileUrl" alt="" style="width: 100%; max-height: 360px; object-fit: contain; border: 1px solid var(--line); border-radius: 12px" />
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <div>
+            <h2 class="card-title">打印设置</h2>
+            <p class="card-desc">参数会根据所选打印机的 PPD 能力生效</p>
+          </div>
+        </div>
+
+        <div class="params">
+          <div class="field full">
+            <label>打印机</label>
+            <select v-model="selectedPrinter" class="select">
+              <option v-for="p in printers" :key="p.id" :value="p.id">
+                {{ p.name }}{{ p.is_default ? '（默认）' : '' }}
+              </option>
+            </select>
+          </div>
+          <div class="field">
+            <label>页码范围</label>
+            <input v-model="form.page_range" class="input" placeholder="全部，如 1-2 或 1-5 8" />
+          </div>
+          <div class="field">
+            <label>份数</label>
+            <input v-model.number="form.copies" type="number" min="1" max="99" class="input" />
+          </div>
+          <div class="field">
+            <label>双面</label>
+            <select v-model="form.duplex" class="select">
+              <option value="one-sided">单面</option>
+              <option value="two-sided-long-edge">双面（长边翻页）</option>
+              <option value="two-sided-short-edge">双面（短边翻页）</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>纸张</label>
+            <select v-model="form.paper_size" class="select">
+              <option v-for="c in paperChoices" :key="c" :value="c">{{ c }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>方向</label>
+            <select v-model="form.orientation" class="select">
+              <option value="portrait">纵向</option>
+              <option value="landscape">横向</option>
+            </select>
+          </div>
+          <div v-if="supportsColor" class="field">
+            <label>颜色</label>
+            <select v-model="form.color_mode" class="select">
+              <option value="monochrome">黑白</option>
+              <option value="color">彩色</option>
+            </select>
+          </div>
+          <div class="field full">
+            <label>缩放</label>
+            <select v-model="form.scaling" class="select">
+              <option value="auto">自动</option>
+              <option value="fit">适应页面</option>
+              <option value="fill">填满页面</option>
+              <option value="none">原始大小</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" style="width: 100%; margin-top: 18px" :disabled="submitting || !file" @click="submit">
+          {{ submitting ? '提交中…' : '打印' }}
+        </button>
+        <p class="card-desc" style="text-align: center; margin-top: 10px">提交后即可离开，任务在后台排队处理</p>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top: 20px">
+      <div class="section-head">
+        <div>
+          <h2 class="card-title">最近任务</h2>
+          <p class="card-desc">任务进度会自动刷新</p>
+        </div>
+      </div>
+      <div v-if="!jobs.length" class="empty">暂无任务</div>
+      <div v-else class="job-list">
+        <div v-for="j in jobs" :key="j.id" class="job-item">
+          <div class="job-main">
+            <div class="job-title">#{{ j.id }} · {{ j.filename }}</div>
+            <div class="job-sub">
+              {{ j.printer_name }} · {{ j.copies }} 份 · {{ formatTime(j.created_at) }}
+              <span v-if="j.error_message" style="color: var(--danger)"> · {{ j.error_message }}</span>
+            </div>
+          </div>
+          <StatusBadge :status="j.status" />
+          <button v-if="['pending', 'converting', 'submitted', 'queued', 'printing'].includes(j.status)" class="btn btn-ghost btn-sm" @click="cancelJob(j.id)">
+            取消
+          </button>
+          <button v-if="['failed', 'cancelled'].includes(j.status) && j.source === 'web'" class="btn btn-ghost btn-sm" @click="retryJob(j.id)">
+            重试
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer" style="margin-top: 28px; text-align: center; color: var(--text-3); font-size: 12px">
+      单用户 · 局域网 · 自带 CUPS · PPD + RAW
+    </footer>
+  </main>
+</template>

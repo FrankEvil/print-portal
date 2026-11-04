@@ -28,14 +28,38 @@ CREATE TABLE printers (
 );
 ```
 
+### drivers
+
+```sql
+CREATE TABLE drivers (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT NOT NULL,            -- brlaser / escpr / hplip / ...
+  version       TEXT NOT NULL DEFAULT '',
+  kind          TEXT NOT NULL DEFAULT 'builtin',  -- builtin / package / ppd
+  source        TEXT NOT NULL DEFAULT '',         -- image / upload / download
+  package_path  TEXT NOT NULL DEFAULT '',
+  ppd_dir       TEXT NOT NULL DEFAULT '',
+  filter_dir    TEXT NOT NULL DEFAULT '',
+  state         TEXT NOT NULL DEFAULT 'missing',  -- ready / degraded / missing
+  models_count  INTEGER NOT NULL DEFAULT 0,
+  license       TEXT NOT NULL DEFAULT '',
+  installed_at  TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+```
+
+说明：型号索引（`lpinfo -m` / foomatic）实时读取并缓存，不落库，避免数千条型号数据。
+
 ### jobs
 
 ```sql
 CREATE TABLE jobs (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   printer_id      INTEGER NOT NULL,
+  source          TEXT NOT NULL DEFAULT 'web',   -- web / local
   filename        TEXT NOT NULL,
   source_ip       TEXT NOT NULL DEFAULT '',
+  cups_user       TEXT NOT NULL DEFAULT '',
   pages           INTEGER NOT NULL DEFAULT 0,
   page_range      TEXT NOT NULL DEFAULT '',
   duplex          TEXT NOT NULL DEFAULT 'one-sided',
@@ -56,6 +80,13 @@ CREATE TABLE jobs (
 
 ```text
 pending / converting / submitted / queued / printing / completed / failed / cancelled
+```
+
+来源：
+
+```text
+web    网页提交，文件已上传到应用侧，可预览、可重试
+local  本地客户端直连 PPD/RAW 队列，CUPS 任务同步而来，无原始文件
 ```
 
 ### settings

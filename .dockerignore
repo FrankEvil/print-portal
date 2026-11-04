@@ -1,0 +1,15 @@
+.git
+.gitignore
+.tools
+.pnpm-store
+data
+web/node_modules
+web/dist
+web/.vite
+*.db
+*.db-shm
+*.db-wal
+*.log
+.DS_Store
+.idea
+.vscode

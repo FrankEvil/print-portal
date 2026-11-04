@@ -1,22 +1,46 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strconv"
+	"strings"
+)
 
 // Config is the P1 runtime configuration.
 type Config struct {
 	Addr        string
-	CUPSServer  string
+	DataDir     string
+	StaticDir   string
 	AdminToken  string
 	MaxUploadMB int
+	CUPSServer  string
+	Version     string
 }
 
+// Load reads configuration from environment variables.
 func Load() Config {
 	return Config{
 		Addr:        env("PRINTD_ADDR", ":8088"),
-		CUPSServer:  env("CUPS_SERVER", "127.0.0.1:8631"),
+		DataDir:     env("PRINT_PORTAL_DATA", "data"),
+		StaticDir:   env("PRINT_PORTAL_STATIC", ""),
 		AdminToken:  env("ADMIN_TOKEN", ""),
-		MaxUploadMB: 200,
+		MaxUploadMB: envInt("MAX_UPLOAD_MB", 200),
+		CUPSServer:  env("CUPS_SERVER", "127.0.0.1:631"),
+		Version:     env("PRINT_PORTAL_VERSION", "0.1.0"),
 	}
+}
+
+// EnsureDataDir creates the data directory if it does not exist.
+func (c Config) EnsureDataDir() error {
+	if err := os.MkdirAll(c.DataDir, 0o755); err != nil {
+		return err
+	}
+	for _, sub := range []string{"uploads", "jobs", "scans", "logs", "drivers/packages", "drivers/ppd"} {
+		if err := os.MkdirAll(strings.TrimRight(c.DataDir, "/")+"/"+sub, 0o755); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func env(key, fallback string) string {
@@ -24,4 +48,16 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func envInt(key string, fallback int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return fallback
+	}
+	return n
 }

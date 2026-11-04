@@ -13,11 +13,29 @@ CREATE TABLE IF NOT EXISTS printers (
   updated_at    TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS drivers (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT NOT NULL,
+  version       TEXT NOT NULL DEFAULT '',
+  kind          TEXT NOT NULL DEFAULT 'builtin',
+  source        TEXT NOT NULL DEFAULT '',
+  package_path  TEXT NOT NULL DEFAULT '',
+  ppd_dir       TEXT NOT NULL DEFAULT '',
+  filter_dir    TEXT NOT NULL DEFAULT '',
+  state         TEXT NOT NULL DEFAULT 'missing',
+  models_count  INTEGER NOT NULL DEFAULT 0,
+  license       TEXT NOT NULL DEFAULT '',
+  installed_at  TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS jobs (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   printer_id      INTEGER NOT NULL,
+  source          TEXT NOT NULL DEFAULT 'web',
   filename        TEXT NOT NULL,
   source_ip       TEXT NOT NULL DEFAULT '',
+  cups_user       TEXT NOT NULL DEFAULT '',
   pages           INTEGER NOT NULL DEFAULT 0,
   page_range      TEXT NOT NULL DEFAULT '',
   duplex          TEXT NOT NULL DEFAULT 'one-sided',
@@ -25,9 +43,12 @@ CREATE TABLE IF NOT EXISTS jobs (
   paper_size      TEXT NOT NULL DEFAULT 'A4',
   orientation     TEXT NOT NULL DEFAULT 'portrait',
   color_mode      TEXT NOT NULL DEFAULT 'monochrome',
+  scaling         TEXT NOT NULL DEFAULT 'auto',
   status          TEXT NOT NULL DEFAULT 'pending',
   cups_job_id     TEXT NOT NULL DEFAULT '',
   error_message   TEXT NOT NULL DEFAULT '',
+  stored_path     TEXT NOT NULL DEFAULT '',
+  preview_path    TEXT NOT NULL DEFAULT '',
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL,
   FOREIGN KEY (printer_id) REFERENCES printers(id)

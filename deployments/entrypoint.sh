@@ -1,14 +1,41 @@
 #!/bin/sh
 set -eu
 
-# 说明：这是 P1 部署草案，CUPS 的 printers.conf/cupsd.conf 初始化将在实现阶段补齐。
-mkdir -p /etc/cups /var/spool/cups /var/log/cups /app/data /opt/print-portal/web
+# ---------------------------------------------------------------------------
+# Print Portal container entrypoint: CUPS (8631) + printd (8088)
+# ---------------------------------------------------------------------------
+mkdir -p /app/data /etc/cups /var/spool/cups /var/log/cups /run/cups /opt/print-portal/web
 
+# Generate a minimal cupsd.conf on first run. The file lives on the
+# cups-etc volume, so user changes survive container restarts.
 if [ ! -f /etc/cups/cupsd.conf ]; then
-  cp /usr/share/cups/cupsd.conf.default /etc/cups/cupsd.conf 2>/dev/null || true
+  cat > /etc/cups/cupsd.conf <<'EOF'
+LogLevel warn
+MaxJobs 500
+Listen 0.0.0.0:8631
+ServerName print-portal
+WebInterface No
+Browsing Off
+DefaultShared Yes
+
+<Location />
+  Order allow,deny
+  Allow all
+</Location>
+
+<Location /admin>
+  Order allow,deny
+  Allow localhost
+</Location>
+
+<Location /admin/conf>
+  Order allow,deny
+  Allow localhost
+</Location>
+EOF
 fi
 
-# CUPS 在前台启动；实际镜像应改为 s6-overlay 或 supervisord 管理。
+# Start CUPS in the foreground as a child process.
 cupsd -f &
 CUPS_PID=$!
 
@@ -18,7 +45,14 @@ cleanup() {
 }
 trap cleanup TERM INT
 
-# 等待 CUPS 就绪（后续实现中会加入健康检查）
-sleep 2
+# Wait for the scheduler before starting the web service.
+i=0
+while [ "$i" -lt 60 ]; do
+  if lpstat -r >/dev/null 2>&1; then
+    break
+  fi
+  i=$((i + 1))
+  sleep 0.5
+done
 
 exec /usr/local/bin/printd
