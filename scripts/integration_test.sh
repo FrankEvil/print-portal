@@ -99,7 +99,7 @@ curl -fsS "http://127.0.0.1:18088/healthz" | grep -q '"status":"ok"' || fail "he
 echo "== static frontend =="
 INDEX=$(curl -fsS "http://127.0.0.1:18088/")
 echo "$INDEX" | grep -qi "<div id=\"app\"" || fail "frontend index"
-ASSET=$(echo "$INDEX" | sed -n 's/.*src="\.\/\([^"]*\.js\)".*/\1/p' | head -1)
+ASSET=$(echo "$INDEX" | sed -n 's/.*src="[./]*\([^"]*\.js\)".*/\1/p' | head -1)
 [ -n "$ASSET" ] || fail "frontend asset not referenced"
 curl -fsS "http://127.0.0.1:18088/$ASSET" >/dev/null || fail "frontend asset missing: $ASSET"
 curl -fsS "http://127.0.0.1:18088/admin" | grep -qi "<div id=\"app\"" || fail "admin SPA fallback"

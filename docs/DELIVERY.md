@@ -133,6 +133,22 @@ pnpm build
 
 结果：类型检查通过，生产构建成功（输出 `web/dist`）。
 
+### 3.5 浏览器渲染检查（Chrome 156 headless）
+
+使用本机 Google Chrome 对构建产物做真实渲染截图：
+
+- 桌面打印页：[print-desktop.png](screenshots/print-desktop.png)
+- 手机打印页（390×844）：[print-mobile.png](screenshots/print-mobile.png)
+- 管理登录页：[admin-login.png](screenshots/admin-login.png)
+- 管理概览：[admin-dashboard.png](screenshots/admin-dashboard.png)
+- 打印机管理：[admin-printers.png](screenshots/admin-printers.png)
+
+检查中发现并修复：
+
+- Vite `base: './'` 导致 `/admin/*` 深链接资源 404、页面空白 → 改为 `base: '/'`
+
+结果：打印页桌面/手机布局、管理登录与后台页面均正常渲染。
+
 ## 4. 运行方式
 
 ### 4.1 本地开发
