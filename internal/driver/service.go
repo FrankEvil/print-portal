@@ -415,9 +415,6 @@ func (s *Service) Uninstall(ctx context.Context, id int64) error {
 			return err
 		}
 	}
-	if d.PPDDir != "" && d.Kind == "ppd" {
-		_ = os.RemoveAll(d.PPDDir)
-	}
 	return s.store.DeleteDriver(d.ID)
 }
 

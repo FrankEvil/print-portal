@@ -56,6 +56,7 @@ onUnmounted(() => {
         <option value="">全部状态</option>
         <option value="pending">待处理</option>
         <option value="converting">转换中</option>
+        <option value="submitted">已提交</option>
         <option value="queued">排队中</option>
         <option value="printing">打印中</option>
         <option value="completed">已完成</option>

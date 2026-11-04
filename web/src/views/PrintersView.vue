@@ -195,6 +195,8 @@ onMounted(load)
                 <button class="btn btn-ghost btn-sm" @click="action(p, 'test')">测试页</button>
                 <button class="btn btn-ghost btn-sm" @click="action(p, 'pause')">暂停</button>
                 <button class="btn btn-ghost btn-sm" @click="action(p, 'resume')">恢复</button>
+                <button class="btn btn-ghost btn-sm" @click="action(p, 'accept')">接受任务</button>
+                <button class="btn btn-ghost btn-sm" @click="action(p, 'reject')">拒绝任务</button>
                 <button class="btn btn-ghost btn-sm" @click="action(p, 'purge')">清空</button>
                 <button class="btn btn-ghost btn-sm" @click="loadOptions(p)">PPD 选项</button>
                 <button class="btn btn-danger btn-sm" @click="remove(p)">删除</button>
