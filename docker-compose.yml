@@ -1,0 +1,27 @@
+services:
+  print-portal:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+    container_name: print-portal
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "192.168.2.30:8088:8088"
+      - "192.168.2.30:8631:8631"
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - print-data:/app/data
+      - cups-etc:/etc/cups
+      - cups-spool:/var/spool/cups
+      - cups-log:/var/log/cups
+    environment:
+      ADMIN_TOKEN: "change-me"
+      PRINTD_ADDR: ":8088"
+      CUPS_SERVER: "127.0.0.1:8631"
+
+volumes:
+  print-data:
+  cups-etc:
+  cups-spool:
+  cups-log:

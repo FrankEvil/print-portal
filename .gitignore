@@ -1,0 +1,27 @@
+# Go
+/printd
+/dist/
+*.exe
+*.test
+*.out
+
+# Node
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Local data
+data/
+*.db
+*.db-shm
+*.db-wal
+*.log
+.env
+.env.local
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/

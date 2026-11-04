@@ -1,0 +1,254 @@
+# Print Portal 产品需求文档（PRD）
+
+- 版本：v0.1
+- 状态：P1 目标已确认，待开发
+- 项目：Print Portal（打印门户）
+- 目标平台：fnOS NAS（Debian 12，x86_64）
+
+## 1. 背景
+
+现有环境是一台 fnOS NAS，通过 USB 连接 Brother DCP-7060D 打印机。过去使用第三方 `cups-web` 应用（闭源、`source=thirdparty`），存在：
+
+- 网页打印机列表把主 PPD 队列错误映射到 raw 队列
+- raw 队列暴露到公网后被扫描器不断触发，打印机一直出空白页
+- 应用中心重启会重新生成 `cupsd.conf`，丢失局域网权限
+- PPD 队列处理大 PostScript 文件时，`gstoraster` 的 bbox 预处理非常慢
+- 打印机配置、地址修改依赖后台命令，页面化不足
+
+因此决定自研一个长期可维护的单用户打印门户，参考开源项目的设计，但保持架构简单。
+
+## 2. 产品目标
+
+1. 局域网手机/电脑打开网页即可打印，不需要安装驱动
+2. 管理页可配置打印机、CUPS 参数、PPD/RAW 队列，不写死地址
+3. 网页打印只走 PPD 队列，避免用户误选 raw
+4. 本地客户端可自由选择 PPD 或 RAW 连接
+5. 内置 CUPS，不依赖系统单独安装
+6. 单用户，无用户体系；管理页仅一个 `ADMIN_TOKEN`
+7. 长期可分享、可扩展、可重构 UI
+
+## 3. 用户与场景
+
+### 主要用户
+
+- 家庭/小办公室的单一管理员
+- 局域网内的手机、平板、电脑用户
+
+### 典型场景
+
+1. 手机打开网页，上传 PDF/照片，直接打印
+2. 选择页码范围、双面、份数
+3. 管理员在网页上添加新打印机、修改 IP、选择驱动
+4. Mac 本地驱动通过 RAW 队列打印大文件
+5. 管理员查看 CUPS 状态、队列、任务、日志
+6. 扫描仪自动发现，在网页扫描并下载 PDF
+
+## 4. 非目标（当前阶段）
+
+- 用户注册、登录、角色权限
+- 配额、审批、审计（以后可扩展）
+- 公网直接访问（只允许局域网/VPN）
+- 多租户
+- 邮件打印、云打印
+- 移动端原生 App
+
+## 5. 核心概念
+
+### 物理打印机
+
+一台实际设备，例如 `Brother DCP-7060D`，通过 USB 或网络连接。
+
+### 打印队列
+
+同一物理打印机可有两个队列：
+
+- **PPD 队列**：CUPS 负责格式转换，支持页码、双面等
+- **RAW 队列**：无 PPD，CUPS 原样透传，客户端负责渲染
+
+### 打印模式
+
+- **网页打印**：只使用 PPD 队列
+- **本地 PPD**：本地客户端连接 PPD 队列
+- **本地 RAW**：本地客户端连接 RAW 队列
+
+## 6. P1 功能范围
+
+### 6.1 打印页
+
+- 路由：`/`
+- 上传：点击、拖拽、手机文件/相册
+- 支持格式：
+  - PDF
+  - JPEG / PNG / WebP / HEIC / TIFF
+  - Word / Excel / PPT（LibreOffice 转 PDF）
+  - PostScript（`ps2pdf` 转 PDF）
+- 文件预览：PDF 首页缩略图、图片缩略图、页数
+- 打印参数：
+  - 全部页 / 页码范围
+  - 单面 / 双面长边 / 双面短边
+  - 份数
+  - 纸张大小 A4/A5/Letter
+  - 方向
+  - 黑白/彩色
+  - 缩放
+- 提交后状态：
+  - 转换中、已提交、排队中、打印中、已完成、失败、已取消
+- 操作：取消、重试
+- 历史任务
+- 手机 PWA、深色模式、中英文
+
+### 6.2 管理首页
+
+- 路由：`/admin`
+- `ADMIN_TOKEN` 登录/验证
+- 仪表盘：
+  - CUPS 版本、运行状态
+  - 默认打印机
+  - 打印机数量、活动任务数
+  - 最近任务
+  - 当前告警
+
+### 6.3 打印机管理
+
+- 路由：`/admin/printers`
+- 单打印机配置卡（P1 先做单台，结构支持多台）：
+  - 名称
+  - 型号/PPD
+  - PPD 队列名
+  - RAW 队列名
+  - 设备地址 `device-uri`
+  - 是否默认
+  - 是否共享
+  - 当前状态、队列长度
+  - PPD 地址、RAW 地址、二维码
+- 操作：
+  - 新增/修改/删除
+  - 修改设备地址（PPD/RAW 同步）
+  - 修改 PPD/驱动
+  - 设默认
+  - 测试打印
+  - 暂停/恢复、接受/拒绝任务、清空队列
+- 保存时后端调用 `lpadmin`
+
+### 6.4 设备发现/添加向导
+
+- 路由：`/admin/discovery`
+- 自动发现：
+  - USB：`lpinfo -v`，`usb://...`
+  - 网络 IPP/AirPrint：`ippfind`、mDNS `_ipp._tcp`、`_ipps._tcp`
+  - 扫描仪：mDNS `_uscan._tcp`、`_uscans._tcp`、`_scanner._tcp`
+- 展示：
+  - 设备名称/型号/IP/USB
+  - 设备类型（打印/扫描/一体机）
+  - 是否支持 IPP Everywhere
+- 添加：
+  - IPP Everywhere/AirPrint → `lpadmin -m everywhere`
+  - USB Brother → brlaser PPD
+  - 其他 → `lpinfo -m` 推荐
+  - 支持手动上传 PPD 作为兜底
+- 默认同时创建 PPD + RAW 队列
+
+### 6.5 扫描
+
+- 路由：`/scan`
+- 自动发现扫描仪
+- 参数：
+  - 分辨率 150/300/600 dpi
+  - 彩色/灰度/黑白
+  - PDF/JPEG/PNG
+  - 单面/双面（设备支持时）
+- 流程：扫描 → 预览 → 下载
+- 技术：`scanimage -L`、`scanimage --format=pdf`、`sane-airscan`，Brother 扫描仪可加 `brscan4`
+
+### 6.6 CUPS 控制台
+
+- 路由：`/admin/cups`
+- 状态显示：
+  - CUPS 版本、ServerName
+  - 监听端口
+  - WebInterface、DefaultShared、Browsing
+  - LogLevel、MaxJobs、MaxJobsPerPrinter
+  - MaxRequestSize、PreserveJobHistory、PreserveJobFiles
+  - 每个打印机的状态、状态原因、DeviceURI、MakeModel、PPD、队列、耗材
+- 参数配置：
+  - 上述常用参数表单
+  - PPD 默认选项：PageSize、Duplex、Resolution、InputSlot、MediaType、TonerSave
+- 高级：
+  - `cupsd.conf` / `cups-files.conf` 文本编辑
+  - 保存前 `cupsd -t` 校验
+  - 自动备份、回滚、重载
+
+### 6.7 任务管理
+
+- 路由：`/admin/jobs`
+- 活动/历史任务
+- 字段：打印机、文件、页数、单双面、份数、时间、状态
+- 操作：取消、暂停、恢复、重试、清空历史
+
+### 6.8 应用设置
+
+- 路由：`/admin/settings`
+- `ADMIN_TOKEN`
+- Web 端口
+- 上传大小
+- 允许格式
+- 临时文件保留
+- 历史保留
+- 默认打印机
+- 语言/主题
+- 二维码/访问地址
+
+### 6.9 日志与备份
+
+- `/admin/logs`：应用日志、CUPS error_log、任务日志
+- `/healthz`：健康检查
+- `/admin/backup`：导出/导入配置、数据库、PPD、cupsd.conf
+
+### 6.10 部署
+
+- 单个 Docker 容器，内置 CUPS
+- 对外端口：
+  - `8088`：Web
+  - `8631`：CUPS/IPP（本地 PPD/RAW）
+- USB 设备挂载
+- CUPS 配置/spool/日志持久化
+- 停用 cups-web，避免端口/USB 冲突
+
+## 7. PPD 与 RAW 规则
+
+- 网页：只允许 PPD 队列
+- 本地 PPD：`ipp://<nas>:8631/printers/<ppd_queue>`
+- 本地 RAW：`ipp://<nas>:8631/printers/<raw_queue>`
+- RAW 队列不支持页码/双面/份数，UI 必须提示
+- 两个队列共用 USB 时，backend 层 `flock` 串行化
+
+## 8. 安全要求
+
+- 只允许局域网访问，不做公网端口映射
+- 打印页不需要登录
+- 管理 API/页面必须 `ADMIN_TOKEN`
+- 上传类型白名单、大小限制、文件名过滤
+- 临时文件定期清理
+- CUPS 配置修改前校验、备份、可回滚
+- 不暴露 CUPS 管理密码/证书私钥到前端
+
+## 9. P1 验收标准
+
+1. 手机打开网页，上传一页 PDF 能正常打印
+2. 选择 `1-2` 页 + 双面，能只打一张纸（两页）
+3. 大 PDF 能看到转换/排队状态，不会误走 raw
+4. 网页看不到 raw 队列，也不会把主队列映射到 raw
+5. 管理页能修改打印机设备地址，PPD+RAW 队列同步更新
+6. 管理页能修改 PPD 默认选项并生效
+7. 能暂停/恢复队列、取消任务、测试打印
+8. 能显示 CUPS 版本、状态、队列、任务
+9. 设备发现页能发现局域网/USB 打印机并自动创建队列
+10. 扫描页能发现扫描仪并扫描 PDF
+11. 高级 CUPS 配置修改有校验、备份、回滚
+12. 重启容器后配置和任务历史不丢
+13. 局域网外不可访问
+
+## 10. 后续版本
+
+- P2：用户体系、配额、审计、公网/VPN、邮件打印、多租户
+- 只有在明确需要多人分享时才引入，不进入 P1
