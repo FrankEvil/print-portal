@@ -63,15 +63,27 @@ fi
 CUPS_PID=$!
 
 # CUPS creates spool files as root:lp with mode 0600 in this container setup.
-# Filters run as lp, so keep newly created job files readable by lp.
-(
-  while :; do
-    for f in /var/spool/cups/d*; do
-      [ -f "$f" ] && chmod 0644 "$f" 2>/dev/null || true
+# Filters run as lp, so keep newly created job files readable by lp. Prefer
+# inotify (no polling race); fall back to a tight chmod loop.
+if command -v inotifywait >/dev/null 2>&1; then
+  (
+    inotifywait -m -e create,moved_to --format '%w%f' /var/spool/cups 2>/dev/null |
+      while IFS= read -r f; do
+        case "$f" in
+          */d*) chmod 0644 "$f" 2>/dev/null || true ;;
+        esac
+      done
+  ) &
+else
+  (
+    while :; do
+      for f in /var/spool/cups/d*; do
+        [ -f "$f" ] && chmod 0644 "$f" 2>/dev/null || true
+      done
+      sleep 0.005
     done
-    sleep 0.05
-  done
-) &
+  ) &
+fi
 SPOOL_PERM_PID=$!
 
 cleanup() {

@@ -26,6 +26,7 @@ RUN sed -i "s|deb.debian.org|${APT_MIRROR}|g; s|security.debian.org|${APT_MIRROR
     avahi-daemon \
     libnss-mdns \
     dbus \
+    inotify-tools \
     ca-certificates \
     tzdata \
     curl \
