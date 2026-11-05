@@ -4,6 +4,7 @@ import { api } from '../api'
 import { toast } from '../toast'
 import type { AdminPrinter, Device, Model, PPDOption } from '../types'
 import StatusBadge from '../components/StatusBadge.vue'
+import SearchableSelect from '../components/SearchableSelect.vue'
 
 const printers = ref<AdminPrinter[]>([])
 const optionsFor = ref('')
@@ -26,7 +27,6 @@ const modelTotal = ref(0)
 const modelsLoading = ref(false)
 const selectedBrand = ref('')
 const selectedModel = ref('')
-const modelSearch = ref('')
 const useEverywhere = ref(false)
 const uploading = ref(false)
 const driverInput = ref<HTMLInputElement | null>(null)
@@ -40,7 +40,6 @@ const editUploading = ref(false)
 const editDriverInput = ref<HTMLInputElement | null>(null)
 const editForm = ref({ name: '', model: '', is_default: false, is_shared: true })
 const editBrand = ref('')
-const editSearch = ref('')
 
 const brands = computed(() => {
   const set = new Set<string>()
@@ -57,9 +56,16 @@ const visibleDevices = computed(() => {
 const filteredModels = computed(() => {
   let list = models.value
   if (selectedBrand.value) list = list.filter((m) => m.brand === selectedBrand.value)
-  const q = modelSearch.value.trim().toLowerCase()
-  if (q) list = list.filter((m) => `${m.brand} ${m.description} ${m.name}`.toLowerCase().includes(q))
   return list
+})
+
+const modelSelectOptions = computed(() =>
+  filteredModels.value.map((m) => ({ value: m.name, label: m.description, hint: m.brand })),
+)
+
+const selectedModelLabel = computed(() => {
+  const match = models.value.find((m) => m.name === selectedModel.value)
+  return match?.description || selectedModel.value
 })
 
 const brandMissing = computed(() => {
@@ -70,19 +76,21 @@ const brandMissing = computed(() => {
 const editModelOptions = computed(() => {
   let list = models.value
   if (editBrand.value) list = list.filter((m) => m.brand === editBrand.value)
-  const q = editSearch.value.trim().toLowerCase()
-  if (q) list = list.filter((m) => `${m.brand} ${m.description} ${m.name}`.toLowerCase().includes(q))
   return list.slice(0, 500)
 })
 
-const editModelMissing = computed(() =>
-  !!editForm.value.model && !editModelOptions.value.some((m) => m.name === editForm.value.model),
-)
 const editCurrentDriverLabel = computed(() => {
   const match = models.value.find((m) => m.name === editForm.value.model)
   return match?.description || editForm.value.model || '—'
 })
-const editNoMatch = computed(() => !!editSearch.value.trim() && editModelOptions.value.length === 0)
+
+const editModelSelectOptions = computed(() => {
+  const list = editModelOptions.value.map((m) => ({ value: m.name, label: m.description, hint: m.brand }))
+  if (editForm.value.model && !list.some((o) => o.value === editForm.value.model)) {
+    list.unshift({ value: editForm.value.model, label: `当前：${editCurrentDriverLabel.value}`, hint: '当前驱动' })
+  }
+  return list
+})
 
 const isNetworkDevice = computed(() => {
   const uri = selectedDevice.value?.device_uri || ''
@@ -137,7 +145,6 @@ function openWizard() {
   manualUri.value = ''
   selectedBrand.value = ''
   selectedModel.value = ''
-  modelSearch.value = ''
   useEverywhere.value = false
   wizardForm.value = { name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true }
   models.value = []
@@ -267,7 +274,6 @@ function openEdit(p: AdminPrinter) {
   editingPrinter.value = p
   editForm.value = { name: p.name, model: p.model, is_default: p.is_default, is_shared: p.is_shared }
   editBrand.value = ''
-  editSearch.value = ''
   if (!models.value.length) loadModels().then(syncEditBrand)
   else syncEditBrand()
 }
@@ -532,19 +538,12 @@ onMounted(load)
               </div>
               <div class="field">
                 <label>型号</label>
-                <select v-model="selectedModel" class="select" :disabled="useEverywhere">
-                  <option value="">请选择型号</option>
-                  <option v-for="m in filteredModels.slice(0, 500)" :key="m.name" :value="m.name">{{ m.description }}</option>
-                </select>
+                <SearchableSelect v-model="selectedModel" :options="modelSelectOptions" placeholder="搜索并选择型号" :disabled="useEverywhere" />
               </div>
             </div>
-            <div class="field" style="margin-top: 12px">
-              <label>搜索品牌、型号或文件名</label>
-              <input v-model="modelSearch" class="input" placeholder="例如：Brother、DCP-7060、brlaser" :disabled="useEverywhere" />
-            </div>
-            <div v-if="!useEverywhere && !filteredModels.length" class="empty">没有匹配的驱动型号，尝试上传 PPD 或更换关键词</div>
+            <div v-if="!useEverywhere && !modelSelectOptions.length" class="empty">没有匹配的驱动型号，尝试上传 PPD 或更换品牌</div>
             <div v-if="selectedModel" class="selected-driver">
-              已选择：<strong>{{ selectedModel }}</strong>
+              已选择：<strong>{{ selectedModelLabel }}</strong>
             </div>
           </template>
         </div>
@@ -624,21 +623,9 @@ onMounted(load)
             </div>
             <div class="field">
               <label>型号</label>
-              <select v-model="editForm.model" class="select">
-                <option v-if="editModelMissing" :value="editForm.model">
-                  当前：{{ editCurrentDriverLabel }}
-                </option>
-                <option v-for="m in editModelOptions" :key="m.name" :value="m.name">{{ m.description }}</option>
-              </select>
+              <SearchableSelect v-model="editForm.model" :options="editModelSelectOptions" placeholder="搜索并选择型号" />
             </div>
           </div>
-          <div class="field" style="margin-top: 12px">
-            <label>搜索型号</label>
-            <input v-model="editSearch" class="input" placeholder="品牌、型号或文件名" />
-          </div>
-          <p v-if="editNoMatch" class="admin-sub" style="margin-top: 8px; color: var(--warning)">
-            没有匹配的型号，当前驱动保持不变
-          </p>
         </section>
 
         <section class="edit-section">
