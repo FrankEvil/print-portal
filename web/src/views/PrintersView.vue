@@ -63,9 +63,17 @@ const selectedModelLabel = computed(() => {
   return match?.description || selectedModel.value
 })
 
+const deviceBrand = computed(() => {
+  const device = selectedDevice.value
+  if (!device) return ''
+  if (device.brand) return device.brand
+  const name = (device.model || device.name || '').trim()
+  const first = name.split(/\s+/)[0] || ''
+  return first === 'AirPrint' ? '' : first
+})
+
 const brandMissing = computed(() => {
-  const brand = selectedDevice.value?.brand
-  return !!brand && models.value.length > 0 && !brands.value.includes(brand)
+  return !!deviceBrand.value && models.value.length > 0 && !brands.value.includes(deviceBrand.value)
 })
 
 const editModelOptions = computed(() => {
@@ -91,6 +99,7 @@ function onWizardBrandChange() {
   if (selectedModel.value && !filteredModels.value.some((m) => m.name === selectedModel.value)) {
     selectedModel.value = ''
   }
+  autoSelectDriver()
 }
 
 function onEditBrandChange() {
@@ -119,6 +128,7 @@ async function loadModels() {
     const res = await api.get<{ models: Model[]; total: number }>('/api/admin/drivers/models?limit=5000')
     models.value = res.models
     modelTotal.value = res.total
+    autoSelectDriver()
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -211,16 +221,43 @@ function openWizard() {
 function chooseDevice(d: Device) {
   selectedDevice.value = d
   manualMode.value = ''
+  selectedModel.value = ''
   if (d.brand) selectedBrand.value = d.brand
-  if (d.model) {
-    const match = models.value.find((m) => m.description.toLowerCase() === d.model.toLowerCase() || m.description.toLowerCase().includes(d.model.toLowerCase()))
-    if (match) {
-      selectedModel.value = match.name
-      selectedBrand.value = match.brand
-    }
-  }
   wizardForm.value.name = d.model || d.name || 'Printer'
   fillQueueNames()
+  autoSelectDriver()
+}
+
+function normalizeDriverText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+// Find a matching PPD for the selected device, so the user doesn't have to
+// search manually every time. Falls back to an explicit warning when nothing
+// matches.
+function autoSelectDriver() {
+  const device = selectedDevice.value
+  if (!device || selectedModel.value || !models.value.length) return
+  const target = normalizeDriverText(device.model || device.name)
+  if (!target) return
+  let candidates = models.value
+  if (deviceBrand.value) {
+    const sameBrand = candidates.filter((m) => m.brand.toLowerCase() === deviceBrand.value.toLowerCase())
+    if (sameBrand.length) candidates = sameBrand
+  }
+  let best: Model | null = null
+  for (const model of candidates) {
+    const desc = normalizeDriverText(model.description)
+    if (desc === target) {
+      best = model
+      break
+    }
+    if (!best && (desc.includes(target) || target.includes(desc))) best = model
+  }
+  if (best) {
+    selectedModel.value = best.name
+    selectedBrand.value = best.brand
+  }
 }
 
 function applyManualDevice() {
@@ -587,7 +624,7 @@ onMounted(load)
           <div v-if="modelsLoading" class="empty">正在加载驱动型号…</div>
           <template v-else>
             <p v-if="brandMissing" class="card-desc" style="color: var(--warning); margin-bottom: 12px">
-              当前驱动库没有 {{ selectedDevice?.brand }} 品牌的驱动。请上传对应 PPD / 驱动包，或对支持 IPP Everywhere 的设备勾选免驱动。
+              当前驱动库没有 {{ deviceBrand }} 品牌的驱动。请上传对应 PPD / 驱动包，或对支持 IPP Everywhere 的设备勾选免驱动。
             </p>
             <div class="driver-filter-grid" :class="{ disabled: useEverywhere }">
               <div class="field">
@@ -606,6 +643,9 @@ onMounted(load)
             <div v-if="selectedModel" class="selected-driver">
               已选择：<strong>{{ selectedModelLabel }}</strong>
             </div>
+            <p v-else-if="!useEverywhere && modelSelectOptions.length" class="card-desc" style="color: var(--warning); margin-top: 8px">
+              未自动匹配到驱动，请手动选择型号；找不到时请上传 PPD / 驱动包，或使用 IPP Everywhere。
+            </p>
           </template>
         </div>
 
