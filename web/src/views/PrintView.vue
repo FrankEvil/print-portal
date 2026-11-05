@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api } from '../api'
 import { toast } from '../toast'
 import type { Job, PPDOption, Printer } from '../types'
+import { formatJobParams } from '../jobDisplay'
 import StatusBadge from '../components/StatusBadge.vue'
 
 const printers = ref<Printer[]>([])
@@ -325,9 +326,10 @@ onUnmounted(() => {
           <div class="job-main">
             <div class="job-title">#{{ j.id }} · {{ j.filename }}</div>
             <div class="job-sub">
-              {{ j.printer_name }} · {{ j.copies }} 份 · {{ formatTime(j.created_at) }}
+              {{ j.printer_name }} · {{ formatJobParams(j) }}
               <span v-if="j.error_message" style="color: var(--danger)"> · {{ j.error_message }}</span>
             </div>
+            <div class="job-sub">{{ formatTime(j.created_at) }}</div>
           </div>
           <StatusBadge :status="j.status" />
           <button v-if="j.source === 'web' && ['submitted', 'queued', 'printing', 'completed', 'failed'].includes(j.status)" class="btn btn-ghost btn-sm" @click="openJobFile(j.id)">

@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { api } from '../api'
 import { toast } from '../toast'
 import type { Job } from '../types'
+import { formatJobParams } from '../jobDisplay'
 import StatusBadge from '../components/StatusBadge.vue'
 
 const jobs = ref<Job[]>([])
@@ -92,10 +93,7 @@ onUnmounted(() => {
             </td>
             <td>{{ j.printer_name }}</td>
             <td>{{ j.source === 'web' ? '网页' : '本地' }}</td>
-            <td class="admin-sub">
-              {{ j.copies }} 份 · {{ j.duplex === 'one-sided' ? '单面' : '双面' }} · {{ j.paper_size }}
-              <span v-if="j.pages"> · {{ j.pages }} 页</span>
-            </td>
+            <td class="admin-sub">{{ formatJobParams(j) }}</td>
             <td>
               <StatusBadge :status="j.status" />
               <div v-if="j.error_message" class="admin-sub" style="color: var(--danger); max-width: 220px">{{ j.error_message }}</div>

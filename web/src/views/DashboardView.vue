@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { api } from '../api'
 import type { Job, Overview } from '../types'
 import StatusBadge from '../components/StatusBadge.vue'
+import { formatJobParams } from '../jobDisplay'
 import { toast } from '../toast'
 
 const overview = ref<Overview | null>(null)
@@ -16,6 +17,10 @@ async function load() {
   } catch (e) {
     toast.error((e as Error).message)
   }
+}
+
+function openJobFile(id: number) {
+  window.open(`/api/jobs/${id}/file`, '_blank')
 }
 
 onMounted(load)
@@ -62,16 +67,23 @@ onMounted(load)
     <div v-else class="table-wrap">
       <table class="table">
         <thead>
-          <tr><th>ID</th><th>文件</th><th>打印机</th><th>来源</th><th>状态</th><th>时间</th></tr>
+          <tr><th>ID</th><th>文件</th><th>打印机</th><th>参数</th><th>状态</th><th>操作</th><th>时间</th></tr>
         </thead>
         <tbody>
           <tr v-for="j in jobs" :key="j.id">
             <td>#{{ j.id }}</td>
-            <td>{{ j.filename }}</td>
+            <td>
+              <div style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ j.filename }}</div>
+              <div class="admin-sub">{{ j.source === 'web' ? '网页' : '本地' }}</div>
+            </td>
             <td>{{ j.printer_name }}</td>
-            <td>{{ j.source === 'web' ? '网页' : '本地' }}</td>
+            <td class="admin-sub">{{ formatJobParams(j) }}</td>
             <td><StatusBadge :status="j.status" /></td>
-            <td>{{ new Date(j.created_at).toLocaleString('zh-CN', { hour12: false }) }}</td>
+            <td>
+              <button v-if="j.source === 'web' && ['submitted','queued','printing','completed','failed'].includes(j.status)" class="btn btn-ghost btn-sm" @click="openJobFile(j.id)">查看文件</button>
+              <span v-else class="admin-sub">—</span>
+            </td>
+            <td class="admin-sub">{{ new Date(j.created_at).toLocaleString('zh-CN', { hour12: false }) }}</td>
           </tr>
         </tbody>
       </table>
