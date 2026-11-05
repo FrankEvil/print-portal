@@ -41,6 +41,31 @@ func (s *Service) DiscoverPrinters(ctx context.Context) ([]storage.Device, error
 	if err != nil {
 		return nil, err
 	}
+	out := buildDevices(devices)
+	if err := s.store.ReplaceDevices("printer", out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// DiscoverUSBPrinters scans only the USB backend (fast, no mDNS wait).
+func (s *Service) DiscoverUSBPrinters(ctx context.Context) ([]storage.Device, error) {
+	devices, err := s.cups.ListUSBDevices(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := buildDevices(devices)
+	// Merge into the cached device list instead of replacing it, so network
+	// devices from a previous scan are not lost.
+	existing, _ := s.store.ListDevices("printer")
+	merged := mergeDeviceLists(existing, out)
+	if err := s.store.ReplaceDevices("printer", merged); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func buildDevices(devices []cups.Device) []storage.Device {
 	out := make([]storage.Device, 0, len(devices))
 	for _, d := range devices {
 		name, brand, model := DeviceIdentity(d.URI)
@@ -57,10 +82,22 @@ func (s *Service) DiscoverPrinters(ctx context.Context) ([]storage.Device, error
 			Metadata:  fmt.Sprintf(`{"transport":%q}`, d.Transport),
 		})
 	}
-	if err := s.store.ReplaceDevices("printer", out); err != nil {
-		return nil, err
+	return out
+}
+
+func mergeDeviceLists(base, extra []storage.Device) []storage.Device {
+	byURI := map[string]storage.Device{}
+	for _, d := range base {
+		byURI[d.DeviceURI] = d
 	}
-	return out, nil
+	for _, d := range extra {
+		byURI[d.DeviceURI] = d
+	}
+	out := make([]storage.Device, 0, len(byURI))
+	for _, d := range byURI {
+		out = append(out, d)
+	}
+	return out
 }
 
 // StartScan starts (or reuses) an asynchronous discovery scan for a scope.
@@ -95,12 +132,21 @@ func (s *Service) StartScan(scope string) string {
 func (s *Service) runScan(scope, id string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	devices, err := s.DiscoverPrinters(ctx)
+	var devices []storage.Device
+	var err error
+	if scope == "usb" {
+		devices, err = s.DiscoverUSBPrinters(ctx)
+	} else {
+		devices, err = s.DiscoverPrinters(ctx)
+	}
 	var filtered []storage.Device
 	for _, d := range devices {
 		if scanMatches(scope, d.DeviceURI) {
 			filtered = append(filtered, d)
 		}
+	}
+	if filtered == nil {
+		filtered = []storage.Device{}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

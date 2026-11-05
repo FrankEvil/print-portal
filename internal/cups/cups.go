@@ -629,6 +629,22 @@ func (c *Client) ListDevices(ctx context.Context) ([]Device, error) {
 	return parseDeviceLines(out), nil
 }
 
+// ListUSBDevices asks only the USB backend, avoiding slow mDNS enumeration.
+func (c *Client) ListUSBDevices(ctx context.Context) ([]Device, error) {
+	out, stderr, err := c.command(ctx, "lpinfo", "--include-schemes", "usb", "-v")
+	if err != nil {
+		return nil, fmt.Errorf("lpinfo usb failed: %s: %w", strings.TrimSpace(stderr), err)
+	}
+	devices := parseDeviceLines(out)
+	filtered := make([]Device, 0, len(devices))
+	for _, d := range devices {
+		if strings.HasPrefix(d.URI, "usb://") {
+			filtered = append(filtered, d)
+		}
+	}
+	return filtered, nil
+}
+
 // Scanner is a SANE scanner.
 type Scanner struct {
 	Name string `json:"name"`
