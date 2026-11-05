@@ -97,6 +97,31 @@ Library/Printers/PPDs/Contents/Resources/Brother DCP-7060D CUPS.gz Brother DCP-7
 	}
 }
 
+func TestParseChinesePrinterStatuses(t *testing.T) {
+	out := `打印机canon-ir-adv-c5560-ppd闲置，启用时间始于Thu Nov 5 09:30:54 2026
+打印机DCP7060正在打印DCP7060-42，启用时间始于now
+打印机OFF已停用，启用时间始于now`
+	got := parsePrinterStatuses(out)
+	if got["canon-ir-adv-c5560-ppd"] == nil || got["canon-ir-adv-c5560-ppd"].State != "idle" {
+		t.Errorf("canon state = %+v", got["canon-ir-adv-c5560-ppd"])
+	}
+	if got["DCP7060"].State != "printing" || got["DCP7060"].PrintingJob != "DCP7060-42" {
+		t.Errorf("DCP7060 = %+v", got["DCP7060"])
+	}
+	if got["OFF"].State != "stopped" {
+		t.Errorf("OFF state = %q", got["OFF"].State)
+	}
+}
+
+func TestParseChineseDeviceURIs(t *testing.T) {
+	out := `用于canon-ir-adv-c5560-ppd的设备：dnssd://Canon%20iR-ADV._pdl-datastream._tcp.local./?uuid=1
+用于DCP7060的设备：usb://Brother/DCP-7060D?serial=X`
+	got := parseDeviceURIs(out)
+	if got["canon-ir-adv-c5560-ppd"] == "" || !strings.Contains(got["DCP7060"], "usb://") {
+		t.Errorf("uris = %+v", got)
+	}
+}
+
 func TestSubmitParsesRequestID(t *testing.T) {
 	runner := &fakeRunner{stdout: map[string]string{"lp": "request id is DCP7060-7 (1 file(s))"}}
 	client := NewClient(runner, "127.0.0.1:631")

@@ -119,6 +119,11 @@ func DeviceIdentity(uri string) (name, brand, model string) {
 				brand = fields[0]
 			}
 		}
+		if brand == "" {
+			if fields := strings.Fields(name); len(fields) > 0 {
+				brand = fields[0]
+			}
+		}
 		return name, brand, model
 	case strings.HasPrefix(uri, "ipp://"), strings.HasPrefix(uri, "ipps://"):
 		if parsed, err := url.Parse(uri); err == nil {

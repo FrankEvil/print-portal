@@ -83,11 +83,16 @@ type PrinterStatus struct {
 
 var printerLineRE = regexp.MustCompile(`^printer\s+(\S+)\s+(.*)$`)
 
-// parsePrinterStatuses parses `lpstat -p` output.
+// parsePrinterStatuses parses `lpstat -p` output, including localized
+// Chinese output emitted by macOS CUPS even when LC_ALL=C is set.
 func parsePrinterStatuses(out string) map[string]*PrinterStatus {
 	result := map[string]*PrinterStatus{}
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
+		if st := parseChinesePrinterLine(line); st != nil {
+			result[st.Name] = st
+			continue
+		}
 		m := printerLineRE.FindStringSubmatch(line)
 		if m == nil {
 			continue
@@ -121,11 +126,60 @@ func parsePrinterStatuses(out string) map[string]*PrinterStatus {
 	return result
 }
 
-// parseDeviceURIs parses `lpstat -v` output.
+// parseChinesePrinterLine handles lines like:
+// 打印机canon-ir-adv-c5560-ppd闲置，启用时间始于...
+// 打印机queue正在打印queue-123，...
+func parseChinesePrinterLine(line string) *PrinterStatus {
+	const prefix = "打印机"
+	if !strings.HasPrefix(line, prefix) {
+		return nil
+	}
+	rest := strings.TrimPrefix(line, prefix)
+	states := []struct {
+		word  string
+		state string
+	}{
+		{"正在打印", "printing"},
+		{"闲置", "idle"},
+		{"已停用", "stopped"},
+		{"已禁用", "stopped"},
+		{"停止", "stopped"},
+	}
+	for _, s := range states {
+		idx := strings.Index(rest, s.word)
+		if idx <= 0 {
+			continue
+		}
+		st := &PrinterStatus{Name: strings.TrimSpace(rest[:idx]), State: s.state}
+		if s.word == "正在打印" {
+			job := rest[idx+len(s.word):]
+			if cut := strings.IndexAny(job, "，。"); cut >= 0 {
+				job = job[:cut]
+			}
+			st.PrintingJob = strings.TrimSpace(job)
+		}
+		return st
+	}
+	return nil
+}
+
+// parseDeviceURIs parses `lpstat -v` output (English and Chinese variants).
 func parseDeviceURIs(out string) map[string]string {
 	result := map[string]string{}
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "用于") && strings.Contains(line, "的设备") {
+			rest := strings.TrimPrefix(line, "用于")
+			idx := strings.Index(rest, "的设备")
+			name := strings.TrimSpace(rest[:idx])
+			uri := strings.TrimSpace(rest[idx+len("的设备"):])
+			uri = strings.TrimPrefix(uri, "：")
+			uri = strings.TrimPrefix(uri, ":")
+			if name != "" {
+				result[name] = strings.TrimSpace(uri)
+			}
+			continue
+		}
 		if !strings.HasPrefix(line, "device for ") {
 			continue
 		}

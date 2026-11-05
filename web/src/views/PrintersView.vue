@@ -58,6 +58,11 @@ const filteredModels = computed(() => {
   return list
 })
 
+const brandMissing = computed(() => {
+  const brand = selectedDevice.value?.brand
+  return !!brand && models.value.length > 0 && !brands.value.includes(brand)
+})
+
 const isNetworkDevice = computed(() => {
   const uri = selectedDevice.value?.device_uri || ''
   return uri.startsWith('ipp://') || uri.startsWith('ipps://') || uri.startsWith('dnssd://')
@@ -458,6 +463,9 @@ onMounted(load)
 
           <div v-if="modelsLoading" class="empty">正在加载驱动型号…</div>
           <template v-else>
+            <p v-if="brandMissing" class="card-desc" style="color: var(--warning); margin-bottom: 12px">
+              当前驱动库没有 {{ selectedDevice?.brand }} 品牌的驱动。请上传对应 PPD / 驱动包，或对支持 IPP Everywhere 的设备勾选免驱动。
+            </p>
             <div class="driver-filter-grid" :class="{ disabled: useEverywhere }">
               <div class="field">
                 <label>品牌</label>
