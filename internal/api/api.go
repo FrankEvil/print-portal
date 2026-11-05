@@ -101,6 +101,7 @@ func (s *Server) routes() {
 	s.admin("POST /api/admin/printers/discover", s.handleDiscoverAndCreate)
 	s.admin("GET /api/admin/drivers", s.handleDrivers)
 	s.admin("POST /api/admin/drivers/install", s.handleDriverInstall)
+	s.admin("POST /api/admin/drivers/refresh", s.handleDriverRefresh)
 	s.admin("POST /api/admin/drivers/{id}/uninstall", s.handleDriverUninstall)
 	s.admin("POST /api/admin/drivers/{id}/refresh", s.handleDriverRefresh)
 	s.admin("GET /api/admin/drivers/models", s.handleDriverModels)

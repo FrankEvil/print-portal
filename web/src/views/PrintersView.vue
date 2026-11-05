@@ -397,15 +397,43 @@ onMounted(load)
 
           <div class="wizard-divider"></div>
           <div class="manual-section">
-            <button class="btn btn-ghost btn-sm" @click="manualMode = manualMode === 'tcp' ? '' : 'tcp'">Standard TCP/IP (RAW/9100)</button>
-            <div v-if="manualMode === 'tcp'" class="form-grid" style="margin-top: 12px">
-              <div class="field"><label>打印机 IP 地址</label><input v-model="tcpIp" class="input" placeholder="例如：192.168.1.100" /></div>
-              <div class="field"><label>端口</label><input v-model.number="tcpPort" type="number" class="input" placeholder="9100" /></div>
+            <div class="manual-tabs">
+              <button
+                class="btn btn-sm"
+                :class="manualMode === 'tcp' ? 'btn-primary' : 'btn-ghost'"
+                @click="manualMode = manualMode === 'tcp' ? '' : 'tcp'"
+              >
+                Standard TCP/IP (RAW/9100)
+              </button>
+              <button
+                class="btn btn-sm"
+                :class="manualMode === 'uri' ? 'btn-primary' : 'btn-ghost'"
+                @click="manualMode = manualMode === 'uri' ? '' : 'uri'"
+              >
+                手动输入设备 URI
+              </button>
             </div>
-            <button class="btn btn-ghost btn-sm" style="margin-left: 8px" @click="manualMode = manualMode === 'uri' ? '' : 'uri'">手动输入设备 URI</button>
-            <div v-if="manualMode === 'uri'" class="field" style="margin-top: 12px">
-              <label>设备 URI</label>
-              <input v-model="manualUri" class="input" placeholder="usb://... / ipp://... / socket://..." />
+
+            <div v-if="manualMode === 'tcp'" class="manual-panel">
+              <div class="form-grid">
+                <div class="field">
+                  <label>打印机 IP 地址</label>
+                  <input v-model="tcpIp" class="input" placeholder="例如：192.168.1.100" />
+                </div>
+                <div class="field">
+                  <label>端口</label>
+                  <input v-model.number="tcpPort" type="number" class="input" placeholder="9100" />
+                </div>
+              </div>
+              <p class="admin-sub" style="margin-top: 10px">将生成地址：socket://{{ tcpIp || '打印机IP' }}:{{ tcpPort || 9100 }}</p>
+            </div>
+
+            <div v-if="manualMode === 'uri'" class="manual-panel">
+              <div class="field">
+                <label>设备 URI</label>
+                <input v-model="manualUri" class="input" placeholder="usb://... / ipp://... / socket://..." />
+              </div>
+              <p class="admin-sub" style="margin-top: 10px">高级选项：可直接粘贴 CUPS 支持的 device-uri</p>
             </div>
           </div>
         </div>

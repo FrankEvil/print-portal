@@ -986,6 +986,10 @@ table.table {
   font-size: 11.5px;
   color: var(--text-3);
   word-break: break-all;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .wizard-divider {
@@ -996,9 +1000,21 @@ table.table {
 
 .manual-section {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.manual-tabs {
+  display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.manual-panel {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
 }
 
 .driver-filter-grid {

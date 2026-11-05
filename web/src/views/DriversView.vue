@@ -99,6 +99,9 @@ onMounted(async () => {
       <h2 class="card-title">已安装驱动</h2>
       <span class="admin-sub">{{ drivers.length }} 个</span>
     </div>
+    <p class="card-desc" style="margin-bottom: 12px">
+      状态由当前 CUPS 环境的 <code>lpinfo -m</code> 型号索引计算。「缺失」表示本机未安装对应驱动包（Docker 镜像内置 brlaser / foomatic；macOS 本机 CUPS 不包含）。
+    </p>
     <div v-if="!drivers.length" class="empty">暂无驱动信息</div>
     <div v-else class="table-wrap">
       <table class="table">
