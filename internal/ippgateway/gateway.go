@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -64,6 +65,18 @@ func (g *Gateway) Start(ctx context.Context) error {
 			http.Error(w, "printer is not shared", http.StatusForbidden)
 			return
 		}
+		if queue == p.RAWQueue {
+			if !isPrivateRemote(r.RemoteAddr) {
+				http.Error(w, "raw queue is limited to the local network", http.StatusForbidden)
+				return
+			}
+			const maxRawBody = 100 << 20
+			if r.ContentLength > maxRawBody {
+				http.Error(w, "raw print job too large", http.StatusRequestEntityTooLarge)
+				return
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, maxRawBody)
+		}
 		r = g.captureJobName(r, queue)
 		proxy.ServeHTTP(w, r)
 	})
@@ -80,6 +93,18 @@ func (g *Gateway) Start(ctx context.Context) error {
 		return nil
 	}
 	return err
+}
+
+func isPrivateRemote(remote string) bool {
+	host, _, err := net.SplitHostPort(remote)
+	if err != nil {
+		host = remote
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate()
 }
 
 func queueFromPath(path string) (string, bool) {
