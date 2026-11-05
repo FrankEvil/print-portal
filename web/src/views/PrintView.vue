@@ -204,12 +204,13 @@ onUnmounted(() => {
       <section class="card">
         <div class="section-head">
           <div>
-            <h2 class="card-title">选择文件</h2>
+            <h2 class="card-title">{{ file ? '文件预览' : '选择文件' }}</h2>
             <p class="card-desc">支持 PDF、图片、Word / Excel / PPT、PostScript，单次一个文件</p>
           </div>
         </div>
 
         <label
+          v-if="!file"
           class="dropzone"
           :class="{ dragging }"
           @dragover.prevent="dragging = true"
@@ -217,28 +218,31 @@ onUnmounted(() => {
           @drop.prevent="onDrop"
         >
           <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.ps" @change="onFileChange" />
-          <template v-if="!file">
-            <div class="dropzone-icon">＋</div>
-            <div><strong>拖拽文件到这里</strong>，或点击选择</div>
-            <div class="file-sub">最大 200MB</div>
-          </template>
-          <template v-else>
-            <div class="file-card" style="width: 100%">
-              <div class="file-thumb">
-                <img v-if="isImage && fileUrl" :src="fileUrl" alt="" />
-                <span v-else>{{ isPdf ? 'PDF' : 'DOC' }}</span>
-              </div>
-              <div class="file-meta">
-                <div class="file-name">{{ file.name }}</div>
-                <div class="file-sub">{{ formatSize(file.size) }} · 点击可更换文件</div>
-              </div>
-            </div>
-          </template>
+          <div class="dropzone-icon">＋</div>
+          <div><strong>拖拽文件到这里</strong>，或点击选择</div>
+          <div class="file-sub">最大 200MB</div>
         </label>
 
-        <div v-if="file && (isPdf || isImage)" style="margin-top: 16px">
-          <iframe v-if="isPdf" :src="fileUrl" style="width: 100%; height: 360px; border: 1px solid var(--line); border-radius: 12px"></iframe>
-          <img v-else :src="fileUrl" alt="" style="width: 100%; max-height: 360px; object-fit: contain; border: 1px solid var(--line); border-radius: 12px" />
+        <div v-else class="preview-shell">
+          <button class="preview-remove" title="移除文件" aria-label="移除文件" @click="setFile(null)">×</button>
+          <div class="preview-head">
+            <span class="file-name">{{ file.name }}</span>
+            <span class="file-sub">{{ formatSize(file.size) }}</span>
+          </div>
+          <iframe
+            v-if="isPdf"
+            :src="fileUrl"
+            class="preview-frame"
+            title="PDF 预览"
+          ></iframe>
+          <img v-else-if="isImage" :src="fileUrl" alt="文件预览" class="preview-image" />
+          <div v-else class="file-card" style="width: 100%; margin-top: 14px">
+            <div class="file-thumb"><span>{{ isPdf ? 'PDF' : 'DOC' }}</span></div>
+            <div class="file-meta">
+              <div class="file-name">{{ file.name }}</div>
+              <div class="file-sub">{{ formatSize(file.size) }}</div>
+            </div>
+          </div>
         </div>
       </section>
 
