@@ -10,18 +10,19 @@ import (
 )
 
 type sharingPrinter struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	Model     string `json:"model"`
-	State     string `json:"state"`
-	IsDefault bool   `json:"is_default"`
-	IsShared  bool   `json:"is_shared"`
-	DeviceURI string `json:"device_uri"`
-	PPDQueue  string `json:"ppd_queue"`
-	RAWQueue  string `json:"raw_queue"`
-	PPDURI    string `json:"ppd_uri"`
-	RAWURI    string `json:"raw_uri"`
-	WebURL    string `json:"web_url"`
+	ID             int64  `json:"id"`
+	Name           string `json:"name"`
+	Model          string `json:"model"`
+	State          string `json:"state"`
+	IsDefault      bool   `json:"is_default"`
+	IsShared       bool   `json:"is_shared"`
+	AllowDiscovery bool   `json:"allow_discovery"`
+	DeviceURI      string `json:"device_uri"`
+	PPDQueue       string `json:"ppd_queue"`
+	RAWQueue       string `json:"raw_queue"`
+	PPDURI         string `json:"ppd_uri"`
+	RAWURI         string `json:"raw_uri"`
+	WebURL         string `json:"web_url"`
 }
 
 // handleSharing returns LAN connection information for every printer.
@@ -56,7 +57,7 @@ func (s *Server) handleSharing(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, sharingPrinter{
 			ID: p.ID, Name: p.Name, Model: p.Model, State: state,
-			IsDefault: p.IsDefault, IsShared: p.IsShared, DeviceURI: p.DeviceURI,
+			IsDefault: p.IsDefault, IsShared: p.IsShared, AllowDiscovery: p.AllowDiscovery, DeviceURI: p.DeviceURI,
 			PPDQueue: p.PPDQueue, RAWQueue: p.RAWQueue,
 			PPDURI: ppdURI, RAWURI: rawURI,
 			WebURL: fmt.Sprintf("http://%s:%s/", host, webPort),

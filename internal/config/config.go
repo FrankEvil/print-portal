@@ -14,6 +14,7 @@ type Config struct {
 	AdminToken  string
 	MaxUploadMB int
 	CUPSServer  string
+	IPPAddr     string
 	Version     string
 }
 
@@ -26,6 +27,7 @@ func Load() Config {
 		AdminToken:  env("ADMIN_TOKEN", ""),
 		MaxUploadMB: envInt("MAX_UPLOAD_MB", 200),
 		CUPSServer:  env("CUPS_SERVER", "127.0.0.1:631"),
+		IPPAddr:     env("PRINT_PORTAL_IPP_ADDR", "0.0.0.0:8631"),
 		Version:     env("PRINT_PORTAL_VERSION", "0.1.0"),
 	}
 }

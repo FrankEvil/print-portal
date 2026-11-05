@@ -18,7 +18,8 @@ services:
     environment:
       ADMIN_TOKEN: "change-me"
       PRINTD_ADDR: ":8088"
-      CUPS_SERVER: "127.0.0.1:8631"
+      CUPS_SERVER: "127.0.0.1:631"
+      PRINT_PORTAL_IPP_ADDR: "0.0.0.0:8631"
 
 volumes:
   print-data:

@@ -25,14 +25,15 @@ func NewService(store *storage.Store, cupsClient *cups.Client) *Service {
 }
 
 type CreateInput struct {
-	Name      string `json:"name"`
-	Model     string `json:"model"`
-	PPDQueue  string `json:"ppd_queue"`
-	RAWQueue  string `json:"raw_queue"`
-	DeviceURI string `json:"device_uri"`
-	PPDFile   string `json:"ppd_file"`
-	IsDefault bool   `json:"is_default"`
-	IsShared  bool   `json:"is_shared"`
+	Name           string `json:"name"`
+	Model          string `json:"model"`
+	PPDQueue       string `json:"ppd_queue"`
+	RAWQueue       string `json:"raw_queue"`
+	DeviceURI      string `json:"device_uri"`
+	PPDFile        string `json:"ppd_file"`
+	IsDefault      bool   `json:"is_default"`
+	IsShared       bool   `json:"is_shared"`       // allow LAN access
+	AllowDiscovery bool   `json:"allow_discovery"` // advertise via DNS-SD
 }
 
 func (in CreateInput) validate() error {
@@ -96,6 +97,9 @@ func (s *Service) EnsureQueues(ctx context.Context) error {
 
 // Create makes a printer record and both CUPS queues.
 func (s *Service) Create(ctx context.Context, in CreateInput) (*storage.Printer, error) {
+	if !in.IsShared {
+		in.AllowDiscovery = false
+	}
 	if err := in.validate(); err != nil {
 		return nil, err
 	}
@@ -116,19 +120,18 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*storage.Printer,
 	if in.IsDefault {
 		_ = s.cups.SetDefault(ctx, in.PPDQueue)
 	}
-	if in.IsShared {
-		_ = s.cups.SetPrinterShared(ctx, in.PPDQueue, true)
-		_ = s.cups.SetPrinterShared(ctx, in.RAWQueue, true)
-	}
+	_ = s.cups.SetPrinterShared(ctx, in.PPDQueue, in.AllowDiscovery)
+	_ = s.cups.SetPrinterShared(ctx, in.RAWQueue, in.AllowDiscovery)
 	p := &storage.Printer{
-		Name:      in.Name,
-		Model:     in.Model,
-		PPDQueue:  in.PPDQueue,
-		RAWQueue:  in.RAWQueue,
-		DeviceURI: in.DeviceURI,
-		PPDFile:   in.PPDFile,
-		IsDefault: in.IsDefault,
-		IsShared:  in.IsShared,
+		Name:           in.Name,
+		Model:          in.Model,
+		PPDQueue:       in.PPDQueue,
+		RAWQueue:       in.RAWQueue,
+		DeviceURI:      in.DeviceURI,
+		PPDFile:        in.PPDFile,
+		IsDefault:      in.IsDefault,
+		IsShared:       in.IsShared,
+		AllowDiscovery: in.AllowDiscovery,
 	}
 	if err := s.store.CreatePrinter(p); err != nil {
 		_ = s.cups.DeletePrinter(ctx, in.PPDQueue)
@@ -140,6 +143,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*storage.Printer,
 
 // Update changes an existing printer. Queue names are immutable in P1.
 func (s *Service) Update(ctx context.Context, name string, in CreateInput) (*storage.Printer, error) {
+	if !in.IsShared {
+		in.AllowDiscovery = false
+	}
 	p, err := s.store.GetPrinterByName(name)
 	if err != nil {
 		return nil, err
@@ -172,15 +178,16 @@ func (s *Service) Update(ctx context.Context, name string, in CreateInput) (*sto
 	if in.Name != "" && in.Name != p.Name {
 		p.Name = in.Name
 	}
-	sharedChanged := p.IsShared != in.IsShared
+	discoveryChanged := p.AllowDiscovery != in.AllowDiscovery
 	p.IsShared = in.IsShared
+	p.AllowDiscovery = in.AllowDiscovery
 	p.IsDefault = in.IsDefault
 	if err := s.store.UpdatePrinter(p); err != nil {
 		return nil, err
 	}
-	if sharedChanged {
-		_ = s.cups.SetPrinterShared(ctx, p.PPDQueue, p.IsShared)
-		_ = s.cups.SetPrinterShared(ctx, p.RAWQueue, p.IsShared)
+	if discoveryChanged {
+		_ = s.cups.SetPrinterShared(ctx, p.PPDQueue, p.AllowDiscovery)
+		_ = s.cups.SetPrinterShared(ctx, p.RAWQueue, p.AllowDiscovery)
 	}
 	if p.IsDefault {
 		_ = s.cups.SetDefault(ctx, p.PPDQueue)

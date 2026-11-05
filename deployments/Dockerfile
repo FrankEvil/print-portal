@@ -42,6 +42,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sane-utils \
     sane-airscan \
     avahi-utils \
+    avahi-daemon \
+    libnss-mdns \
+    dbus \
     ca-certificates \
     tzdata \
     curl \
@@ -54,7 +57,8 @@ COPY deployments/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENV PRINTD_ADDR=:8088
-ENV CUPS_SERVER=127.0.0.1:8631
+ENV CUPS_SERVER=127.0.0.1:631
+ENV PRINT_PORTAL_IPP_ADDR=0.0.0.0:8631
 ENV PRINT_PORTAL_STATIC=/opt/print-portal/web
 ENV PRINT_PORTAL_DATA=/app/data
 

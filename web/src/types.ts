@@ -18,6 +18,7 @@ export interface AdminPrinter {
   ppd_file: string
   is_default: boolean
   is_shared: boolean
+  allow_discovery: boolean
   state: string
   state_reasons: string[]
   accepting: boolean
@@ -145,6 +146,7 @@ export interface SharingPrinter {
   state: string
   is_default: boolean
   is_shared: boolean
+  allow_discovery: boolean
   device_uri: string
   ppd_queue: string
   raw_queue: string

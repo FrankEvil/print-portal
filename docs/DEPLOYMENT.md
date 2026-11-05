@@ -28,8 +28,8 @@
 | 端口 | 用途 | 访问范围 |
 |---|---|---|
 | 8088 | Web 打印/管理 | 局域网 |
-| 8631 | CUPS IPP（PPD/RAW） | 局域网 |
-| 631 | 不使用 | — |
+| 8631 | printd IPP 网关（PPD/RAW，按打印机校验允许访问） | 局域网 |
+| 631 | CUPS 内部端口（仅 127.0.0.1） | 仅容器内 |
 
 ## 4. USB
 
@@ -72,7 +72,8 @@ services:
       - cups-log:/var/log/cups
     environment:
       ADMIN_TOKEN: "change-me"
-      CUPS_PORT: "8631"
+      CUPS_SERVER: "127.0.0.1:631"
+      PRINT_PORTAL_IPP_ADDR: "0.0.0.0:8631"
 
 volumes:
   print-data:
@@ -85,10 +86,10 @@ volumes:
 
 容器入口：
 
-1. 初始化 CUPS 配置目录
-2. 启动 `cupsd`（8631）
+1. 初始化 CUPS 配置目录并启动 mDNS（允许发现时使用）
+2. 启动 `cupsd`（仅 `127.0.0.1:631`）
 3. 等待 CUPS socket 就绪
-4. 启动 `printd`
+4. 启动 `printd`（Web 8088 + IPP 网关 8631）
 5. 退出时优雅停止 cupsd
 
 推荐用 `s6-overlay` 或 `supervisord` 管理两个进程。

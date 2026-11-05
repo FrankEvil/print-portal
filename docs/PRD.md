@@ -268,7 +268,10 @@
   - **RAW 连接地址**：`ipp://<host>:<cups_port>/printers/<raw_queue>`，用于本地 RAW 客户端
   - **网页打印地址**：`http://<host>:<web_port>/`
   - 复制按钮
-- 局域网共享开关（同步 `printer-is-shared`）
+- 每台打印机两个开关：
+  - **允许访问**：由 printd 的 IPP 网关校验，关闭后局域网客户端无法通过 IPP 连接
+  - **允许发现**：控制 CUPS/DNS-SD 广播，仅在允许访问开启时可设置
+- CUPS 仅监听 `127.0.0.1:631`，局域网只暴露 printd IPP 网关 `8631`
 - 客户端连接说明：macOS、Windows、Linux/CUPS
 
 ## 7. PPD 与 RAW 规则

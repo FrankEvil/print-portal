@@ -18,6 +18,7 @@ import (
 	"github.com/liuzhaojun/print-portal/internal/cups"
 	"github.com/liuzhaojun/print-portal/internal/discovery"
 	"github.com/liuzhaojun/print-portal/internal/driver"
+	"github.com/liuzhaojun/print-portal/internal/ippgateway"
 	"github.com/liuzhaojun/print-portal/internal/job"
 	"github.com/liuzhaojun/print-portal/internal/printer"
 	"github.com/liuzhaojun/print-portal/internal/scan"
@@ -87,6 +88,15 @@ func main() {
 		defer ensureCancel()
 		if err := printerService.EnsureQueues(ensureCtx); err != nil {
 			logger.Printf("ensure printer queues: %v", err)
+		}
+	}()
+
+	// LAN clients only reach CUPS through the IPP gateway; queues with
+	// is_shared=false are rejected there.
+	go func() {
+		gateway := ippgateway.New(cfg.IPPAddr, cfg.CUPSServer, store, logger)
+		if err := gateway.Start(ctx); err != nil {
+			logger.Printf("IPP gateway: %v", err)
 		}
 	}()
 

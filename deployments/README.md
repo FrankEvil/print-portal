@@ -18,7 +18,8 @@ docker compose up -d
 ## 端口
 
 - `8088` Web
-- `8631` CUPS IPP（本地 PPD/RAW）
+- `8631` printd IPP 网关（本地 PPD/RAW，按允许访问开关校验）
+- `631` CUPS 内部端口（仅 127.0.0.1）
 
 ## 说明
 

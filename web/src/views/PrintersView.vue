@@ -30,14 +30,14 @@ const useEverywhere = ref(false)
 const uploading = ref(false)
 const driverInput = ref<HTMLInputElement | null>(null)
 const saving = ref(false)
-const wizardForm = ref({ name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true })
+const wizardForm = ref({ name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true, allow_discovery: false })
 
 // Edit dialog: name, driver, default/share only
 const editingPrinter = ref<AdminPrinter | null>(null)
 const editSaving = ref(false)
 const editUploading = ref(false)
 const editDriverInput = ref<HTMLInputElement | null>(null)
-const editForm = ref({ name: '', model: '', is_default: false, is_shared: true })
+const editForm = ref({ name: '', model: '', is_default: false, is_shared: true, allow_discovery: false })
 const editBrand = ref('')
 const rowMenu = ref<{ printer: AdminPrinter; top: number; left: number } | null>(null)
 
@@ -111,6 +111,14 @@ const editModelSelectOptions = computed(() => {
   }
   return list
 })
+
+function onWizardAccessChange() {
+  if (!wizardForm.value.is_shared) wizardForm.value.allow_discovery = false
+}
+
+function onEditAccessChange() {
+  if (!editForm.value.is_shared) editForm.value.allow_discovery = false
+}
 
 function onWizardBrandChange() {
   if (selectedModel.value && !filteredModels.value.some((m) => m.name === selectedModel.value)) {
@@ -232,7 +240,7 @@ function openWizard() {
   selectedBrand.value = ''
   selectedModel.value = ''
   useEverywhere.value = false
-  wizardForm.value = { name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true }
+  wizardForm.value = { name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true, allow_discovery: false }
   models.value = []
   modelTotal.value = 0
   // Local USB scan is fast; start LAN mDNS scan after it finishes.
@@ -369,6 +377,7 @@ async function savePrinter() {
       device_uri: selectedDevice.value.device_uri,
       is_default: wizardForm.value.is_default,
       is_shared: wizardForm.value.is_shared,
+      allow_discovery: wizardForm.value.allow_discovery,
     })
     toast.success('打印机已创建')
     showWizard.value = false
@@ -389,7 +398,7 @@ function syncEditBrand() {
 
 function openEdit(p: AdminPrinter) {
   editingPrinter.value = p
-  editForm.value = { name: p.name, model: p.model, is_default: p.is_default, is_shared: p.is_shared }
+  editForm.value = { name: p.name, model: p.model, is_default: p.is_default, is_shared: p.is_shared, allow_discovery: p.allow_discovery }
   editBrand.value = ''
   if (!models.value.length) loadModels().then(syncEditBrand)
   else syncEditBrand()
@@ -410,6 +419,7 @@ async function saveEdit() {
       device_uri: p.device_uri,
       is_default: editForm.value.is_default,
       is_shared: editForm.value.is_shared,
+      allow_discovery: editForm.value.allow_discovery,
     })
     toast.success('打印机已更新')
     editingPrinter.value = null
@@ -763,7 +773,8 @@ onUnmounted(() => {
             <div class="field full"><label>设备地址</label><input :value="selectedDevice?.device_uri" class="input" disabled /></div>
             <div class="field full"><label>驱动</label><input :value="useEverywhere ? 'IPP Everywhere（免驱动）' : selectedModel" class="input" disabled /></div>
             <div class="field"><label><input v-model="wizardForm.is_default" type="checkbox" /> 设为默认打印机</label></div>
-            <div class="field"><label><input v-model="wizardForm.is_shared" type="checkbox" /> 局域网共享</label></div>
+            <div class="field"><label><input v-model="wizardForm.is_shared" type="checkbox" @change="onWizardAccessChange" /> 允许局域网访问</label></div>
+            <div class="field"><label :style="{ opacity: wizardForm.is_shared ? 1 : 0.45 }"><input v-model="wizardForm.allow_discovery" type="checkbox" :disabled="!wizardForm.is_shared" /> 允许被发现</label></div>
           </div>
         </div>
 
@@ -833,7 +844,8 @@ onUnmounted(() => {
         <section class="edit-section">
           <h3 class="wizard-title" style="margin-bottom: 10px">选项</h3>
           <label class="check-line"><input v-model="editForm.is_default" type="checkbox" /> 设为默认打印机</label>
-          <label class="check-line"><input v-model="editForm.is_shared" type="checkbox" /> 局域网共享</label>
+          <label class="check-line"><input v-model="editForm.is_shared" type="checkbox" @change="onEditAccessChange" /> 允许局域网访问</label>
+          <label class="check-line" :style="{ opacity: editForm.is_shared ? 1 : 0.45 }"><input v-model="editForm.allow_discovery" type="checkbox" :disabled="!editForm.is_shared" /> 允许被发现</label>
         </section>
 
         <div class="modal-foot">

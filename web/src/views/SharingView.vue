@@ -63,23 +63,41 @@ async function copy(text: string) {
   }
 }
 
-async function toggleShare(p: SharingPrinter, event: Event) {
+async function saveSharing(p: SharingPrinter, access: boolean, discovery: boolean) {
+  await api.put(`/api/admin/printers/${encodeURIComponent(p.name)}`, {
+    name: p.name,
+    model: p.model,
+    ppd_queue: p.ppd_queue,
+    raw_queue: p.raw_queue,
+    device_uri: p.device_uri,
+    is_default: p.is_default,
+    is_shared: access,
+    allow_discovery: discovery && access,
+  })
+  p.is_shared = access
+  p.allow_discovery = discovery && access
+}
+
+async function toggleAccess(p: SharingPrinter, event: Event) {
   const checked = (event.target as HTMLInputElement).checked
   try {
-    await api.put(`/api/admin/printers/${encodeURIComponent(p.name)}`, {
-      name: p.name,
-      model: p.model,
-      ppd_queue: p.ppd_queue,
-      raw_queue: p.raw_queue,
-      device_uri: p.device_uri,
-      is_default: p.is_default,
-      is_shared: checked,
-    })
-    p.is_shared = checked
-    toast.success(checked ? '已开启 CUPS 共享标记' : '已关闭 CUPS 共享标记')
+    await saveSharing(p, checked, p.allow_discovery)
+    toast.success(checked ? '已允许局域网访问' : '已禁止局域网访问')
   } catch (e) {
     toast.error((e as Error).message)
-    event.target && ((event.target as HTMLInputElement).checked = !checked)
+    ;(event.target as HTMLInputElement).checked = !checked
+  }
+}
+
+async function toggleDiscovery(p: SharingPrinter, event: Event) {
+  if (!p.is_shared) return
+  const checked = (event.target as HTMLInputElement).checked
+  try {
+    await saveSharing(p, true, checked)
+    toast.success(checked ? '已允许局域网发现' : '已关闭局域网发现')
+  } catch (e) {
+    toast.error((e as Error).message)
+    ;(event.target as HTMLInputElement).checked = !checked
   }
 }
 
@@ -127,7 +145,8 @@ onMounted(load)
           <span class="share-printer-name">{{ p.name }}</span>
           <StatusBadge :status="p.state" />
           <span v-if="p.is_default" class="status-badge is-neutral">默认</span>
-          <span v-if="p.is_shared" class="status-badge is-neutral">已共享</span>
+          <span v-if="p.is_shared" class="status-badge is-neutral">允许访问</span>
+          <span v-if="p.allow_discovery" class="status-badge is-neutral">允许发现</span>
         </div>
         <span class="share-printer-model">{{ prettyModel(p.model) }}</span>
       </div>
@@ -136,13 +155,19 @@ onMounted(load)
 
     <div class="share-printer-body">
       <div class="share-body-head">
-        <span class="card-desc">连接地址</span>
-        <label class="check-line" style="margin: 0" title="仅同步 CUPS printer-is-shared 标记，不改变 CUPS 监听或防火墙策略">
-          <input type="checkbox" :checked="p.is_shared" @change="toggleShare(p, $event)" />
-          CUPS 共享标记
-        </label>
+        <span class="card-desc">连接设置</span>
+        <div class="share-switches">
+          <label class="check-line" style="margin: 0">
+            <input type="checkbox" :checked="p.is_shared" @change="toggleAccess(p, $event)" />
+            允许访问
+          </label>
+          <label class="check-line" :style="{ margin: 0, opacity: p.is_shared ? 1 : 0.45 }">
+            <input type="checkbox" :checked="p.allow_discovery" :disabled="!p.is_shared" @change="toggleDiscovery(p, $event)" />
+            允许发现
+          </label>
+        </div>
       </div>
-      <p class="share-hint">共享标记只控制 CUPS 的打印机广播；局域网客户端使用上方 IPP 地址连接，实际访问由 CUPS 监听地址和防火墙决定。</p>
+      <p class="share-hint">允许访问：局域网客户端可通过 IPP 网关连接；允许发现：通过 mDNS/Bonjour 广播。关闭访问时发现自动关闭。</p>
 
       <div class="share-grid">
         <div class="share-box is-ppd">

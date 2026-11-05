@@ -22,11 +22,14 @@ CREATE TABLE printers (
   device_uri    TEXT NOT NULL,
   ppd_file      TEXT NOT NULL DEFAULT '',
   is_default    INTEGER NOT NULL DEFAULT 0,
-  is_shared     INTEGER NOT NULL DEFAULT 1,
+  is_shared     INTEGER NOT NULL DEFAULT 1, -- 允许局域网访问（IPP 网关）
+  allow_discovery INTEGER NOT NULL DEFAULT 0, -- 允许通过 mDNS/DNS-SD 发现
   created_at    TEXT NOT NULL,
   updated_at    TEXT NOT NULL
 );
 ```
+
+`is_shared` 表示是否允许局域网客户端通过 IPP 网关访问；`allow_discovery` 表示是否允许 CUPS/DNS-SD 广播发现。两者都开启时局域网才能自动发现并访问；关闭访问会自动关闭发现。
 
 ### drivers
 

@@ -1058,6 +1058,13 @@ table.table {
   margin-bottom: 14px;
 }
 
+.share-switches {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
 .share-hint {
   margin: -4px 0 14px;
   color: var(--text-3);
