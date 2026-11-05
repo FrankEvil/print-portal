@@ -154,6 +154,39 @@ func (c *Converter) PageCount(ctx context.Context, pdfPath string) (int, error) 
 	return strconv.Atoi(m[1])
 }
 
+// SplitPDF splits a PDF into small PDFs so large jobs can be fed to the
+// printer in controlled chunks instead of one huge USB transfer.
+func (c *Converter) SplitPDF(ctx context.Context, src, dstDir string, chunkPages int) ([]string, error) {
+	pages, err := c.PageCount(ctx, src)
+	if err != nil {
+		return nil, err
+	}
+	if chunkPages <= 0 || pages <= chunkPages {
+		return []string{src}, nil
+	}
+	if _, err := exec.LookPath("gs"); err != nil {
+		return nil, fmt.Errorf("PDF split requires ghostscript (gs)")
+	}
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		return nil, err
+	}
+	var chunks []string
+	for start := 1; start <= pages; start += chunkPages {
+		end := start + chunkPages - 1
+		if end > pages {
+			end = pages
+		}
+		out := filepath.Join(dstDir, fmt.Sprintf("chunk-%03d-%03d.pdf", start, end))
+		if err := run(ctx, "gs", "-q", "-dNOPAUSE", "-dBATCH", "-sDEVICE=pdfwrite",
+			fmt.Sprintf("-dFirstPage=%d", start), fmt.Sprintf("-dLastPage=%d", end),
+			fmt.Sprintf("-sOutputFile=%s", out), src); err != nil {
+			return nil, err
+		}
+		chunks = append(chunks, out)
+	}
+	return chunks, nil
+}
+
 // Thumbnail renders the first page of a PDF to a PNG.
 func (c *Converter) Thumbnail(ctx context.Context, pdfPath, dst string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {

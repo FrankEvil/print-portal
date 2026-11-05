@@ -51,6 +51,9 @@ func (testConverter) ToPDF(_ context.Context, _ string, dst string) error {
 	return os.WriteFile(dst, []byte("%PDF-1.4\n"), 0o644)
 }
 func (testConverter) PageCount(_ context.Context, _ string) (int, error) { return 1, nil }
+func (testConverter) SplitPDF(_ context.Context, src, _ string, _ int) ([]string, error) {
+	return []string{src}, nil
+}
 func (testConverter) Thumbnail(_ context.Context, _, dst string) error {
 	return os.WriteFile(dst, []byte("png"), 0o644)
 }

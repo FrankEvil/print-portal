@@ -21,6 +21,7 @@ import (
 type FileConverter interface {
 	ToPDF(ctx context.Context, src, dst string) error
 	PageCount(ctx context.Context, pdf string) (int, error)
+	SplitPDF(ctx context.Context, src, dstDir string, chunkPages int) ([]string, error)
 	Thumbnail(ctx context.Context, pdf, dst string) error
 	ThumbnailImage(ctx context.Context, src, dst string) error
 }
@@ -121,16 +122,6 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 	if pages, err := m.conv.PageCount(convertCtx, pdfPath); err == nil {
 		j.Pages = pages
 	}
-	if maxPages := settingInt(m.store, "max_job_pages", 100); maxPages > 0 && j.Pages > maxPages {
-		m.fail(j, fmt.Sprintf("文件共 %d 页，超过安全上限 %d 页，请拆分后打印；大文件本地打印请使用 RAW 队列", j.Pages, maxPages))
-		return
-	}
-	if info, err := os.Stat(pdfPath); err == nil {
-		if maxMB := settingInt(m.store, "max_job_mb", 100); maxMB > 0 && info.Size() > int64(maxMB)*1024*1024 {
-			m.fail(j, fmt.Sprintf("转换后文件 %.0f MB，超过安全上限 %d MB，请拆分后打印；大文件本地打印请使用 RAW 队列", float64(info.Size())/1024/1024, maxMB))
-			return
-		}
-	}
 	preview := filepath.Join(jobDir, "preview.png")
 	if err := m.conv.Thumbnail(convertCtx, pdfPath, preview); err == nil {
 		j.PreviewPath = "/api/jobs/" + fmt.Sprintf("%d", j.ID) + "/preview"
@@ -158,6 +149,21 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 		ColorMode:   j.ColorMode,
 		Scaling:     j.Scaling,
 	}
+	// Large multi-page jobs are split into small CUPS jobs and submitted
+	// one at a time. This keeps the USB/printer buffer from being flooded.
+	chunkPages := settingInt(m.store, "chunk_pages", 4)
+	if chunkPages > 0 && j.PageRange == "" && j.Pages > chunkPages {
+		chunks, splitErr := m.conv.SplitPDF(convertCtx, pdfPath, filepath.Join(jobDir, "chunks"), chunkPages)
+		if splitErr == nil && len(chunks) > 1 {
+			if err := m.submitChunks(ctx, j, printer, chunks, opts); err != nil {
+				m.fail(j, err.Error())
+			}
+			return
+		}
+		if splitErr != nil {
+			m.logger.Printf("job %d chunking unavailable, fallback to single job: %v", j.ID, splitErr)
+		}
+	}
 	submitCtx, submitCancel := context.WithTimeout(ctx, 60*time.Second)
 	defer submitCancel()
 	cupsID, err := m.cups.Submit(submitCtx, printer.PPDQueue, pdfPath, opts)
@@ -171,6 +177,67 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 		m.logger.Printf("update job %d: %v", j.ID, err)
 	}
 	m.logger.Printf("job %d submitted as CUPS job %s", j.ID, cupsID)
+}
+
+// submitChunks submits one small CUPS job at a time and waits for it to leave
+// the CUPS queue before sending the next chunk.
+func (m *Manager) submitChunks(ctx context.Context, j *storage.Job, printer *storage.Printer, chunks []string, opts cups.PrintOptions) error {
+	copies := opts.Copies
+	if copies < 1 {
+		copies = 1
+	}
+	opts.Copies = 1
+	for copyIndex := 0; copyIndex < copies; copyIndex++ {
+		for _, chunk := range chunks {
+			fresh, _ := m.store.GetJob(j.ID)
+			if fresh != nil && fresh.Status == "cancelled" {
+				return nil
+			}
+			submitCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			cupsID, err := m.cups.Submit(submitCtx, printer.PPDQueue, chunk, opts)
+			cancel()
+			if err != nil {
+				return err
+			}
+			j.Status = "printing"
+			j.CupsJobID = cupsID
+			_ = m.store.UpdateJob(j)
+			m.logger.Printf("job %d chunk submitted as CUPS job %s", j.ID, cupsID)
+			if err := m.waitCUPSJob(ctx, cupsID); err != nil {
+				_ = m.cups.Cancel(context.Background(), cupsID)
+				return err
+			}
+		}
+	}
+	j.Status = "completed"
+	return m.store.UpdateJob(j)
+}
+
+func (m *Manager) waitCUPSJob(ctx context.Context, jobID string) error {
+	deadline := time.Now().Add(10 * time.Minute)
+	for {
+		if time.Now().After(deadline) {
+			return errors.New("CUPS 分块任务超时，已停止继续打印")
+		}
+		active, err := m.cups.ListActiveJobs(ctx)
+		if err == nil {
+			found := false
+			for _, job := range active {
+				if job.ID == jobID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
 }
 
 func (m *Manager) fail(j *storage.Job, msg string) {
