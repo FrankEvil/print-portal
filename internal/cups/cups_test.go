@@ -127,13 +127,13 @@ func TestParseAccepting(t *testing.T) {
 DCP7060不接受请求，时间始于now
 printer RAW accepting requests since now
 printer OFF not accepting requests since now
-brother-dcp-7060d-ppd accepting requests since now
-brother-dcp-7060d-raw not accepting requests since now`
+any-printer-ppd accepting requests since now
+any-printer-raw not accepting requests since now`
 	got := parseAccepting(out)
-	if !got["canon-ir-adv-c5560-ppd"] || !got["RAW"] || !got["brother-dcp-7060d-ppd"] {
+	if !got["canon-ir-adv-c5560-ppd"] || !got["RAW"] || !got["any-printer-ppd"] {
 		t.Errorf("expected accepting queues: %+v", got)
 	}
-	if got["DCP7060"] || got["OFF"] || got["brother-dcp-7060d-raw"] {
+	if got["DCP7060"] || got["OFF"] || got["any-printer-raw"] {
 		t.Errorf("expected rejecting queues: %+v", got)
 	}
 }
