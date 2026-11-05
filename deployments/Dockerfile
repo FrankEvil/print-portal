@@ -7,7 +7,9 @@
 FROM node:22-alpine AS web
 WORKDIR /src/web
 COPY web/package.json web/pnpm-lock.yaml* ./
-RUN corepack enable && (pnpm install --frozen-lockfile || pnpm install)
+RUN corepack enable \
+    && npm config set registry https://registry.npmmirror.com \
+    && (pnpm install --frozen-lockfile --config.minimumReleaseAge=0 --config.dangerouslyAllowAllBuilds=true || pnpm install --config.minimumReleaseAge=0 --config.dangerouslyAllowAllBuilds=true)
 COPY web/ ./
 RUN pnpm build
 
@@ -20,15 +22,16 @@ COPY internal ./internal
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/printd ./cmd/printd
 
 FROM debian:bookworm-slim
+ARG APT_MIRROR=mirrors.ustc.edu.cn
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Shanghai
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i "s|deb.debian.org|${APT_MIRROR}|g; s|security.debian.org|${APT_MIRROR}|g" /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list 2>/dev/null || true \
+    && apt-get update && apt-get install -y --no-install-recommends \
     cups \
     cups-client \
     cups-filters \
     cups-ipp-utils \
     printer-driver-brlaser \
-    foomatic-db \
     foomatic-db-compressed-ppds \
     foomatic-db-engine \
     imagemagick \

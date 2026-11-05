@@ -1,0 +1,26 @@
+services:
+  print-portal:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+    container_name: print-portal-local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8088:8088"
+      - "127.0.0.1:8631:8631"
+    volumes:
+      - print-data-local:/app/data
+      - cups-etc-local:/etc/cups
+      - cups-spool-local:/var/spool/cups
+      - cups-log-local:/var/log/cups
+    environment:
+      ADMIN_TOKEN: "demo123"
+      PRINTD_ADDR: ":8088"
+      CUPS_SERVER: "127.0.0.1:631"
+      PRINT_PORTAL_IPP_ADDR: "0.0.0.0:8631"
+
+volumes:
+  print-data-local:
+  cups-etc-local:
+  cups-spool-local:
+  cups-log-local:
