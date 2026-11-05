@@ -461,10 +461,10 @@ onMounted(load)
               <p class="card-desc">自动发现局域网 IPP/AirPrint 与 USB 打印机</p>
             </div>
             <div style="display: flex; gap: 8px">
-              <button class="btn btn-ghost btn-sm" :disabled="scanning.network" @click="startScan('network')">
+              <button class="btn btn-ghost btn-sm" :disabled="scanning.network" title="只扫描局域网 IPP/AirPrint 设备" @click="startScan('network')">
                 {{ scanning.network ? '扫描局域网中…' : '扫描局域网' }}
               </button>
-              <button class="btn btn-ghost btn-sm" :disabled="scanning.usb" @click="startScan('usb')">
+              <button class="btn btn-ghost btn-sm" :disabled="scanning.usb" title="扫描 USB / 本地连接设备" @click="startScan('usb')">
                 {{ scanning.usb ? '扫描中…' : '扫描' }}
               </button>
             </div>
