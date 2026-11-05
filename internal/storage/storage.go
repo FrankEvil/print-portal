@@ -299,6 +299,7 @@ func (s *Store) GetJobByCupsID(cupsID string) (*Job, error) {
 type JobFilter struct {
 	Status string
 	Source string
+	Query  string
 	Limit  int
 	Offset int
 }
@@ -313,6 +314,11 @@ func (s *Store) ListJobs(f JobFilter) ([]Job, error) {
 	if f.Source != "" {
 		q += ` AND source = ?`
 		args = append(args, f.Source)
+	}
+	if f.Query != "" {
+		like := "%" + f.Query + "%"
+		q += ` AND (filename LIKE ? OR cups_user LIKE ? OR status LIKE ?)`
+		args = append(args, like, like, like)
 	}
 	q += ` ORDER BY id DESC`
 	if f.Limit <= 0 || f.Limit > 500 {

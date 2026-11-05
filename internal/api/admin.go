@@ -836,6 +836,7 @@ func (s *Server) handleAdminJobs(w http.ResponseWriter, r *http.Request) {
 	jobs, err := s.store.ListJobs(storage.JobFilter{
 		Status: r.URL.Query().Get("status"),
 		Source: r.URL.Query().Get("source"),
+		Query:  strings.TrimSpace(r.URL.Query().Get("q")),
 		Limit:  atoiDefault(r.URL.Query().Get("limit"), 200),
 		Offset: atoiDefault(r.URL.Query().Get("offset"), 0),
 	})

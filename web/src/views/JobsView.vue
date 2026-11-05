@@ -10,6 +10,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 const jobs = ref<Job[]>([])
 const status = ref('')
 const source = ref('')
+const query = ref('')
 let timer: number | undefined
 const showClearConfirm = ref(false)
 const clearing = ref(false)
@@ -19,6 +20,7 @@ async function load() {
     const params = new URLSearchParams()
     if (status.value) params.set('status', status.value)
     if (source.value) params.set('source', source.value)
+    if (query.value.trim()) params.set('q', query.value.trim())
     params.set('limit', '200')
     const res = await api.get<{ jobs: Job[] }>(`/api/admin/jobs?${params.toString()}`)
     jobs.value = res.jobs
@@ -91,6 +93,14 @@ onUnmounted(() => {
         <option value="web">网页</option>
         <option value="local">本地</option>
       </select>
+      <input
+        v-model="query"
+        class="input"
+        style="width: 220px"
+        placeholder="搜索文件 / 用户 / 状态"
+        @keyup.enter="load"
+        @change="load"
+      />
       <button class="btn btn-ghost btn-sm" @click="showClearConfirm = true">清空打印记录</button>
       <button class="btn btn-ghost btn-sm" @click="load">刷新</button>
     </div>
