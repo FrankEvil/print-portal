@@ -482,10 +482,15 @@ func (c *Client) ClearJobHistory(ctx context.Context) error {
 	if c.server != "" {
 		args = append(args, "-h", c.server)
 	}
-	args = append(args, "PreserveJobHistory=No", "PreserveJobFiles=No")
-	_, stderr, err := c.runner.Run(ctx, "cupsctl", args...)
-	if err != nil {
-		return fmt.Errorf("cupsctl: %s: %w", strings.TrimSpace(stderr), err)
+	// Disabling history is what makes CUPS discard its existing completed
+	// job records; re-enable it immediately so future jobs are retained.
+	clearArgs := append(append([]string{}, args...), "PreserveJobHistory=No", "PreserveJobFiles=No")
+	if _, stderr, err := c.runner.Run(ctx, "cupsctl", clearArgs...); err != nil {
+		return fmt.Errorf("cupsctl clear: %s: %w", strings.TrimSpace(stderr), err)
+	}
+	restoreArgs := append(append([]string{}, args...), "PreserveJobHistory=Yes", "PreserveJobFiles=Yes")
+	if _, stderr, err := c.runner.Run(ctx, "cupsctl", restoreArgs...); err != nil {
+		return fmt.Errorf("cupsctl restore: %s: %w", strings.TrimSpace(stderr), err)
 	}
 	return nil
 }
