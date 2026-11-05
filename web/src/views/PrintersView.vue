@@ -37,7 +37,7 @@ const editingPrinter = ref<AdminPrinter | null>(null)
 const editSaving = ref(false)
 const editUploading = ref(false)
 const editDriverInput = ref<HTMLInputElement | null>(null)
-const editForm = ref({ name: '', model: '', is_default: false, is_shared: true })
+const editForm = ref({ name: '', model: '', device_uri: '', is_default: false, is_shared: true })
 const editBrand = ref('')
 const rowMenu = ref<{ printer: AdminPrinter; top: number; left: number } | null>(null)
 
@@ -110,6 +110,38 @@ const editModelSelectOptions = computed(() => {
     list.unshift({ value: editForm.value.model, label: `当前：${editCurrentDriverLabel.value}`, hint: '当前驱动' })
   }
   return list
+})
+
+const editConnectionKind = computed(() => {
+  const uri = editForm.value.device_uri
+  if (uri.startsWith('usb://')) return 'USB'
+  if (uri.startsWith('dnssd://')) return '局域网 · Bonjour'
+  if (uri.startsWith('ipp://')) return '局域网 · IPP'
+  if (uri.startsWith('ipps://')) return '局域网 · IPPS'
+  if (uri.startsWith('socket://')) return '局域网 · TCP/IP'
+  if (uri.startsWith('lpd://')) return '局域网 · LPD'
+  return '自定义'
+})
+
+const editConnectionTarget = computed(() => {
+  const uri = editForm.value.device_uri
+  if (uri.startsWith('usb://')) {
+    return decodeURIComponent(uri.slice(6).split('?')[0]).replace('/', ' ')
+  }
+  if (uri.startsWith('dnssd://')) {
+    return decodeURIComponent(uri.slice(8)).split('/')[0].split('._')[0]
+  }
+  if (uri.startsWith('ipp://') || uri.startsWith('ipps://')) {
+    try {
+      const parsed = new URL(uri)
+      return parsed.host
+    } catch {
+      /* fall through */
+    }
+  }
+  if (uri.startsWith('socket://')) return uri.slice(9)
+  if (uri.startsWith('lpd://')) return uri.slice(6)
+  return ''
 })
 
 function onWizardBrandChange() {
@@ -389,7 +421,7 @@ function syncEditBrand() {
 
 function openEdit(p: AdminPrinter) {
   editingPrinter.value = p
-  editForm.value = { name: p.name, model: p.model, is_default: p.is_default, is_shared: p.is_shared }
+  editForm.value = { name: p.name, model: p.model, device_uri: p.device_uri, is_default: p.is_default, is_shared: p.is_shared }
   editBrand.value = ''
   if (!models.value.length) loadModels().then(syncEditBrand)
   else syncEditBrand()
@@ -400,6 +432,7 @@ async function saveEdit() {
   if (!p) return
   if (!editForm.value.name.trim()) return toast.error('请输入打印机名称')
   if (!editForm.value.model) return toast.error('请选择驱动 / 型号')
+  if (!editForm.value.device_uri.trim()) return toast.error('请输入设备地址 device-uri')
   editSaving.value = true
   try {
     await api.put(`/api/admin/printers/${encodeURIComponent(p.name)}`, {
@@ -407,7 +440,7 @@ async function saveEdit() {
       model: editForm.value.model,
       ppd_queue: p.ppd_queue,
       raw_queue: p.raw_queue,
-      device_uri: p.device_uri,
+      device_uri: editForm.value.device_uri.trim(),
       is_default: editForm.value.is_default,
       is_shared: editForm.value.is_shared,
     })
@@ -791,7 +824,6 @@ onUnmounted(() => {
             <span>PPD 队列：{{ editingPrinter.ppd_queue }}</span>
             <span>RAW 队列：{{ editingPrinter.raw_queue }}</span>
           </div>
-          <div><span class="admin-sub">设备地址：</span>{{ editingPrinter.device_uri }}</div>
         </div>
 
         <section class="edit-section">
@@ -800,6 +832,20 @@ onUnmounted(() => {
             <label>打印机名称</label>
             <input v-model="editForm.name" class="input" />
           </div>
+        </section>
+
+        <section class="edit-section">
+          <div class="section-head" style="margin-bottom: 10px">
+            <h3 class="wizard-title">连接</h3>
+            <span class="connection-kind">{{ editConnectionKind }}</span>
+          </div>
+          <div class="field">
+            <label>设备地址 device-uri</label>
+            <input v-model="editForm.device_uri" class="input" placeholder="usb://... / ipp://... / socket://..." />
+          </div>
+          <p class="card-desc" style="margin-top: 8px">
+            当前主机：{{ editConnectionTarget || '—' }}。修改地址会同步更新 PPD 与 RAW 两个队列。
+          </p>
         </section>
 
         <section class="edit-section">
