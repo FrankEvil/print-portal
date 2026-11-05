@@ -120,6 +120,7 @@ func (s *Server) routes() {
 	s.admin("POST /api/admin/cups/reload", s.handleCUPSReload)
 	s.admin("GET /api/admin/cups/logs", s.handleCUPSLogs)
 	s.admin("GET /api/admin/jobs", s.handleAdminJobs)
+	s.admin("DELETE /api/admin/jobs", s.handleAdminJobs)
 	s.admin("POST /api/admin/jobs/{id}/cancel", s.handleAdminJobAction)
 	s.admin("POST /api/admin/jobs/{id}/hold", s.handleAdminJobAction)
 	s.admin("POST /api/admin/jobs/{id}/release", s.handleAdminJobAction)

@@ -347,6 +347,20 @@ func (s *Store) UpdateJobStatus(id int64, status, errMsg string) error {
 	return err
 }
 
+// ClearFinishedJobs removes completed/failed/cancelled job history while
+// keeping active jobs and their state intact.
+func (s *Store) ClearFinishedJobs() (int64, error) {
+	_, _ = s.db.Exec(`DELETE FROM local_job_names WHERE cups_job_id IN (
+		SELECT cups_job_id FROM jobs
+		WHERE source='local' AND status IN ('completed','failed','cancelled')
+	)`)
+	res, err := s.db.Exec(`DELETE FROM jobs WHERE status IN ('completed','failed','cancelled')`)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // SaveLocalJobName persists the document name captured by the IPP gateway
 // for a CUPS job created by a LAN client.
 func (s *Store) SaveLocalJobName(cupsJobID, name string) error {

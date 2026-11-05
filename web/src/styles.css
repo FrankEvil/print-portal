@@ -1677,3 +1677,17 @@ table.table {
     animation: none !important;
   }
 }
+
+.confirm-modal {
+  width: min(440px, 100%);
+}
+
+.confirm-modal .modal-head {
+  align-items: flex-start;
+}
+
+.confirm-message {
+  margin: 8px 0 0;
+  line-height: 1.65;
+  white-space: pre-line;
+}

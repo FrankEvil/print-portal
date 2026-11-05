@@ -5,6 +5,7 @@ import { toast } from '../toast'
 import type { AdminPrinter, Device, MaintenanceAction, MaintenanceCapabilities, Model, PPDOption } from '../types'
 import StatusBadge from '../components/StatusBadge.vue'
 import SearchableSelect from '../components/SearchableSelect.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 
 const printers = ref<AdminPrinter[]>([])
 const optionsFor = ref('')
@@ -45,6 +46,14 @@ const maintenanceCaps = ref<MaintenanceCapabilities | null>(null)
 const maintenanceOutput = ref('')
 const maintenanceLoading = ref(false)
 const maintenanceRunning = ref('')
+const confirmState = ref<{
+  title: string
+  message: string
+  confirmText: string
+  danger?: boolean
+  onConfirm: () => Promise<void> | void
+} | null>(null)
+const confirmBusy = ref(false)
 
 const brands = computed(() => {
   const set = new Set<string>()
@@ -456,25 +465,43 @@ async function uploadEditDriver(e: Event) {
   }
 }
 
-async function remove(p: AdminPrinter) {
-  if (!confirm(`确定删除打印机 ${p.name} 及其队列？`)) return
-  try {
-    await api.del(`/api/admin/printers/${encodeURIComponent(p.name)}`)
-    toast.success('已删除')
-    await load()
-  } catch (e) {
-    toast.error((e as Error).message)
+function remove(p: AdminPrinter) {
+  confirmState.value = {
+    title: '删除打印机',
+    message: `确定删除「${p.name}」及其 PPD / RAW 队列？`,
+    confirmText: '删除',
+    danger: true,
+    onConfirm: async () => {
+      try {
+        await api.del(`/api/admin/printers/${encodeURIComponent(p.name)}`)
+        toast.success('已删除')
+        await load()
+      } catch (e) {
+        toast.error((e as Error).message)
+      }
+    },
   }
 }
 
 async function action(p: AdminPrinter, name: string) {
-  if (name === 'purge' && !confirm('确定清空该打印机的所有任务？')) return
   try {
     const res = await api.post<{ cups_job_id?: string }>(`/api/admin/printers/${encodeURIComponent(p.name)}/${name}`)
     toast.success(name === 'test' ? `测试页已提交 ${res.cups_job_id || ''}` : '操作成功')
     await load()
   } catch (e) {
     toast.error((e as Error).message)
+  }
+}
+
+async function runConfirm() {
+  const state = confirmState.value
+  if (!state || confirmBusy.value) return
+  confirmBusy.value = true
+  try {
+    await state.onConfirm()
+    confirmState.value = null
+  } finally {
+    confirmBusy.value = false
   }
 }
 
@@ -504,10 +531,17 @@ function menuLoadOptions() {
   if (p) loadOptions(p)
 }
 
-async function menuPurge() {
+function menuPurge() {
   const p = rowMenu.value?.printer
   rowMenu.value = null
-  if (p) await action(p, 'purge')
+  if (!p) return
+  confirmState.value = {
+    title: '清空打印队列',
+    message: `将取消「${p.name}」PPD 和 RAW 队列中的所有任务，此操作不可撤销。`,
+    confirmText: '清空队列',
+    danger: true,
+    onConfirm: () => action(p, 'purge'),
+  }
 }
 
 async function menuRemove() {
@@ -905,6 +939,17 @@ onUnmounted(() => {
       </div>
     </div>
   </Teleport>
+
+  <ConfirmDialog
+    :open="!!confirmState"
+    :title="confirmState?.title || ''"
+    :message="confirmState?.message || ''"
+    :confirm-text="confirmState?.confirmText || '确定'"
+    :danger="confirmState?.danger"
+    :busy="confirmBusy"
+    @close="confirmState = null"
+    @confirm="runConfirm"
+  />
 
   <!-- Row action dropdown (teleported so the table cannot clip it) -->
   <Teleport to="body">

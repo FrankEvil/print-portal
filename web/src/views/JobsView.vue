@@ -5,11 +5,14 @@ import { toast } from '../toast'
 import type { Job } from '../types'
 import { formatJobParams } from '../jobDisplay'
 import StatusBadge from '../components/StatusBadge.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 
 const jobs = ref<Job[]>([])
 const status = ref('')
 const source = ref('')
 let timer: number | undefined
+const showClearConfirm = ref(false)
+const clearing = ref(false)
 
 async function load() {
   try {
@@ -26,6 +29,21 @@ async function load() {
 
 function openJobFile(id: number) {
   window.open(`/api/jobs/${id}/file`, '_blank')
+}
+
+async function clearRecords() {
+  if (clearing.value) return
+  clearing.value = true
+  try {
+    const res = await api.del<{ cleared: number }>('/api/admin/jobs')
+    showClearConfirm.value = false
+    toast.success(`已清理 ${res.cleared} 条打印记录`)
+    await load()
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    clearing.value = false
+  }
 }
 
 async function act(j: Job, action: string) {
@@ -73,6 +91,7 @@ onUnmounted(() => {
         <option value="web">网页</option>
         <option value="local">本地</option>
       </select>
+      <button class="btn btn-ghost btn-sm" @click="showClearConfirm = true">清空打印记录</button>
       <button class="btn btn-ghost btn-sm" @click="load">刷新</button>
     </div>
   </div>
@@ -114,4 +133,15 @@ onUnmounted(() => {
       </table>
     </div>
   </section>
+
+  <ConfirmDialog
+    :open="showClearConfirm"
+    title="清空打印记录"
+    message="将删除所有已完成、失败和已取消的打印记录；正在打印的任务不受影响。"
+    confirm-text="清空记录"
+    danger
+    :busy="clearing"
+    @close="showClearConfirm = false"
+    @confirm="clearRecords"
+  />
 </template>
