@@ -21,3 +21,16 @@ services:
       PRINTD_ADDR: ":8088"
       CUPS_SERVER: "127.0.0.1:631"
       PRINT_PORTAL_IPP_ADDR: "0.0.0.0:8631"
+
+  web-proxy:
+    image: nginx:latest
+    container_name: print-portal-web-proxy
+    restart: unless-stopped
+    depends_on:
+      - print-portal
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./deployments/nginx-proxy.conf:/etc/nginx/nginx.conf:ro
