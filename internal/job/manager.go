@@ -393,11 +393,20 @@ func (m *Manager) importLocalJobs(active, completed []cups.Job) {
 		}
 	}
 	for _, cj := range active {
-		status := "queued"
-		importOne(cj, status)
+		importOne(cj, "queued")
 	}
+	// Completed local jobs are historical CUPS records and must not be
+	// imported as new application tasks. Only refresh rows that were already
+	// created while the job was active.
 	for _, cj := range completed {
-		importOne(cj, "completed")
+		existing, err := m.store.GetJobByCupsID(cj.ID)
+		if err != nil || existing == nil || existing.Source != "local" {
+			continue
+		}
+		if storedName, err := m.store.GetLocalJobName(cj.ID); err == nil && storedName != "" && existing.Filename != storedName {
+			_ = m.store.UpdateJobFilename(existing.ID, storedName)
+		}
+		_ = m.store.UpdateJobStatus(existing.ID, "completed", "")
 	}
 }
 
