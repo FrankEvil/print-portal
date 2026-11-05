@@ -134,8 +134,12 @@ function pollScan(scope: 'network' | 'usb', scanID: string) {
       if (res.status === 'done' || res.status === 'failed') {
         clearInterval(timer)
         scanning.value[scope] = false
-        if (res.status === 'done') toast.success(`扫描完成，发现 ${res.devices.length} 个设备`)
-        else toast.error(res.error || '扫描失败')
+        if (res.status === 'done') {
+          reconcileScope(scope, res.devices || [])
+          toast.success(`扫描完成，发现 ${res.devices.length} 个设备`)
+        } else {
+          toast.error(res.error || '扫描失败')
+        }
       }
     } catch (e) {
       clearInterval(timer)
@@ -150,6 +154,24 @@ function mergeDevices(list: Device[]) {
   for (const d of devices.value) byURI.set(d.device_uri, d)
   for (const d of list) byURI.set(d.device_uri, d)
   devices.value = Array.from(byURI.values())
+}
+
+function isUSBDevice(d: Device) {
+  return d.device_uri.startsWith('usb://')
+}
+
+// Keep devices from the other scan scope; replace this scope with the latest
+// result so devices that went offline disappear after a completed scan.
+function reconcileScope(scope: 'network' | 'usb', list: Device[]) {
+  const inScope = (d: Device) => (scope === 'usb' ? isUSBDevice(d) : !isUSBDevice(d))
+  const others = devices.value.filter((d) => !inScope(d))
+  const byURI = new Map<string, Device>()
+  for (const d of list) byURI.set(d.device_uri, d)
+  devices.value = [...others, ...Array.from(byURI.values())]
+  if (selectedDevice.value && inScope(selectedDevice.value) && !byURI.has(selectedDevice.value.device_uri)) {
+    selectedDevice.value = null
+    toast.info('之前选择的设备已不在扫描结果中')
+  }
 }
 
 function openWizard() {
