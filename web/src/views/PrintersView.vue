@@ -138,12 +138,12 @@ async function loadModels() {
 
 type ScanScope = 'network' | 'usb' | 'all'
 
-async function startScan(scope: ScanScope, after?: () => void) {
+async function startScan(scope: ScanScope, after?: () => void, silent = false) {
   if (scanning.value[scope]) return
   scanning.value[scope] = true
   try {
     const res = await api.post<{ scan_id: string }>('/api/admin/discovery/scan', { scope })
-    pollScan(scope, res.scan_id, after)
+    pollScan(scope, res.scan_id, after, silent)
   } catch (e) {
     scanning.value[scope] = false
     toast.error((e as Error).message)
@@ -151,7 +151,7 @@ async function startScan(scope: ScanScope, after?: () => void) {
   }
 }
 
-function pollScan(scope: ScanScope, scanID: string, after?: () => void) {
+function pollScan(scope: ScanScope, scanID: string, after?: () => void, silent = false) {
   const timer = window.setInterval(async () => {
     try {
       const res = await api.get<{ status: string; devices: Device[] | null; error?: string }>(`/api/admin/discovery/scan/${scanID}`)
@@ -162,7 +162,7 @@ function pollScan(scope: ScanScope, scanID: string, after?: () => void) {
         scanning.value[scope] = false
         if (res.status === 'done') {
           reconcileScope(scope, list)
-          toast.success(`扫描完成，发现 ${list.length} 个设备`)
+          if (!silent) toast.success(`扫描完成，发现 ${list.length} 个设备`)
         } else {
           toast.error(res.error || '扫描失败')
         }
@@ -219,9 +219,10 @@ function openWizard() {
   models.value = []
   modelTotal.value = 0
   // Local USB scan is fast; start LAN mDNS scan after it finishes.
+  // Automatic scans stay silent; the device list itself is the feedback.
   startScan('usb', () => {
-    if (showWizard.value) startScan('network')
-  })
+    if (showWizard.value) startScan('network', undefined, true)
+  }, true)
 }
 
 function chooseDevice(d: Device) {
