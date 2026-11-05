@@ -347,6 +347,10 @@ func (m *Manager) importLocalJobs(active, completed []cups.Job) {
 		queueToPrinter[printers[i].RAWQueue] = &printers[i]
 	}
 	importOne := func(cj cups.Job, status string) {
+		// Empty jobs are CUPS validation/retry artifacts, not real print jobs.
+		if cj.Size <= 0 {
+			return
+		}
 		printer := queueToPrinter[cj.Queue]
 		if printer == nil {
 			return
