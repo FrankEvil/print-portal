@@ -138,19 +138,20 @@ async function loadModels() {
 
 type ScanScope = 'network' | 'usb' | 'all'
 
-async function startScan(scope: ScanScope) {
+async function startScan(scope: ScanScope, after?: () => void) {
   if (scanning.value[scope]) return
   scanning.value[scope] = true
   try {
     const res = await api.post<{ scan_id: string }>('/api/admin/discovery/scan', { scope })
-    pollScan(scope, res.scan_id)
+    pollScan(scope, res.scan_id, after)
   } catch (e) {
     scanning.value[scope] = false
     toast.error((e as Error).message)
+    after?.()
   }
 }
 
-function pollScan(scope: ScanScope, scanID: string) {
+function pollScan(scope: ScanScope, scanID: string, after?: () => void) {
   const timer = window.setInterval(async () => {
     try {
       const res = await api.get<{ status: string; devices: Device[] | null; error?: string }>(`/api/admin/discovery/scan/${scanID}`)
@@ -165,11 +166,13 @@ function pollScan(scope: ScanScope, scanID: string) {
         } else {
           toast.error(res.error || '扫描失败')
         }
+        after?.()
       }
     } catch (e) {
       clearInterval(timer)
       scanning.value[scope] = false
       toast.error((e as Error).message)
+      after?.()
     }
   }, 800)
 }
@@ -215,7 +218,10 @@ function openWizard() {
   wizardForm.value = { name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true }
   models.value = []
   modelTotal.value = 0
-  startScan('usb')
+  // Local USB scan is fast; start LAN mDNS scan after it finishes.
+  startScan('usb', () => {
+    if (showWizard.value) startScan('network')
+  })
 }
 
 function chooseDevice(d: Device) {
