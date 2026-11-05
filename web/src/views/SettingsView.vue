@@ -10,6 +10,8 @@ const theme = ref<ThemeMode>(getTheme())
 
 const fields: { key: string; label: string; type?: string; hint?: string }[] = [
   { key: 'max_upload_mb', label: '上传大小上限（MB）', type: 'number' },
+  { key: 'max_job_pages', label: '单任务最大页数', type: 'number', hint: '超过会拒绝提交，0 表示不限制' },
+  { key: 'max_job_mb', label: '单任务最大转换后大小（MB）', type: 'number', hint: '防止超大任务卡死 USB/打印机，0 表示不限制' },
   { key: 'temp_retention_hours', label: '临时文件保留（小时）', type: 'number' },
   { key: 'job_history_days', label: '任务历史保留（天）', type: 'number' },
   { key: 'language', label: '语言', hint: '当前 P1 仅中文' },

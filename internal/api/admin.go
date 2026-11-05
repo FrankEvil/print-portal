@@ -878,6 +878,8 @@ func (s *Server) handleAdminJobAction(w http.ResponseWriter, r *http.Request) {
 
 var allowedSettings = map[string]string{
 	"max_upload_mb":        "200",
+	"max_job_pages":        "100",
+	"max_job_mb":           "100",
 	"temp_retention_hours": "24",
 	"job_history_days":     "30",
 	"default_printer_id":   "0",

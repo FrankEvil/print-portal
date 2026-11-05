@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -119,6 +120,16 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 
 	if pages, err := m.conv.PageCount(convertCtx, pdfPath); err == nil {
 		j.Pages = pages
+	}
+	if maxPages := settingInt(m.store, "max_job_pages", 100); maxPages > 0 && j.Pages > maxPages {
+		m.fail(j, fmt.Sprintf("文件共 %d 页，超过安全上限 %d 页，请拆分后打印；大文件本地打印请使用 RAW 队列", j.Pages, maxPages))
+		return
+	}
+	if info, err := os.Stat(pdfPath); err == nil {
+		if maxMB := settingInt(m.store, "max_job_mb", 100); maxMB > 0 && info.Size() > int64(maxMB)*1024*1024 {
+			m.fail(j, fmt.Sprintf("转换后文件 %.0f MB，超过安全上限 %d MB，请拆分后打印；大文件本地打印请使用 RAW 队列", float64(info.Size())/1024/1024, maxMB))
+			return
+		}
 	}
 	preview := filepath.Join(jobDir, "preview.png")
 	if err := m.conv.Thumbnail(convertCtx, pdfPath, preview); err == nil {
@@ -340,3 +351,15 @@ func (m *Manager) Retry(id int64) (*storage.Job, error) {
 
 // KindName is a helper for API logging.
 func KindName(path string) string { return string(convert.Detect(path)) }
+
+func settingInt(store *storage.Store, key string, fallback int) int {
+	value, ok, _ := store.GetSetting(key)
+	if !ok || strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return fallback
+	}
+	return n
+}
