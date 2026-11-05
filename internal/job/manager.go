@@ -399,14 +399,24 @@ func (m *Manager) importLocalJobs(active, completed []cups.Job) {
 	// imported as new application tasks. Only refresh rows that were already
 	// created while the job was active.
 	for _, cj := range completed {
-		existing, err := m.store.GetJobByCupsID(cj.ID)
-		if err != nil || existing == nil || existing.Source != "local" {
+		if cj.Size <= 0 {
 			continue
 		}
-		if storedName, err := m.store.GetLocalJobName(cj.ID); err == nil && storedName != "" && existing.Filename != storedName {
-			_ = m.store.UpdateJobFilename(existing.ID, storedName)
+		printer := queueToPrinter[cj.Queue]
+		if printer == nil {
+			continue
 		}
-		_ = m.store.UpdateJobStatus(existing.ID, "completed", "")
+		name, _ := m.store.GetLocalJobName(cj.ID)
+		if name == "" {
+			// Without a captured client document name, completed CUPS history
+			// cannot be distinguished from validation/retry artifacts.
+			continue
+		}
+		recent, err := m.store.HasRecentLocalJob(printer.ID, cj.User, name, time.Now().Add(-10*time.Minute).Format(time.RFC3339))
+		if err != nil || recent {
+			continue
+		}
+		importOne(cj, "completed")
 	}
 }
 

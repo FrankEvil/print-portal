@@ -376,6 +376,17 @@ func (s *Store) GetLocalJobName(cupsJobID string) (string, error) {
 	return name, err
 }
 
+// HasRecentLocalJob reports whether an equivalent local task was already
+// imported recently. It is used to collapse CUPS retry jobs that have distinct
+// CUPS job IDs but the same client document name.
+func (s *Store) HasRecentLocalJob(printerID int64, user, filename, since string) (bool, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(1) FROM jobs
+		WHERE source='local' AND printer_id=? AND cups_user=? AND filename=? AND created_at >= ?`,
+		printerID, user, filename, since).Scan(&n)
+	return n > 0, err
+}
+
 // ClaimNextPending atomically moves the oldest pending job to converting and returns it.
 func (s *Store) ClaimNextPending() (*Job, error) {
 	tx, err := s.db.Begin()
