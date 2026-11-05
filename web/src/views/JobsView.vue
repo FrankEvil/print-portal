@@ -76,7 +76,7 @@ onUnmounted(() => {
       <h1 class="admin-title">任务管理</h1>
       <p class="admin-sub">网页任务与本地直连任务统一展示；本地任务仅含 CUPS 元数据</p>
     </div>
-    <div style="display: flex; gap: 8px">
+    <div class="admin-actions">
       <select v-model="status" class="select" style="width: 140px" @change="load">
         <option value="">全部状态</option>
         <option value="pending">待处理</option>
