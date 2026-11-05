@@ -484,7 +484,39 @@ async function saveOptions() {
   }
 }
 
-onMounted(load)
+function prettyModel(p: AdminPrinter) {
+  if (p.model === 'everywhere') return 'IPP Everywhere（免驱动）'
+  const match = models.value.find((m) => m.name === p.model)
+  if (match?.description) return match.description
+  const base = (p.model.split('/').pop() || p.model).replace(/\.(gz|ppd)$/i, '')
+  return base.replace(/\s+CUPS$/i, '') || '—'
+}
+
+function prettyDevice(uri: string) {
+  if (uri.startsWith('usb://')) {
+    return 'USB · ' + decodeURIComponent(uri.slice(6).split('?')[0]).replace('/', ' ')
+  }
+  if (uri.startsWith('dnssd://')) {
+    const raw = decodeURIComponent(uri.slice(8)).split('/')[0].split('._')[0]
+    return 'Bonjour · ' + raw.replace(/-/g, ' ').replace(/\s+@\s+/g, ' @ ')
+  }
+  if (uri.startsWith('ipp://') || uri.startsWith('ipps://')) {
+    try {
+      const parsed = new URL(uri)
+      return (uri.startsWith('ipps://') ? 'IPPS · ' : 'IPP · ') + parsed.hostname
+    } catch {
+      /* fall through */
+    }
+  }
+  if (uri.startsWith('socket://')) return 'TCP/IP · ' + uri.slice(9)
+  if (uri.startsWith('lpd://')) return 'LPD · ' + uri.slice(6)
+  return uri.length > 60 ? uri.slice(0, 60) + '…' : uri
+}
+
+onMounted(() => {
+  load()
+  loadModels()
+})
 </script>
 
 <template>
@@ -501,32 +533,41 @@ onMounted(load)
     <div v-else class="table-wrap">
       <table class="table">
         <thead>
-          <tr><th>名称</th><th>队列</th><th>设备地址</th><th>状态</th><th>队列长度</th><th>操作</th></tr>
+          <tr><th>名称</th><th>队列</th><th>设备</th><th>状态</th><th>操作</th></tr>
         </thead>
         <tbody>
           <tr v-for="p in printers" :key="p.id">
-            <td>
+            <td class="printer-name-cell">
               <strong>{{ p.name }}</strong>
-              <div class="admin-sub">{{ p.model || '—' }}{{ p.is_default ? ' · 默认' : '' }}</div>
+              <div class="model-label">{{ prettyModel(p) }}<span v-if="p.is_default"> · 默认</span></div>
+            </td>
+            <td class="queue-cell">
+              <div class="queue-line"><span class="queue-tag">PPD</span><span class="queue-name">{{ p.ppd_queue }}</span></div>
+              <div class="queue-line"><span class="queue-tag">RAW</span><span class="queue-name">{{ p.raw_queue }}</span></div>
+            </td>
+            <td><div class="device-summary" :title="p.device_uri">{{ prettyDevice(p.device_uri) }}</div></td>
+            <td>
+              <div class="status-cell">
+                <StatusBadge :status="p.state" />
+                <span class="queue-count">队列 {{ p.queue_length }}</span>
+              </div>
             </td>
             <td>
-              <div>{{ p.ppd_queue }} <span class="admin-sub">(PPD)</span></div>
-              <div>{{ p.raw_queue }} <span class="admin-sub">(RAW)</span></div>
-            </td>
-            <td style="max-width: 260px; word-break: break-all">{{ p.device_uri }}</td>
-            <td><StatusBadge :status="p.state" /></td>
-            <td>{{ p.queue_length }}</td>
-            <td>
-              <div style="display: flex; flex-wrap: wrap; gap: 6px">
+              <div class="row-actions">
                 <button class="btn btn-ghost btn-sm" @click="openEdit(p)">编辑</button>
                 <button class="btn btn-ghost btn-sm" @click="action(p, 'test')">测试页</button>
                 <button v-if="p.state === 'stopped'" class="btn btn-ghost btn-sm" @click="action(p, 'resume')">恢复</button>
                 <button v-else class="btn btn-ghost btn-sm" @click="action(p, 'pause')">暂停</button>
                 <button v-if="p.accepting" class="btn btn-ghost btn-sm" @click="action(p, 'reject')">拒绝任务</button>
                 <button v-else class="btn btn-ghost btn-sm" @click="action(p, 'accept')">接受任务</button>
-                <button class="btn btn-ghost btn-sm" @click="action(p, 'purge')">清空</button>
-                <button class="btn btn-ghost btn-sm" @click="loadOptions(p)">PPD 选项</button>
-                <button class="btn btn-danger btn-sm" @click="remove(p)">删除</button>
+                <details class="action-menu">
+                  <summary class="btn btn-ghost btn-sm">更多</summary>
+                  <div class="action-menu-panel">
+                    <button class="btn btn-ghost btn-sm" @click="loadOptions(p)">PPD 选项</button>
+                    <button class="btn btn-ghost btn-sm" @click="action(p, 'purge')">清空队列</button>
+                    <button class="btn btn-danger btn-sm" @click="remove(p)">删除打印机</button>
+                  </div>
+                </details>
               </div>
             </td>
           </tr>
