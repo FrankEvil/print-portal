@@ -650,7 +650,7 @@ onMounted(load)
             <div v-if="selectedModel" class="selected-driver">
               已选择：<strong>{{ selectedModelLabel }}</strong>
             </div>
-            <p v-else-if="!useEverywhere && modelSelectOptions.length" class="card-desc" style="color: var(--warning); margin-top: 8px">
+            <p v-else-if="!useEverywhere && modelSelectOptions.length && !brandMissing" class="card-desc" style="color: var(--warning); margin-top: 8px">
               未自动匹配到驱动，请手动选择型号；找不到时请上传 PPD / 驱动包，或使用 IPP Everywhere。
             </p>
           </template>
