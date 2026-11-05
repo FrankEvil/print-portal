@@ -347,6 +347,35 @@ func (s *Store) UpdateJobStatus(id int64, status, errMsg string) error {
 	return err
 }
 
+// SaveLocalJobName persists the document name captured by the IPP gateway
+// for a CUPS job created by a LAN client.
+func (s *Store) SaveLocalJobName(cupsJobID, name string) error {
+	name = strings.TrimSpace(name)
+	if cupsJobID == "" || name == "" {
+		return nil
+	}
+	_, err := s.db.Exec(`INSERT INTO local_job_names(cups_job_id, name, updated_at) VALUES (?, ?, ?)
+		ON CONFLICT(cups_job_id) DO UPDATE SET name=excluded.name, updated_at=excluded.updated_at`,
+		cupsJobID, name, now())
+	return err
+}
+
+// UpdateJobFilename replaces a job's display filename.
+func (s *Store) UpdateJobFilename(id int64, filename string) error {
+	_, err := s.db.Exec(`UPDATE jobs SET filename=?, updated_at=? WHERE id=?`, filename, now(), id)
+	return err
+}
+
+// GetLocalJobName returns the captured document name for a CUPS job.
+func (s *Store) GetLocalJobName(cupsJobID string) (string, error) {
+	var name string
+	err := s.db.QueryRow(`SELECT name FROM local_job_names WHERE cups_job_id = ?`, cupsJobID).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return name, err
+}
+
 // ClaimNextPending atomically moves the oldest pending job to converting and returns it.
 func (s *Store) ClaimNextPending() (*Job, error) {
 	tx, err := s.db.Begin()

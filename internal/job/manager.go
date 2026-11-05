@@ -356,12 +356,22 @@ func (m *Manager) importLocalJobs(active, completed []cups.Job) {
 			return
 		}
 		if existing != nil {
-			if existing.Source == "local" && existing.Status != status && status != "" {
-				_ = m.store.UpdateJobStatus(existing.ID, status, "")
+			if existing.Source == "local" {
+				if storedName, err := m.store.GetLocalJobName(cj.ID); err == nil && storedName != "" && existing.Filename != storedName {
+					_ = m.store.UpdateJobFilename(existing.ID, storedName)
+				}
+				if existing.Status != status && status != "" {
+					_ = m.store.UpdateJobStatus(existing.ID, status, "")
+				}
 			}
 			return
 		}
 		filename := cj.Name
+		if filename == "" {
+			if storedName, err := m.store.GetLocalJobName(cj.ID); err == nil {
+				filename = storedName
+			}
+		}
 		if filename == "" {
 			filename = cj.ID
 		}

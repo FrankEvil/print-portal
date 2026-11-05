@@ -47,6 +47,7 @@ func (g *Gateway) Start(ctx context.Context) error {
 		// instead of the LAN address used by the client.
 		req.Host = targetURL.Host
 	}
+	proxy.ModifyResponse = g.captureJobResponse
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		queue, ok := queueFromPath(r.URL.Path)
@@ -63,6 +64,7 @@ func (g *Gateway) Start(ctx context.Context) error {
 			http.Error(w, "printer is not shared", http.StatusForbidden)
 			return
 		}
+		r = g.captureJobName(r, queue)
 		proxy.ServeHTTP(w, r)
 	})
 	srv := &http.Server{Addr: g.addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}

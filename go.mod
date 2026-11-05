@@ -2,7 +2,10 @@ module github.com/liuzhaojun/print-portal
 
 go 1.23.0
 
-require modernc.org/sqlite v1.34.5
+require (
+	github.com/OpenPrinting/goipp v1.2.0
+	modernc.org/sqlite v1.34.5
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
