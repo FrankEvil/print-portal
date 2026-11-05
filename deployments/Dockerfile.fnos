@@ -1,0 +1,47 @@
+# Prebuilt Linux amd64 image for fnOS: avoids downloading Go/Node build images.
+FROM debian:bookworm-slim
+ARG APT_MIRROR=mirrors.ustc.edu.cn
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Shanghai
+RUN sed -i "s|deb.debian.org|${APT_MIRROR}|g; s|security.debian.org|${APT_MIRROR}|g" /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list 2>/dev/null || true \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    cups \
+    cups-client \
+    cups-filters \
+    cups-ipp-utils \
+    printer-driver-brlaser \
+    foomatic-db-compressed-ppds \
+    foomatic-db-engine \
+    imagemagick \
+    img2pdf \
+    ghostscript \
+    poppler-utils \
+    libreoffice-core-nogui \
+    libreoffice-writer-nogui \
+    libreoffice-calc-nogui \
+    libreoffice-impress-nogui \
+    sane-utils \
+    sane-airscan \
+    avahi-utils \
+    avahi-daemon \
+    libnss-mdns \
+    dbus \
+    ca-certificates \
+    tzdata \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /opt/print-portal/web /app/data /etc/cups /var/spool/cups /var/log/cups
+COPY printd-linux-amd64 /usr/local/bin/printd
+COPY web/dist/ /opt/print-portal/web/
+COPY deployments/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENV PRINTD_ADDR=:8088
+ENV CUPS_SERVER=127.0.0.1:631
+ENV PRINT_PORTAL_IPP_ADDR=0.0.0.0:8631
+ENV PRINT_PORTAL_STATIC=/opt/print-portal/web
+ENV PRINT_PORTAL_DATA=/app/data
+
+EXPOSE 8088 8631
+ENTRYPOINT ["/entrypoint.sh"]

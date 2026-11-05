@@ -1,0 +1,20 @@
+services:
+  print-portal:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile.fnos
+    container_name: print-portal
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - ./data:/app/data
+      - ./cups-etc:/etc/cups
+      - ./cups-spool:/var/spool/cups
+      - ./cups-log:/var/log/cups
+    environment:
+      ADMIN_TOKEN: "demo123"
+      PRINTD_ADDR: ":8088"
+      CUPS_SERVER: "127.0.0.1:631"
+      PRINT_PORTAL_IPP_ADDR: "0.0.0.0:8631"
