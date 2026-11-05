@@ -462,7 +462,7 @@ func (s *Server) handleDriverModels(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "models_failed", err.Error())
 		return
 	}
-	filtered := models[:0]
+	filtered := make([]cups.Model, 0, len(models))
 	for _, m := range models {
 		if targetDriver != "" && !strings.EqualFold(m.Driver, targetDriver) {
 			continue

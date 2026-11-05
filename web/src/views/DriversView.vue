@@ -27,7 +27,7 @@ async function load() {
 async function searchModels() {
   try {
     const res = await api.get<{ models: Model[] }>(`/api/admin/drivers/models?q=${encodeURIComponent(query.value)}`)
-    models.value = res.models
+    models.value = res.models || []
   } catch (e) {
     toast.error((e as Error).message)
   }

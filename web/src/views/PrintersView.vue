@@ -143,14 +143,15 @@ async function startScan(scope: ScanScope) {
 function pollScan(scope: ScanScope, scanID: string) {
   const timer = window.setInterval(async () => {
     try {
-      const res = await api.get<{ status: string; devices: Device[]; error?: string }>(`/api/admin/discovery/scan/${scanID}`)
-      if (res.devices?.length) mergeDevices(res.devices)
+      const res = await api.get<{ status: string; devices: Device[] | null; error?: string }>(`/api/admin/discovery/scan/${scanID}`)
+      const list = res.devices ?? []
+      if (list.length) mergeDevices(list)
       if (res.status === 'done' || res.status === 'failed') {
         clearInterval(timer)
         scanning.value[scope] = false
         if (res.status === 'done') {
-          reconcileScope(scope, res.devices || [])
-          toast.success(`扫描完成，发现 ${res.devices.length} 个设备`)
+          reconcileScope(scope, list)
+          toast.success(`扫描完成，发现 ${list.length} 个设备`)
         } else {
           toast.error(res.error || '扫描失败')
         }
