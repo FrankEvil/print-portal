@@ -33,8 +33,14 @@ const driverInput = ref<HTMLInputElement | null>(null)
 const saving = ref(false)
 const wizardForm = ref({ name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true })
 
-// Edit uses the same wizard as create
+// Edit dialog: name, driver, default/share only
 const editingPrinter = ref<AdminPrinter | null>(null)
+const editSaving = ref(false)
+const editUploading = ref(false)
+const editDriverInput = ref<HTMLInputElement | null>(null)
+const editForm = ref({ name: '', model: '', is_default: false, is_shared: true })
+const editBrand = ref('')
+const editSearch = ref('')
 
 const brands = computed(() => {
   const set = new Set<string>()
@@ -60,6 +66,18 @@ const brandMissing = computed(() => {
   const brand = selectedDevice.value?.brand
   return !!brand && models.value.length > 0 && !brands.value.includes(brand)
 })
+
+const editModelOptions = computed(() => {
+  let list = models.value
+  if (editBrand.value) list = list.filter((m) => m.brand === editBrand.value)
+  const q = editSearch.value.trim().toLowerCase()
+  if (q) list = list.filter((m) => `${m.brand} ${m.description} ${m.name}`.toLowerCase().includes(q))
+  return list.slice(0, 500)
+})
+
+const editModelMissing = computed(() =>
+  !!editForm.value.model && !editModelOptions.value.some((m) => m.name === editForm.value.model),
+)
 
 const isNetworkDevice = computed(() => {
   const uri = selectedDevice.value?.device_uri || ''
@@ -214,31 +232,17 @@ async function savePrinter() {
   if (!wizardForm.value.ppd_queue.trim() || !wizardForm.value.raw_queue.trim()) return toast.error('请填写队列名')
   saving.value = true
   try {
-    if (editingPrinter.value) {
-      await api.put(`/api/admin/printers/${encodeURIComponent(editingPrinter.value.name)}`, {
-        name: wizardForm.value.name.trim(),
-        model: useEverywhere.value ? 'everywhere' : selectedModel.value,
-        ppd_queue: editingPrinter.value.ppd_queue,
-        raw_queue: editingPrinter.value.raw_queue,
-        device_uri: selectedDevice.value.device_uri,
-        is_default: wizardForm.value.is_default,
-        is_shared: wizardForm.value.is_shared,
-      })
-      toast.success('打印机已更新')
-    } else {
-      await api.post('/api/admin/printers', {
-        name: wizardForm.value.name.trim(),
-        model: useEverywhere.value ? 'everywhere' : selectedModel.value,
-        ppd_queue: wizardForm.value.ppd_queue.trim(),
-        raw_queue: wizardForm.value.raw_queue.trim(),
-        device_uri: selectedDevice.value.device_uri,
-        is_default: wizardForm.value.is_default,
-        is_shared: wizardForm.value.is_shared,
-      })
-      toast.success('打印机已创建')
-    }
+    await api.post('/api/admin/printers', {
+      name: wizardForm.value.name.trim(),
+      model: useEverywhere.value ? 'everywhere' : selectedModel.value,
+      ppd_queue: wizardForm.value.ppd_queue.trim(),
+      raw_queue: wizardForm.value.raw_queue.trim(),
+      device_uri: selectedDevice.value.device_uri,
+      is_default: wizardForm.value.is_default,
+      is_shared: wizardForm.value.is_shared,
+    })
+    toast.success('打印机已创建')
     showWizard.value = false
-    editingPrinter.value = null
     await load()
   } catch (e) {
     toast.error((e as Error).message)
@@ -247,23 +251,66 @@ async function savePrinter() {
   }
 }
 
+function syncEditBrand() {
+  const p = editingPrinter.value
+  if (!p) return
+  const match = models.value.find((m) => m.name === p.model || m.description === p.model)
+  editBrand.value = match?.brand || ''
+}
+
 function openEdit(p: AdminPrinter) {
   editingPrinter.value = p
-  showWizard.value = true
-  step.value = 3
-  devices.value = []
-  selectedDevice.value = {
-    id: 0, kind: 'printer', name: p.name, model: p.model, brand: '',
-    device_uri: p.device_uri, ip: '', source: 'network', metadata: '', last_seen: '',
+  editForm.value = { name: p.name, model: p.model, is_default: p.is_default, is_shared: p.is_shared }
+  editBrand.value = ''
+  editSearch.value = ''
+  if (!models.value.length) loadModels().then(syncEditBrand)
+  else syncEditBrand()
+}
+
+async function saveEdit() {
+  const p = editingPrinter.value
+  if (!p) return
+  if (!editForm.value.name.trim()) return toast.error('请输入打印机名称')
+  if (!editForm.value.model) return toast.error('请选择驱动 / 型号')
+  editSaving.value = true
+  try {
+    await api.put(`/api/admin/printers/${encodeURIComponent(p.name)}`, {
+      name: editForm.value.name.trim(),
+      model: editForm.value.model,
+      ppd_queue: p.ppd_queue,
+      raw_queue: p.raw_queue,
+      device_uri: p.device_uri,
+      is_default: editForm.value.is_default,
+      is_shared: editForm.value.is_shared,
+    })
+    toast.success('打印机已更新')
+    editingPrinter.value = null
+    await load()
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    editSaving.value = false
   }
-  selectedBrand.value = ''
-  selectedModel.value = p.model
-  useEverywhere.value = p.model === 'everywhere'
-  wizardForm.value = {
-    name: p.name, ppd_queue: p.ppd_queue, raw_queue: p.raw_queue,
-    is_default: p.is_default, is_shared: p.is_shared,
+}
+
+async function uploadEditDriver(e: Event) {
+  const input = e.target as HTMLInputElement
+  const f = input.files?.[0]
+  if (!f) return
+  editUploading.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', f)
+    await api.upload('/api/admin/drivers/install', fd)
+    toast.success(`驱动 ${f.name} 已上传`)
+    await loadModels()
+    syncEditBrand()
+  } catch (err) {
+    toast.error((err as Error).message)
+  } finally {
+    editUploading.value = false
+    input.value = ''
   }
-  if (!models.value.length) loadModels()
 }
 
 async function remove(p: AdminPrinter) {
@@ -519,6 +566,82 @@ onMounted(load)
           <button v-if="step === 1" class="btn btn-primary" @click="nextFromDevice">下一步</button>
           <button v-if="step === 2" class="btn btn-primary" @click="nextFromDriver">下一步</button>
           <button v-if="step === 3" class="btn btn-primary" :disabled="saving" @click="savePrinter">{{ saving ? '保存中…' : '保存' }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Edit dialog: only name, driver, default and shared are editable -->
+  <Teleport to="body">
+    <div v-if="editingPrinter" class="modal-overlay" @click.self="editingPrinter = null">
+      <div class="modal edit-modal">
+        <div class="modal-head">
+          <div>
+            <h2 class="card-title">编辑打印机</h2>
+            <p class="card-desc">{{ editingPrinter.name }}</p>
+          </div>
+          <button class="modal-close" @click="editingPrinter = null">×</button>
+        </div>
+
+        <div class="edit-summary">
+          <div class="edit-summary-row">
+            <StatusBadge :status="editingPrinter.state" />
+            <span>PPD 队列：{{ editingPrinter.ppd_queue }}</span>
+            <span>RAW 队列：{{ editingPrinter.raw_queue }}</span>
+          </div>
+          <div><span class="admin-sub">设备地址：</span>{{ editingPrinter.device_uri }}</div>
+        </div>
+
+        <section class="edit-section">
+          <h3 class="wizard-title">基本信息</h3>
+          <div class="field" style="margin-top: 10px">
+            <label>打印机名称</label>
+            <input v-model="editForm.name" class="input" />
+          </div>
+        </section>
+
+        <section class="edit-section">
+          <div class="section-head" style="margin-bottom: 10px">
+            <h3 class="wizard-title">驱动</h3>
+            <button class="btn btn-ghost btn-sm" :disabled="editUploading" @click="editDriverInput?.click()">
+              {{ editUploading ? '上传中…' : '上传新驱动' }}
+            </button>
+            <input ref="editDriverInput" type="file" accept=".ppd,.deb,.tar.gz,.tgz" style="display: none" @change="uploadEditDriver" />
+          </div>
+          <p class="card-desc" style="margin-bottom: 10px">当前驱动：{{ editingPrinter.model || '—' }}</p>
+          <div class="driver-filter-grid">
+            <div class="field">
+              <label>品牌</label>
+              <select v-model="editBrand" class="select">
+                <option value="">全部品牌</option>
+                <option v-for="b in brands" :key="b" :value="b">{{ b }}</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>型号</label>
+              <select v-model="editForm.model" class="select">
+                <option v-if="editModelMissing" :value="editForm.model">
+                  当前：{{ editForm.model }}
+                </option>
+                <option v-for="m in editModelOptions" :key="m.name" :value="m.name">{{ m.description }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="field" style="margin-top: 12px">
+            <label>搜索型号</label>
+            <input v-model="editSearch" class="input" placeholder="品牌、型号或文件名" />
+          </div>
+        </section>
+
+        <section class="edit-section">
+          <h3 class="wizard-title" style="margin-bottom: 10px">选项</h3>
+          <label class="check-line"><input v-model="editForm.is_default" type="checkbox" /> 设为默认打印机</label>
+          <label class="check-line"><input v-model="editForm.is_shared" type="checkbox" /> 局域网共享</label>
+        </section>
+
+        <div class="modal-foot">
+          <button class="btn btn-ghost" @click="editingPrinter = null">取消</button>
+          <button class="btn btn-primary" :disabled="editSaving" @click="saveEdit">{{ editSaving ? '保存中…' : '保存' }}</button>
         </div>
       </div>
     </div>
