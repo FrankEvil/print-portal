@@ -71,10 +71,11 @@ Duplex/Two-Sided: None *DuplexNoTumble DuplexTumble`
 func TestParseModelLines(t *testing.T) {
 	out := `drv:///brlaser.drv/br7060d.ppd Brother DCP-7060D
 foomatic:HP-LaserJet_1020.ppd HP LaserJet 1020
-drv:///gutenprint.5.3://escp2-ecomode/epson.ppd Epson Stylus`
+drv:///gutenprint.5.3://escp2-ecomode/epson.ppd Epson Stylus
+Library/Printers/PPDs/Contents/Resources/Brother DCP-7060D CUPS.gz Brother DCP-7060D CUPS`
 	models := parseModelLines(out)
-	if len(models) != 3 {
-		t.Fatalf("expected 3 models, got %d", len(models))
+	if len(models) != 4 {
+		t.Fatalf("expected 4 models, got %d", len(models))
 	}
 	if models[0].Driver != "brlaser" {
 		t.Errorf("driver = %q, want brlaser", models[0].Driver)
@@ -84,6 +85,15 @@ drv:///gutenprint.5.3://escp2-ecomode/epson.ppd Epson Stylus`
 	}
 	if models[2].Driver != "gutenprint" {
 		t.Errorf("driver = %q, want gutenprint", models[2].Driver)
+	}
+	if models[3].Name != "Library/Printers/PPDs/Contents/Resources/Brother DCP-7060D CUPS.gz" {
+		t.Errorf("name = %q", models[3].Name)
+	}
+	if models[3].Description != "Brother DCP-7060D" {
+		t.Errorf("description = %q", models[3].Description)
+	}
+	if models[3].Brand != "Brother" {
+		t.Errorf("brand = %q", models[3].Brand)
 	}
 }
 

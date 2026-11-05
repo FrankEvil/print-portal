@@ -401,16 +401,35 @@ func parseModelLines(out string) []Model {
 		if line == "" {
 			continue
 		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
+		name, desc := splitModelLine(line)
+		if name == "" {
 			continue
 		}
-		name := fields[0]
-		desc := cleanModelDescription(strings.Join(fields[1:], " "))
 		driver := modelDriver(name)
-		models = append(models, Model{Name: name, Description: desc, Driver: driver, Brand: brandFromDescription(desc)})
+		models = append(models, Model{Name: name, Description: cleanModelDescription(desc), Driver: driver, Brand: brandFromDescription(cleanModelDescription(desc))})
 	}
 	return models
+}
+
+// splitModelLine separates the model name from its description. On macOS,
+// lpinfo prints PPD file paths containing spaces, e.g.
+// "Library/Printers/PPDs/Contents/Resources/Brother DCP-7060D CUPS.gz Brother DCP-7060D CUPS".
+// The model name ends at .ppd/.drv/.gz; otherwise the first field is the name.
+func splitModelLine(line string) (string, string) {
+	if line == "everywhere" {
+		return "everywhere", "IPP Everywhere"
+	}
+	for _, suffix := range []string{".gz", ".ppd", ".drv"} {
+		needle := suffix + " "
+		if idx := strings.Index(line, needle); idx >= 0 {
+			return strings.TrimSpace(line[:idx+len(suffix)]), strings.TrimSpace(line[idx+len(needle):])
+		}
+	}
+	fields := strings.Fields(line)
+	if len(fields) < 2 {
+		return "", ""
+	}
+	return fields[0], strings.Join(fields[1:], " ")
 }
 
 func cleanModelDescription(desc string) string {
