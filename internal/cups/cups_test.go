@@ -136,6 +136,12 @@ printer OFF not accepting requests since now`
 	}
 }
 
+func TestParseRequestIDChinese(t *testing.T) {
+	if got := parseRequestID("请求id是virtual-ppd-418（1个文件）"); got != "virtual-ppd-418" {
+		t.Errorf("parseRequestID = %q", got)
+	}
+}
+
 func TestSubmitParsesRequestID(t *testing.T) {
 	runner := &fakeRunner{stdout: map[string]string{"lp": "request id is DCP7060-7 (1 file(s))"}}
 	client := NewClient(runner, "127.0.0.1:631")

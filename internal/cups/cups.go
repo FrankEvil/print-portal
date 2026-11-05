@@ -294,9 +294,9 @@ func (c *Client) ListAllJobs(ctx context.Context) ([]Job, error) {
 	return parseJobLines(out), nil
 }
 
-// parseRequestID extracts the job id from `lp` output.
+// parseRequestID extracts the job id from `lp` output (English or Chinese).
 func parseRequestID(out string) string {
-	re := regexp.MustCompile(`request id is\s+(\S+)`)
+	re := regexp.MustCompile(`(?:request id is|请求id是)\s*([^\s（(]+)`)
 	m := re.FindStringSubmatch(out)
 	if m == nil {
 		return ""
