@@ -1058,6 +1058,13 @@ table.table {
   margin-bottom: 14px;
 }
 
+.share-hint {
+  margin: -4px 0 14px;
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
 .share-printer-title {
   display: flex;
   align-items: center;

@@ -76,7 +76,7 @@ async function toggleShare(p: SharingPrinter, event: Event) {
       is_shared: checked,
     })
     p.is_shared = checked
-    toast.success(checked ? '已开启局域网共享' : '已关闭局域网共享')
+    toast.success(checked ? '已开启 CUPS 共享标记' : '已关闭 CUPS 共享标记')
   } catch (e) {
     toast.error((e as Error).message)
     event.target && ((event.target as HTMLInputElement).checked = !checked)
@@ -137,11 +137,12 @@ onMounted(load)
     <div class="share-printer-body">
       <div class="share-body-head">
         <span class="card-desc">连接地址</span>
-        <label class="check-line" style="margin: 0">
+        <label class="check-line" style="margin: 0" title="仅同步 CUPS printer-is-shared 标记，不改变 CUPS 监听或防火墙策略">
           <input type="checkbox" :checked="p.is_shared" @change="toggleShare(p, $event)" />
-          局域网共享
+          CUPS 共享标记
         </label>
       </div>
+      <p class="share-hint">共享标记只控制 CUPS 的打印机广播；局域网客户端使用上方 IPP 地址连接，实际访问由 CUPS 监听地址和防火墙决定。</p>
 
       <div class="share-grid">
         <div class="share-box is-ppd">
