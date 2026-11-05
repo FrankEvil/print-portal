@@ -161,3 +161,16 @@ export interface SharingInfo {
   web_port: string
   printers: SharingPrinter[]
 }
+
+export interface MaintenanceAction {
+  id: string
+  label: string
+  description: string
+  timeout: number
+  confirm: boolean
+}
+
+export interface MaintenanceCapabilities {
+  driver: string
+  actions: MaintenanceAction[] | null
+}

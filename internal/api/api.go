@@ -98,6 +98,8 @@ func (s *Server) routes() {
 	s.admin("POST /api/admin/printers/{name}/test", s.handlePrinterAction)
 	s.admin("GET /api/admin/printers/{name}/ppd-options", s.handlePPDOptions)
 	s.admin("PUT /api/admin/printers/{name}/ppd-options", s.handlePPDOptions)
+	s.admin("GET /api/admin/printers/{name}/maintenance", s.handlePrinterMaintenance)
+	s.admin("POST /api/admin/printers/{name}/maintenance/{action}", s.handlePrinterMaintenance)
 	s.admin("GET /api/admin/discovery/printers", s.handleDiscoveryPrinters)
 	s.admin("POST /api/admin/discovery/scan", s.handleDiscoveryScanStart)
 	s.admin("GET /api/admin/discovery/scan/{id}", s.handleDiscoveryScanStatus)

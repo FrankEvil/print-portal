@@ -242,9 +242,15 @@ func (s *Service) InstallPackage(ctx context.Context, filename string, tmpPath s
 		if err := copyFile(tmpPath, persistentPath); err != nil {
 			return nil, err
 		}
-		out, err := exec.CommandContext(ctx, "dpkg", "-i", persistentPath).CombinedOutput()
-		if err != nil {
+		if out, err := exec.CommandContext(ctx, "dpkg", "-i", persistentPath).CombinedOutput(); err != nil {
 			return nil, fmt.Errorf("dpkg -i failed: %s", strings.TrimSpace(string(out)))
+		}
+		// Optional maintenance manifest can live inside the .deb.
+		if tmpDir, err := os.MkdirTemp("", "print-portal-driver-"); err == nil {
+			if _, err := exec.CommandContext(ctx, "dpkg-deb", "-x", persistentPath, tmpDir).CombinedOutput(); err == nil {
+				_ = s.saveMaintenanceManifest(name, tmpDir)
+			}
+			_ = os.RemoveAll(tmpDir)
 		}
 		d := &storage.Driver{Name: name, Version: "deb", Kind: "package", Source: "upload", PackagePath: persistentPath, State: "ready"}
 		if err := s.store.UpsertDriver(d); err != nil {
@@ -290,6 +296,7 @@ func (s *Service) installTarGz(filename, tmpPath string) (*storage.Driver, error
 	if err := extractTarGz(tmpPath, dest); err != nil {
 		return nil, err
 	}
+	_ = s.saveMaintenanceManifest(base, dest)
 	ppdDir := filepath.Join(dest, "ppd")
 	filterDir := filepath.Join(dest, "filter")
 	var ppdCount int

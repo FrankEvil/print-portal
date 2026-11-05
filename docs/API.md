@@ -181,6 +181,38 @@
 - `POST /api/admin/printers/{name}/purge`
 - `GET /api/admin/printers/{name}/ppd-options`
 - `PUT /api/admin/printers/{name}/ppd-options`
+- `GET /api/admin/printers/{name}/maintenance`：返回驱动声明的维护能力（`maintenance.json`）
+- `POST /api/admin/printers/{name}/maintenance/{action}`：执行白名单维护动作，返回输出
+
+### 驱动维护清单
+
+驱动包可以在根目录或任意子目录放置 `maintenance.json`，安装后自动注册：
+
+```json
+{
+  "version": 1,
+  "actions": [
+    {
+      "id": "status",
+      "label": "状态 / 耗材",
+      "description": "读取打印机状态",
+      "command": ["brprintconf", "--status"],
+      "timeout": 10,
+      "confirm": false
+    },
+    {
+      "id": "clean",
+      "label": "清洗",
+      "description": "执行打印机清洗",
+      "command": ["brprintconf", "--clean"],
+      "timeout": 60,
+      "confirm": true
+    }
+  ]
+}
+```
+
+命令以参数数组直接执行，不经过 shell；驱动没有清单时只展示通用 CUPS 状态、PPD 选项和测试页。
 
 ### 设备发现
 

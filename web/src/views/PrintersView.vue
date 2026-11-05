@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api } from '../api'
 import { toast } from '../toast'
-import type { AdminPrinter, Device, Model, PPDOption } from '../types'
+import type { AdminPrinter, Device, MaintenanceAction, MaintenanceCapabilities, Model, PPDOption } from '../types'
 import StatusBadge from '../components/StatusBadge.vue'
 import SearchableSelect from '../components/SearchableSelect.vue'
 
@@ -40,6 +40,11 @@ const editDriverInput = ref<HTMLInputElement | null>(null)
 const editForm = ref({ name: '', model: '', is_default: false, is_shared: true, allow_discovery: false })
 const editBrand = ref('')
 const rowMenu = ref<{ printer: AdminPrinter; top: number; left: number } | null>(null)
+const maintenancePrinter = ref<AdminPrinter | null>(null)
+const maintenanceCaps = ref<MaintenanceCapabilities | null>(null)
+const maintenanceOutput = ref('')
+const maintenanceLoading = ref(false)
+const maintenanceRunning = ref('')
 
 const brands = computed(() => {
   const set = new Set<string>()
@@ -511,6 +516,46 @@ async function menuRemove() {
   if (p) await remove(p)
 }
 
+function menuMaintenance() {
+  const p = rowMenu.value?.printer
+  rowMenu.value = null
+  if (p) openMaintenance(p)
+}
+
+async function openMaintenance(p: AdminPrinter) {
+  maintenancePrinter.value = p
+  maintenanceCaps.value = null
+  maintenanceOutput.value = ''
+  maintenanceLoading.value = true
+  try {
+    maintenanceCaps.value = await api.get<MaintenanceCapabilities>(`/api/admin/printers/${encodeURIComponent(p.name)}/maintenance`)
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    maintenanceLoading.value = false
+  }
+}
+
+async function runMaintenance(action: MaintenanceAction) {
+  const p = maintenancePrinter.value
+  if (!p) return
+  if (action.confirm && !confirm(`确定执行「${action.label}」？`)) return
+  maintenanceRunning.value = action.id
+  maintenanceOutput.value = ''
+  try {
+    const res = await api.post<{ status: string; output: string }>(
+      `/api/admin/printers/${encodeURIComponent(p.name)}/maintenance/${encodeURIComponent(action.id)}`,
+    )
+    maintenanceOutput.value = res.output || '执行成功'
+    toast.success(action.label + ' 执行完成')
+  } catch (e) {
+    maintenanceOutput.value = (e as Error).message
+    toast.error((e as Error).message)
+  } finally {
+    maintenanceRunning.value = ''
+  }
+}
+
 async function loadOptions(p: AdminPrinter) {
   optionsFor.value = p.name
   try {
@@ -864,10 +909,42 @@ onUnmounted(() => {
       :style="{ top: rowMenu.top + 'px', left: rowMenu.left + 'px' }"
       @click.stop
     >
+      <button class="row-menu-item" @click="menuMaintenance">设备维护</button>
       <button class="row-menu-item" @click="menuLoadOptions">PPD 默认选项</button>
       <button class="row-menu-item" @click="menuPurge">清空队列</button>
       <div class="row-menu-divider"></div>
       <button class="row-menu-item is-danger" @click="menuRemove">删除打印机</button>
+    </div>
+  </Teleport>
+
+  <!-- Driver-declared maintenance actions -->
+  <Teleport to="body">
+    <div v-if="maintenancePrinter" class="modal-overlay" @click.self="maintenancePrinter = null">
+      <div class="modal" style="max-width: 560px">
+        <div class="modal-head">
+          <div>
+            <h2 class="card-title">设备维护</h2>
+            <p class="card-desc">{{ maintenancePrinter.name }}</p>
+          </div>
+          <button class="modal-close" @click="maintenancePrinter = null">×</button>
+        </div>
+        <div v-if="maintenanceLoading" class="empty">正在读取驱动维护能力…</div>
+        <div v-else-if="!maintenanceCaps?.actions?.length" class="empty">
+          当前驱动未提供维护接口。仍可使用 CUPS 状态、PPD 选项和测试页。
+        </div>
+        <div v-else class="maintenance-list">
+          <div v-for="action in maintenanceCaps.actions" :key="action.id" class="maintenance-item">
+            <div>
+              <strong>{{ action.label }}</strong>
+              <p class="card-desc">{{ action.description || '由驱动提供的维护操作' }}</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" :disabled="!!maintenanceRunning" @click="runMaintenance(action)">
+              {{ maintenanceRunning === action.id ? '执行中…' : '执行' }}
+            </button>
+          </div>
+        </div>
+        <pre v-if="maintenanceOutput" class="maintenance-output">{{ maintenanceOutput }}</pre>
+      </div>
     </div>
   </Teleport>
 
