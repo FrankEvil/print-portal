@@ -6,6 +6,9 @@ services:
     container_name: print-portal
     restart: unless-stopped
     network_mode: host
+    expose:
+      - "8088"
+      - "8631"
     privileged: true
     volumes:
       - /dev/bus/usb:/dev/bus/usb
