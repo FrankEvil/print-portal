@@ -54,7 +54,7 @@ cat > "$FAKE/lpinfo" <<'EOF'
 #!/bin/sh
 case "$*" in
   *" -m"*) echo "drv:///brlaser.drv/br7060d.ppd Brother DCP-7060D" ;;
-  *" -v"*) echo "direct usb://Brother/DCP-7060D?serial=TEST" ;;
+  *" -v"*) printf 'direct usb://Brother/DCP-7060D?serial=TEST\nnetwork ipp://192.168.1.50/ipp/print\n' ;;
   *) exit 0 ;;
 esac
 EOF
@@ -166,6 +166,27 @@ curl -fsS "http://127.0.0.1:18088/api/admin/drivers/models?q=DCP" -H "X-Admin-To
 
 echo "== discovery =="
 curl -fsS "http://127.0.0.1:18088/api/admin/discovery/printers" -H "X-Admin-Token: testtoken" | grep -q 'usb://Brother/DCP-7060D' || fail "discovery"
+
+echo "== async network scan =="
+SCAN_RESP=$(curl -fsS -X POST "http://127.0.0.1:18088/api/admin/discovery/scan" -H "X-Admin-Token: testtoken" -H 'Content-Type: application/json' -d '{"scope":"network"}')
+SCAN_ID=$(echo "$SCAN_RESP" | sed -n 's/.*"scan_id":"\([^"]*\)".*/\1/p')
+[ -n "$SCAN_ID" ] || fail "scan start"
+for i in $(seq 1 30); do
+  SCAN_STATE=$(curl -fsS "http://127.0.0.1:18088/api/admin/discovery/scan/$SCAN_ID" -H "X-Admin-Token: testtoken")
+  echo "$SCAN_STATE" | grep -q '"status":"done"' && break
+  sleep 0.2
+done
+echo "$SCAN_STATE" | grep -q '192.168.1.50' || fail "network scan devices"
+
+echo "== async usb scan =="
+SCAN_RESP=$(curl -fsS -X POST "http://127.0.0.1:18088/api/admin/discovery/scan" -H "X-Admin-Token: testtoken" -H 'Content-Type: application/json' -d '{"scope":"usb"}')
+SCAN_ID=$(echo "$SCAN_RESP" | sed -n 's/.*"scan_id":"\([^"]*\)".*/\1/p')
+for i in $(seq 1 30); do
+  SCAN_STATE=$(curl -fsS "http://127.0.0.1:18088/api/admin/discovery/scan/$SCAN_ID" -H "X-Admin-Token: testtoken")
+  echo "$SCAN_STATE" | grep -q '"status":"done"' && break
+  sleep 0.2
+done
+echo "$SCAN_STATE" | grep -q 'usb://Brother/DCP-7060D' || fail "usb scan devices"
 
 echo "== cancel and retry =="
 RESP2=$(curl -fsS -X POST "http://127.0.0.1:18088/api/print" \

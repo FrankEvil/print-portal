@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/liuzhaojun/print-portal/internal/cups"
 	"github.com/liuzhaojun/print-portal/internal/storage"
@@ -14,10 +16,23 @@ import (
 type Service struct {
 	store *storage.Store
 	cups  *cups.Client
+
+	mu    sync.Mutex
+	scans map[string]*ScanState
+}
+
+// ScanState is a snapshot of an asynchronous device scan.
+type ScanState struct {
+	ID        string           `json:"scan_id"`
+	Scope     string           `json:"scope"`  // network / usb
+	Status    string           `json:"status"` // running / done / failed
+	Devices   []storage.Device `json:"devices"`
+	Error     string           `json:"error,omitempty"`
+	StartedAt time.Time        `json:"started_at"`
 }
 
 func NewService(store *storage.Store, cupsClient *cups.Client) *Service {
-	return &Service{store: store, cups: cupsClient}
+	return &Service{store: store, cups: cupsClient, scans: map[string]*ScanState{}}
 }
 
 // DiscoverPrinters scans USB/network print devices via CUPS.
@@ -46,6 +61,81 @@ func (s *Service) DiscoverPrinters(ctx context.Context) ([]storage.Device, error
 		return nil, err
 	}
 	return out, nil
+}
+
+// StartScan starts (or reuses) an asynchronous discovery scan for a scope.
+// scope = "network" or "usb".
+func (s *Service) StartScan(scope string) string {
+	if scope != "usb" {
+		scope = "network"
+	}
+	s.mu.Lock()
+	if st, ok := s.scans[scope]; ok && st.Status == "running" {
+		id := st.ID
+		s.mu.Unlock()
+		return id
+	}
+	id := fmt.Sprintf("%d", time.Now().UnixNano())
+	st := &ScanState{ID: id, Scope: scope, Status: "running", StartedAt: time.Now(), Devices: []storage.Device{}}
+	// Seed with previously cached devices so the UI can render immediately.
+	if cached, err := s.store.ListDevices("printer"); err == nil {
+		for _, d := range cached {
+			if scanMatches(scope, d.DeviceURI) {
+				st.Devices = append(st.Devices, d)
+			}
+		}
+	}
+	s.scans[scope] = st
+	s.mu.Unlock()
+
+	go s.runScan(scope, id)
+	return id
+}
+
+func (s *Service) runScan(scope, id string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	devices, err := s.DiscoverPrinters(ctx)
+	var filtered []storage.Device
+	for _, d := range devices {
+		if scanMatches(scope, d.DeviceURI) {
+			filtered = append(filtered, d)
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st, ok := s.scans[scope]
+	if !ok || st.ID != id {
+		return
+	}
+	if err != nil {
+		st.Status = "failed"
+		st.Error = err.Error()
+		return
+	}
+	st.Devices = filtered
+	st.Status = "done"
+}
+
+func scanMatches(scope, uri string) bool {
+	if scope == "usb" {
+		return strings.HasPrefix(uri, "usb://")
+	}
+	return !strings.HasPrefix(uri, "usb://")
+}
+
+// ScanStatus returns a snapshot of a scan by id.
+func (s *Service) ScanStatus(id string) (*ScanState, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, st := range s.scans {
+		if st.ID == id {
+			copyState := *st
+			copyState.Devices = append([]storage.Device(nil), st.Devices...)
+			return &copyState, true
+		}
+	}
+	return nil, false
 }
 
 // DiscoverScanners scans SANE devices.

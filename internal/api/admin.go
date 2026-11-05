@@ -278,6 +278,26 @@ func (s *Server) handleDiscoveryPrinters(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]any{"devices": devices})
 }
 
+func (s *Server) handleDiscoveryScanStart(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Scope string `json:"scope"`
+	}
+	if r.Body != nil {
+		_ = decodeJSON(r, &body)
+	}
+	id := s.discovery.StartScan(body.Scope)
+	writeJSON(w, http.StatusAccepted, map[string]string{"scan_id": id, "status": "running"})
+}
+
+func (s *Server) handleDiscoveryScanStatus(w http.ResponseWriter, r *http.Request) {
+	state, ok := s.discovery.ScanStatus(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, "not_found", "scan not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, state)
+}
+
 func (s *Server) handleDiscoveryScanners(w http.ResponseWriter, r *http.Request) {
 	devices, err := s.discovery.DiscoverScanners(r.Context())
 	if err != nil {

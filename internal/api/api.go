@@ -97,6 +97,8 @@ func (s *Server) routes() {
 	s.admin("GET /api/admin/printers/{name}/ppd-options", s.handlePPDOptions)
 	s.admin("PUT /api/admin/printers/{name}/ppd-options", s.handlePPDOptions)
 	s.admin("GET /api/admin/discovery/printers", s.handleDiscoveryPrinters)
+	s.admin("POST /api/admin/discovery/scan", s.handleDiscoveryScanStart)
+	s.admin("GET /api/admin/discovery/scan/{id}", s.handleDiscoveryScanStatus)
 	s.admin("GET /api/admin/discovery/scanners", s.handleDiscoveryScanners)
 	s.admin("POST /api/admin/printers/discover", s.handleDiscoverAndCreate)
 	s.admin("GET /api/admin/drivers", s.handleDrivers)

@@ -144,7 +144,7 @@
   - 网络 IPP/AirPrint：`ippfind`、mDNS `_ipp._tcp`、`_ipps._tcp`
   - 扫描仪：mDNS `_uscan._tcp`、`_uscans._tcp`、`_scanner._tcp`
 - 向导步骤：
-  1. **选择设备**：扫描局域网 / 扫描 USB / 全部扫描；设备卡片展示名称、型号、URI、网络/USB 类型；支持 Standard TCP/IP (RAW/9100) 手动输入 IP + 端口；支持手动输入设备 URI（高级）
+  1. **选择设备**：扫描局域网（异步扫描，发现的设备动态加入列表）/ 扫描（USB/本地设备）；设备卡片展示名称、型号、URI、网络/USB 类型；支持 Standard TCP/IP (RAW/9100) 手动输入 IP + 端口；支持手动输入设备 URI（高级）
   2. **选择驱动**：按品牌/型号选择，支持搜索品牌、型号或文件名；显示可用驱动型号总数；支持上传 PPD / 压缩包 / deb 驱动；网络设备可选用 IPP Everywhere 免驱动
   3. **配置**：打印机名称、PPD/RAW 队列名、是否默认、是否共享；保存时自动创建双队列
 - 添加：

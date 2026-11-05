@@ -182,6 +182,8 @@
 
 - `GET /api/admin/discovery/printers`
 - `GET /api/admin/discovery/scanners`
+- `POST /api/admin/discovery/scan`：异步扫描，body `{"scope":"network"|"usb"}`，返回 `202 {"scan_id":"...","status":"running"}`
+- `GET /api/admin/discovery/scan/{id}`：查询扫描状态与动态发现的设备
 - `POST /api/admin/printers/discover`
 
 ```json

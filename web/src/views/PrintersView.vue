@@ -15,8 +15,7 @@ const optionValues = ref<Record<string, string>>({})
 const showWizard = ref(false)
 const step = ref(1)
 const devices = ref<Device[]>([])
-const scanning = ref(false)
-const deviceFilter = ref<'all' | 'network' | 'usb'>('all')
+const scanning = ref<{ network: boolean; usb: boolean }>({ network: false, usb: false })
 const selectedDevice = ref<Device | null>(null)
 const manualMode = ref<'' | 'tcp' | 'uri'>('')
 const tcpIp = ref('')
@@ -47,11 +46,7 @@ const brands = computed(() => {
   return Array.from(set).sort((a, b) => a.localeCompare(b))
 })
 
-const visibleDevices = computed(() => {
-  if (deviceFilter.value === 'usb') return devices.value.filter((d) => d.device_uri.startsWith('usb://'))
-  if (deviceFilter.value === 'network') return devices.value.filter((d) => !d.device_uri.startsWith('usb://'))
-  return devices.value
-})
+const visibleDevices = computed(() => devices.value)
 
 const filteredModels = computed(() => {
   let list = models.value
@@ -119,18 +114,42 @@ async function loadModels() {
   }
 }
 
-async function scanDevices(filter: 'all' | 'network' | 'usb') {
-  scanning.value = true
-  deviceFilter.value = filter
+async function startScan(scope: 'network' | 'usb') {
+  if (scanning.value[scope]) return
+  scanning.value[scope] = true
   try {
-    const res = await api.get<{ devices: Device[] }>('/api/admin/discovery/printers')
-    devices.value = res.devices
-    toast.success(`发现 ${res.devices.length} 个设备`)
+    const res = await api.post<{ scan_id: string }>('/api/admin/discovery/scan', { scope })
+    pollScan(scope, res.scan_id)
   } catch (e) {
+    scanning.value[scope] = false
     toast.error((e as Error).message)
-  } finally {
-    scanning.value = false
   }
+}
+
+function pollScan(scope: 'network' | 'usb', scanID: string) {
+  const timer = window.setInterval(async () => {
+    try {
+      const res = await api.get<{ status: string; devices: Device[]; error?: string }>(`/api/admin/discovery/scan/${scanID}`)
+      if (res.devices?.length) mergeDevices(res.devices)
+      if (res.status === 'done' || res.status === 'failed') {
+        clearInterval(timer)
+        scanning.value[scope] = false
+        if (res.status === 'done') toast.success(`扫描完成，发现 ${res.devices.length} 个设备`)
+        else toast.error(res.error || '扫描失败')
+      }
+    } catch (e) {
+      clearInterval(timer)
+      scanning.value[scope] = false
+      toast.error((e as Error).message)
+    }
+  }, 800)
+}
+
+function mergeDevices(list: Device[]) {
+  const byURI = new Map<string, Device>()
+  for (const d of devices.value) byURI.set(d.device_uri, d)
+  for (const d of list) byURI.set(d.device_uri, d)
+  devices.value = Array.from(byURI.values())
 }
 
 function openWizard() {
@@ -149,7 +168,7 @@ function openWizard() {
   wizardForm.value = { name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true }
   models.value = []
   modelTotal.value = 0
-  scanDevices('all')
+  startScan('network')
 }
 
 function chooseDevice(d: Device) {
@@ -442,15 +461,20 @@ onMounted(load)
               <p class="card-desc">自动发现局域网 IPP/AirPrint 与 USB 打印机</p>
             </div>
             <div style="display: flex; gap: 8px">
-              <button class="btn btn-ghost btn-sm" :disabled="scanning" @click="scanDevices('network')">扫描局域网</button>
-              <button class="btn btn-ghost btn-sm" :disabled="scanning" @click="scanDevices('usb')">扫描 USB</button>
-              <button class="btn btn-ghost btn-sm" :disabled="scanning" @click="scanDevices('all')">{{ scanning ? '扫描中…' : '全部扫描' }}</button>
+              <button class="btn btn-ghost btn-sm" :disabled="scanning.network" @click="startScan('network')">
+                {{ scanning.network ? '扫描局域网中…' : '扫描局域网' }}
+              </button>
+              <button class="btn btn-ghost btn-sm" :disabled="scanning.usb" @click="startScan('usb')">
+                {{ scanning.usb ? '扫描中…' : '扫描' }}
+              </button>
             </div>
           </div>
 
-          <div v-if="scanning" class="empty">正在扫描设备…</div>
-          <div v-else-if="!visibleDevices.length" class="empty">未发现设备，请检查打印机是否连接并开启</div>
-          <div v-else class="device-grid">
+          <div v-if="scanning.network || scanning.usb" class="admin-sub" style="margin-bottom: 10px">
+            正在扫描，发现设备会自动加入列表…
+          </div>
+          <div v-if="!visibleDevices.length && !scanning.network && !scanning.usb" class="empty">未发现设备，请检查打印机是否连接并开启</div>
+          <div v-else-if="visibleDevices.length" class="device-grid">
             <label v-for="d in visibleDevices" :key="d.device_uri" class="device-card" :class="{ selected: selectedDevice?.device_uri === d.device_uri }" @click="chooseDevice(d)">
               <input type="radio" :checked="selectedDevice?.device_uri === d.device_uri" style="display: none" @click.stop="chooseDevice(d)" />
               <div class="device-icon">{{ d.device_uri.startsWith('usb://') ? 'USB' : 'LAN' }}</div>
