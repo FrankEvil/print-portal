@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
 import { toast } from '../toast'
 import type { SharingInfo, SharingPrinter } from '../types'
@@ -9,6 +9,11 @@ const info = ref<SharingInfo | null>(null)
 const settings = ref({ public_host: '', cups_port: '8631', web_port: '8088' })
 const savingSettings = ref(false)
 const loading = ref(false)
+
+const webUrl = computed(() => {
+  if (!info.value) return ''
+  return `http://${info.value.public_host}:${info.value.web_port}/`
+})
 
 async function load() {
   loading.value = true
@@ -105,59 +110,66 @@ onMounted(load)
     <button class="btn btn-primary" style="margin-top: 16px" :disabled="savingSettings" @click="saveSettings">
       {{ savingSettings ? '保存中…' : '保存连接地址' }}
     </button>
+    <div class="share-web share-web-global">
+      网页打印地址：<a :href="webUrl" target="_blank" rel="noreferrer">{{ webUrl }}</a>
+      <button class="btn btn-ghost btn-sm" @click="copy(webUrl)">复制</button>
+    </div>
   </section>
 
   <div v-if="!info?.printers.length" class="card" style="margin-top: 20px">
     <div class="empty">还没有打印机，请先在「打印机」中添加</div>
   </div>
 
-  <section v-for="p in info?.printers || []" :key="p.id" class="card" style="margin-top: 20px">
-    <div class="share-printer-head">
-      <div>
+  <details v-for="p in info?.printers || []" :key="p.id" class="card share-printer-card">
+    <summary class="share-printer-summary">
+      <div class="share-printer-main">
         <div class="share-printer-title">
-          <h2 class="card-title">{{ p.name }}</h2>
+          <span class="share-printer-name">{{ p.name }}</span>
           <StatusBadge :status="p.state" />
           <span v-if="p.is_default" class="status-badge is-neutral">默认</span>
+          <span v-if="p.is_shared" class="status-badge is-neutral">已共享</span>
         </div>
-        <p class="card-desc">{{ prettyModel(p.model) }}</p>
+        <span class="share-printer-model">{{ prettyModel(p.model) }}</span>
       </div>
-      <label class="check-line" style="margin: 0">
-        <input type="checkbox" :checked="p.is_shared" @change="toggleShare(p, $event)" />
-        局域网共享
-      </label>
-    </div>
+      <span class="share-expand">展开</span>
+    </summary>
 
-    <div class="share-grid">
-      <div class="share-box is-ppd">
-        <div class="share-box-head">
-          <span class="queue-tag is-ppd">PPD</span>
-          <strong>网页打印 / 本地 PPD</strong>
-        </div>
-        <code>{{ p.ppd_uri }}</code>
-        <div class="share-box-actions">
-          <button class="btn btn-ghost btn-sm" @click="copy(p.ppd_uri)">复制地址</button>
-          <span>支持页码、双面、份数</span>
-        </div>
+    <div class="share-printer-body">
+      <div class="share-body-head">
+        <span class="card-desc">连接地址</span>
+        <label class="check-line" style="margin: 0">
+          <input type="checkbox" :checked="p.is_shared" @change="toggleShare(p, $event)" />
+          局域网共享
+        </label>
       </div>
 
-      <div class="share-box is-raw">
-        <div class="share-box-head">
-          <span class="queue-tag is-raw">RAW</span>
-          <strong>本地 RAW 客户端</strong>
+      <div class="share-grid">
+        <div class="share-box is-ppd">
+          <div class="share-box-head">
+            <span class="queue-tag is-ppd">PPD</span>
+            <strong>网页打印 / 本地 PPD</strong>
+          </div>
+          <code>{{ p.ppd_uri }}</code>
+          <div class="share-box-actions">
+            <button class="btn btn-ghost btn-sm" @click="copy(p.ppd_uri)">复制地址</button>
+            <span>支持页码、双面、份数</span>
+          </div>
         </div>
-        <code>{{ p.raw_uri }}</code>
-        <div class="share-box-actions">
-          <button class="btn btn-ghost btn-sm" @click="copy(p.raw_uri)">复制地址</button>
-          <span>客户端自行渲染</span>
+
+        <div class="share-box is-raw">
+          <div class="share-box-head">
+            <span class="queue-tag is-raw">RAW</span>
+            <strong>本地 RAW 客户端</strong>
+          </div>
+          <code>{{ p.raw_uri }}</code>
+          <div class="share-box-actions">
+            <button class="btn btn-ghost btn-sm" @click="copy(p.raw_uri)">复制地址</button>
+            <span>客户端自行渲染</span>
+          </div>
         </div>
       </div>
     </div>
-
-    <div class="share-web">
-      网页打印地址：<a :href="p.web_url" target="_blank" rel="noreferrer">{{ p.web_url }}</a>
-      <button class="btn btn-ghost btn-sm" @click="copy(p.web_url)">复制</button>
-    </div>
-  </section>
+  </details>
 
   <section v-if="info?.printers.length" class="card" style="margin-top: 20px">
     <h2 class="card-title">客户端连接方法</h2>

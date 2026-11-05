@@ -991,12 +991,71 @@ table.table {
 }
 
 /* ---------- Sharing page ---------- */
-.share-printer-head {
+.share-printer-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.share-printer-summary {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
+  padding: 18px 20px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.share-printer-summary::-webkit-details-marker {
+  display: none;
+}
+
+.share-printer-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.share-printer-name {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.share-printer-model {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.share-expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.share-expand::after {
+  content: '▾';
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.share-printer-card[open] .share-expand::after {
+  transform: rotate(180deg);
+}
+
+.share-printer-body {
+  padding: 16px 20px 20px;
+  border-top: 1px solid var(--line);
+}
+
+.share-body-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .share-printer-title {
