@@ -140,6 +140,7 @@ USB backend（不经过过滤器）
 - 所有网页输入统一转 PDF
 - 避免 `gstoraster` 对 PostScript 的 bbox 慢扫描
 - 多页大文件按 `chunk_pages`（默认 4 页）拆成多个小 PDF，按顺序逐个提交 CUPS；当前块完成后再提交下一块，避免一次性灌满 USB/打印机缓冲
+- 每个 chunk 先在应用进程内用 `cupsfilter` + PPD filter 渲染成打印机原生数据，再提交到 RAW 队列；这样既保留 PPD 参数，又避免 CUPS 过滤用户/临时文件权限导致 `pdftopdf` 失败
 - 转换在独立子进程中执行，设置超时/内存限制
 - 超时或失败返回明确错误，不占用打印队列
 

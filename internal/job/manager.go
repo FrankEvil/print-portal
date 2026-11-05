@@ -166,7 +166,7 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 	}
 	renderedPath := pdfPath + ".raw"
 	useRaw := true
-	if err := m.cups.RenderToRaw(ctx, printer.PPDQueue, pdfPath, renderedPath); err != nil {
+	if err := m.cups.RenderToRaw(ctx, printer.PPDQueue, pdfPath, renderedPath, opts); err != nil {
 		if errors.Is(err, cups.ErrNoPPD) {
 			useRaw = false
 		} else {
@@ -211,7 +211,7 @@ func (m *Manager) submitChunks(ctx context.Context, j *storage.Job, printer *sto
 			}
 			renderedPath := chunk + ".raw"
 			renderCtx, renderCancel := context.WithTimeout(ctx, 5*time.Minute)
-			renderErr := m.cups.RenderToRaw(renderCtx, printer.PPDQueue, chunk, renderedPath)
+			renderErr := m.cups.RenderToRaw(renderCtx, printer.PPDQueue, chunk, renderedPath, opts)
 			renderCancel()
 			queue := printer.RAWQueue
 			fileName := renderedPath

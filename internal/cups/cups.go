@@ -379,11 +379,43 @@ var ErrNoPPD = errors.New("PPD not found")
 
 var ppdFilterRE = regexp.MustCompile(`(?m)^\*cupsFilter2?:\s+"([^"]+)"`)
 
+func printOptionArgs(opts PrintOptions) []string {
+	var out []string
+	if opts.PageRange != "" {
+		out = append(out, "page-ranges="+opts.PageRange)
+	}
+	switch opts.Duplex {
+	case "two-sided-long-edge", "two-sided-short-edge":
+		out = append(out, "sides="+opts.Duplex)
+	default:
+		out = append(out, "sides=one-sided")
+	}
+	if opts.PaperSize != "" {
+		out = append(out, "media="+opts.PaperSize)
+	}
+	if opts.Orientation == "landscape" {
+		out = append(out, "orientation-requested=4")
+	}
+	switch opts.ColorMode {
+	case "monochrome":
+		out = append(out, "print-color-mode=monochrome")
+	case "color":
+		out = append(out, "print-color-mode=color")
+	}
+	switch opts.Scaling {
+	case "fit", "auto":
+		out = append(out, "fit-to-page")
+	case "fill":
+		out = append(out, "fill")
+	}
+	return out
+}
+
 // RenderToRaw converts a PDF chunk into the printer-native stream using the
 // queue's PPD and filter chain, then writes the result to dst. This is used
 // before submitting to a raw CUPS queue so filters run in the app process
 // (outside CUPS' restricted filter user).
-func (c *Client) RenderToRaw(ctx context.Context, ppdQueue, src, dst string) error {
+func (c *Client) RenderToRaw(ctx context.Context, ppdQueue, src, dst string, opts PrintOptions) error {
 	ppdPath := filepath.Join("/etc/cups/ppd", ppdQueue+".ppd")
 	ppd, err := os.ReadFile(ppdPath)
 	if err != nil {
@@ -404,7 +436,13 @@ func (c *Client) RenderToRaw(ctx context.Context, ppdQueue, src, dst string) err
 	if !strings.HasPrefix(filter, "/") {
 		filter = filepath.Join("/usr/lib/cups/filter", filter)
 	}
-	raster, stderr, err := c.runner.Run(ctx, "cupsfilter", "-p", ppdPath, "-m", "application/vnd.cups-raster", src)
+	optionList := printOptionArgs(opts)
+	cupsArgs := []string{"-p", ppdPath, "-m", "application/vnd.cups-raster"}
+	for _, opt := range optionList {
+		cupsArgs = append(cupsArgs, "-o", opt)
+	}
+	cupsArgs = append(cupsArgs, src)
+	raster, stderr, err := c.runner.Run(ctx, "cupsfilter", cupsArgs...)
 	if err != nil {
 		return fmt.Errorf("cupsfilter: %s: %w", strings.TrimSpace(stderr), err)
 	}
@@ -423,7 +461,11 @@ func (c *Client) RenderToRaw(ctx context.Context, ppdQueue, src, dst string) err
 		return err
 	}
 	defer out.Close()
-	cmd := exec.CommandContext(ctx, filter, "1", "root", "print-portal", "1", "x", tmpPath)
+	optionString := strings.Join(optionList, " ")
+	if optionString == "" {
+		optionString = "x"
+	}
+	cmd := exec.CommandContext(ctx, filter, "1", "root", "print-portal", "1", optionString, tmpPath)
 	cmd.Env = append(os.Environ(), "PPD="+ppdPath)
 	cmd.Stdout = out
 	var filterErr bytes.Buffer
