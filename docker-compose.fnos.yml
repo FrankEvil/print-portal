@@ -20,7 +20,7 @@ services:
       ADMIN_TOKEN: "demo123"
       PRINTD_ADDR: ":8088"
       CUPS_SERVER: "127.0.0.1:631"
-      PRINT_PORTAL_IPP_ADDR: "0.0.0.0:8631"
+      PRINT_PORTAL_IPP_ADDR: "192.168.2.30:8631"
 
   web-proxy:
     image: nginx:latest

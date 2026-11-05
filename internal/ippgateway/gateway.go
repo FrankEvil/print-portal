@@ -51,6 +51,10 @@ func (g *Gateway) Start(ctx context.Context) error {
 	proxy.ModifyResponse = g.captureJobResponse
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if !isPrivateRemote(r.RemoteAddr) {
+			http.Error(w, "IPP gateway is limited to the local network", http.StatusForbidden)
+			return
+		}
 		queue, ok := queueFromPath(r.URL.Path)
 		if !ok {
 			http.Error(w, "not found", http.StatusNotFound)
@@ -66,11 +70,7 @@ func (g *Gateway) Start(ctx context.Context) error {
 			return
 		}
 		if queue == p.RAWQueue {
-			if !isPrivateRemote(r.RemoteAddr) {
-				http.Error(w, "raw queue is limited to the local network", http.StatusForbidden)
-				return
-			}
-			const maxRawBody = 100 << 20
+			const maxRawBody = 500 << 20
 			if r.ContentLength > maxRawBody {
 				http.Error(w, "raw print job too large", http.StatusRequestEntityTooLarge)
 				return

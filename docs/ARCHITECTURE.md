@@ -128,7 +128,9 @@ USB backend → 打印机
 Mac/Windows 本地驱动
   │ 本地已渲染成打印机原生数据
   ▼
-IPP Print-Job → CUPS RAW 队列
+IPP Print-Job → IPP gateway（仅私网/回环，RAW 请求上限 500MB）
+  ▼
+CUPS RAW 队列
   ▼
 USB backend（不经过过滤器）
   ▼
@@ -143,6 +145,7 @@ USB backend（不经过过滤器）
 - 每个 chunk 先在应用进程内用 `cupsfilter` + PPD filter 渲染成打印机原生数据，再提交到 RAW 队列；这样既保留 PPD 参数，又避免 CUPS 过滤用户/临时文件权限导致 `pdftopdf` 失败
 - 转换在独立子进程中执行，设置超时/内存限制
 - 超时或失败返回明确错误，不占用打印队列
+- IPP 网关监听在局域网 IP（`PRINT_PORTAL_IPP_ADDR=192.168.2.30:8631`），只接受私网/回环来源；RAW 任务另有 500MB 请求上限
 
 ### 3.4 异步任务队列
 
