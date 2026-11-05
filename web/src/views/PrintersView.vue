@@ -76,6 +76,22 @@ const brandMissing = computed(() => {
   return !!deviceBrand.value && models.value.length > 0 && !brands.value.includes(deviceBrand.value)
 })
 
+// Single warning area above the brand/model selectors.
+const driverWarning = computed(() => {
+  if (useEverywhere.value) return ''
+  if (brandMissing.value) {
+    return `当前驱动库没有 ${deviceBrand.value} 品牌的驱动。请上传对应 PPD / 驱动包，或对支持 IPP Everywhere 的设备勾选免驱动。`
+  }
+  if (!models.value.length) return ''
+  if (!modelSelectOptions.value.length) {
+    return '当前品牌没有可用型号，请更换品牌，或上传 PPD / 驱动包。'
+  }
+  if (!selectedModel.value) {
+    return '未自动匹配到驱动，请手动选择型号；找不到时请上传 PPD / 驱动包，或使用 IPP Everywhere。'
+  }
+  return ''
+})
+
 const editModelOptions = computed(() => {
   let list = models.value
   if (editBrand.value) list = list.filter((m) => m.brand === editBrand.value)
@@ -630,8 +646,8 @@ onMounted(load)
 
           <div v-if="modelsLoading" class="empty">正在加载驱动型号…</div>
           <template v-else>
-            <p v-if="brandMissing" class="card-desc" style="color: var(--warning); margin-bottom: 12px">
-              当前驱动库没有 {{ deviceBrand }} 品牌的驱动。请上传对应 PPD / 驱动包，或对支持 IPP Everywhere 的设备勾选免驱动。
+            <p v-if="driverWarning" class="driver-warning">
+              {{ driverWarning }}
             </p>
             <div class="driver-filter-grid" :class="{ disabled: useEverywhere }">
               <div class="field">
@@ -646,13 +662,9 @@ onMounted(load)
                 <SearchableSelect v-model="selectedModel" :options="modelSelectOptions" placeholder="搜索并选择型号" :disabled="useEverywhere" />
               </div>
             </div>
-            <div v-if="!useEverywhere && !modelSelectOptions.length" class="empty">没有匹配的驱动型号，尝试上传 PPD 或更换品牌</div>
             <div v-if="selectedModel" class="selected-driver">
               已选择：<strong>{{ selectedModelLabel }}</strong>
             </div>
-            <p v-else-if="!useEverywhere && modelSelectOptions.length && !brandMissing" class="card-desc" style="color: var(--warning); margin-top: 8px">
-              未自动匹配到驱动，请手动选择型号；找不到时请上传 PPD / 驱动包，或使用 IPP Everywhere。
-            </p>
           </template>
         </div>
 

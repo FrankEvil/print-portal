@@ -1142,6 +1142,16 @@ table.table {
   font-size: 13.5px;
 }
 
+.driver-warning {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .selected-driver {
   margin-top: 14px;
   padding: 10px 12px;
