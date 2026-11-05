@@ -164,9 +164,25 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 			m.logger.Printf("job %d chunking unavailable, fallback to single job: %v", j.ID, splitErr)
 		}
 	}
+	renderedPath := pdfPath + ".raw"
+	useRaw := true
+	if err := m.cups.RenderToRaw(ctx, printer.PPDQueue, pdfPath, renderedPath); err != nil {
+		if errors.Is(err, cups.ErrNoPPD) {
+			useRaw = false
+		} else {
+			m.fail(j, "render failed: "+err.Error())
+			return
+		}
+	}
 	submitCtx, submitCancel := context.WithTimeout(ctx, 60*time.Second)
 	defer submitCancel()
-	cupsID, err := m.cups.Submit(submitCtx, printer.PPDQueue, pdfPath, opts)
+	queue := printer.PPDQueue
+	fileName := pdfPath
+	if useRaw {
+		queue = printer.RAWQueue
+		fileName = renderedPath
+	}
+	cupsID, err := m.cups.Submit(submitCtx, queue, fileName, opts)
 	if err != nil {
 		m.fail(j, err.Error())
 		return
@@ -193,8 +209,22 @@ func (m *Manager) submitChunks(ctx context.Context, j *storage.Job, printer *sto
 			if fresh != nil && fresh.Status == "cancelled" {
 				return nil
 			}
+			renderedPath := chunk + ".raw"
+			renderCtx, renderCancel := context.WithTimeout(ctx, 5*time.Minute)
+			renderErr := m.cups.RenderToRaw(renderCtx, printer.PPDQueue, chunk, renderedPath)
+			renderCancel()
+			queue := printer.RAWQueue
+			fileName := renderedPath
+			if renderErr != nil {
+				if errors.Is(renderErr, cups.ErrNoPPD) {
+					queue = printer.PPDQueue
+					fileName = chunk
+				} else {
+					return renderErr
+				}
+			}
 			submitCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-			cupsID, err := m.cups.Submit(submitCtx, printer.PPDQueue, chunk, opts)
+			cupsID, err := m.cups.Submit(submitCtx, queue, fileName, opts)
 			cancel()
 			if err != nil {
 				return err

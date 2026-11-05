@@ -45,12 +45,37 @@ DefaultShared Yes
 EOF
 fi
 
-# Start CUPS in the foreground as a child process.
-cupsd -f &
+# Minimal cups-files.conf is required when /etc/cups is a fresh volume.
+if [ ! -f /etc/cups/cups-files.conf ]; then
+  cat > /etc/cups/cups-files.conf <<'EOF'
+User lp
+Group lp
+SystemGroup root lpadmin
+AccessLog /var/log/cups/access_log
+ErrorLog /var/log/cups/error_log
+PageLog /var/log/cups/page_log
+EOF
+fi
+
+# Start CUPS in the foreground as a child process. The umask makes root-owned
+# spool files group-readable for CUPS filters running as lp.
+(umask 0007; exec cupsd -f) &
 CUPS_PID=$!
 
+# CUPS creates spool files as root:lp with mode 0600 in this container setup.
+# Filters run as lp, so keep newly created job files readable by lp.
+(
+  while :; do
+    for f in /var/spool/cups/d*; do
+      [ -f "$f" ] && chmod 0644 "$f" 2>/dev/null || true
+    done
+    sleep 0.05
+  done
+) &
+SPOOL_PERM_PID=$!
+
 cleanup() {
-  kill "$CUPS_PID" 2>/dev/null || true
+  kill "$CUPS_PID" "$SPOOL_PERM_PID" 2>/dev/null || true
   exit 0
 }
 trap cleanup TERM INT

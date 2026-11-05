@@ -3,9 +3,11 @@ package cups
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -371,6 +373,65 @@ func (c *Client) Submit(ctx context.Context, queue, file string, opts PrintOptio
 		return "", fmt.Errorf("could not parse lp output: %s", strings.TrimSpace(out))
 	}
 	return id, nil
+}
+
+var ErrNoPPD = errors.New("PPD not found")
+
+var ppdFilterRE = regexp.MustCompile(`(?m)^\*cupsFilter2?:\s+"([^"]+)"`)
+
+// RenderToRaw converts a PDF chunk into the printer-native stream using the
+// queue's PPD and filter chain, then writes the result to dst. This is used
+// before submitting to a raw CUPS queue so filters run in the app process
+// (outside CUPS' restricted filter user).
+func (c *Client) RenderToRaw(ctx context.Context, ppdQueue, src, dst string) error {
+	ppdPath := filepath.Join("/etc/cups/ppd", ppdQueue+".ppd")
+	ppd, err := os.ReadFile(ppdPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: %s", ErrNoPPD, ppdPath)
+		}
+		return fmt.Errorf("read PPD %s: %w", ppdPath, err)
+	}
+	m := ppdFilterRE.FindStringSubmatch(string(ppd))
+	if m == nil {
+		return fmt.Errorf("no cupsFilter found in PPD %s", ppdPath)
+	}
+	fields := strings.Fields(m[1])
+	if len(fields) == 0 {
+		return fmt.Errorf("empty cupsFilter in PPD %s", ppdPath)
+	}
+	filter := fields[len(fields)-1]
+	if !strings.HasPrefix(filter, "/") {
+		filter = filepath.Join("/usr/lib/cups/filter", filter)
+	}
+	raster, stderr, err := c.runner.Run(ctx, "cupsfilter", "-p", ppdPath, "-m", "application/vnd.cups-raster", src)
+	if err != nil {
+		return fmt.Errorf("cupsfilter: %s: %w", strings.TrimSpace(stderr), err)
+	}
+	tmp, err := os.CreateTemp("", "print-portal-raster-*.rast")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	_ = tmp.Close()
+	defer os.Remove(tmpPath)
+	if err := os.WriteFile(tmpPath, []byte(raster), 0o600); err != nil {
+		return err
+	}
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	cmd := exec.CommandContext(ctx, filter, "1", "root", "print-portal", "1", "x", tmpPath)
+	cmd.Env = append(os.Environ(), "PPD="+ppdPath)
+	cmd.Stdout = out
+	var filterErr bytes.Buffer
+	cmd.Stderr = &filterErr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("printer filter %s: %s: %w", filter, strings.TrimSpace(filterErr.String()), err)
+	}
+	return nil
 }
 
 func (c *Client) Cancel(ctx context.Context, jobID string) error {
