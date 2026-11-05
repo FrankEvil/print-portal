@@ -87,6 +87,18 @@ const editModelSelectOptions = computed(() => {
   return list
 })
 
+function onWizardBrandChange() {
+  if (selectedModel.value && !filteredModels.value.some((m) => m.name === selectedModel.value)) {
+    selectedModel.value = ''
+  }
+}
+
+function onEditBrandChange() {
+  if (editForm.value.model && !editModelOptions.value.some((m) => m.name === editForm.value.model)) {
+    editForm.value.model = ''
+  }
+}
+
 const isNetworkDevice = computed(() => {
   const uri = selectedDevice.value?.device_uri || ''
   return uri.startsWith('ipp://') || uri.startsWith('ipps://') || uri.startsWith('dnssd://')
@@ -579,7 +591,7 @@ onMounted(load)
             <div class="driver-filter-grid" :class="{ disabled: useEverywhere }">
               <div class="field">
                 <label>品牌</label>
-                <select v-model="selectedBrand" class="select" :disabled="useEverywhere">
+                <select v-model="selectedBrand" class="select" :disabled="useEverywhere" @change="onWizardBrandChange">
                   <option value="">全部品牌</option>
                   <option v-for="b in brands" :key="b" :value="b">{{ b }}</option>
                 </select>
@@ -664,7 +676,7 @@ onMounted(load)
           <div class="driver-filter-grid">
             <div class="field">
               <label>品牌</label>
-              <select v-model="editBrand" class="select">
+              <select v-model="editBrand" class="select" @change="onEditBrandChange">
                 <option value="">全部品牌</option>
                 <option v-for="b in brands" :key="b" :value="b">{{ b }}</option>
               </select>

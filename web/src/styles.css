@@ -1011,7 +1011,7 @@ table.table {
 }
 
 .wizard-body {
-  min-height: 320px;
+  min-height: 0;
 }
 
 .wizard-section-head {
