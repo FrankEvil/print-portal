@@ -218,6 +218,18 @@ func parseAccepting(out string) map[string]bool {
 			accepting := strings.Contains(rest, "accepting requests") && !strings.Contains(rest, "not accepting requests")
 			name := strings.Fields(rest)[0]
 			result[name] = accepting
+			continue
+		}
+		// Linux lpstat -a omits the "printer " prefix:
+		// "brother-ppd accepting requests since ..."
+		fields := strings.Fields(line)
+		if len(fields) >= 2 {
+			rest := strings.ToLower(line)
+			if strings.Contains(rest, "not accepting requests") {
+				result[fields[0]] = false
+			} else if strings.Contains(rest, "accepting requests") {
+				result[fields[0]] = true
+			}
 		}
 	}
 	return result
