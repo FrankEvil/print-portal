@@ -122,6 +122,10 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 	if pages, err := m.conv.PageCount(convertCtx, pdfPath); err == nil {
 		j.Pages = pages
 	}
+	if err := validatePageRange(j.PageRange, j.Pages); err != nil {
+		m.fail(j, err.Error())
+		return
+	}
 	preview := filepath.Join(jobDir, "preview.png")
 	if err := m.conv.Thumbnail(convertCtx, pdfPath, preview); err == nil {
 		j.PreviewPath = "/api/jobs/" + fmt.Sprintf("%d", j.ID) + "/preview"
@@ -193,6 +197,31 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 		m.logger.Printf("update job %d: %v", j.ID, err)
 	}
 	m.logger.Printf("job %d submitted as CUPS job %s", j.ID, cupsID)
+}
+
+func validatePageRange(value string, total int) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	for _, token := range strings.FieldsFunc(value, func(r rune) bool { return r == ' ' || r == ',' }) {
+		parts := strings.SplitN(token, "-", 2)
+		start, err := strconv.Atoi(parts[0])
+		if err != nil || start < 1 {
+			return fmt.Errorf("invalid page range %q", value)
+		}
+		end := start
+		if len(parts) == 2 {
+			end, err = strconv.Atoi(parts[1])
+			if err != nil || end < start {
+				return fmt.Errorf("invalid page range %q", value)
+			}
+		}
+		if end > total {
+			return fmt.Errorf("page range exceeds document (%d pages)", total)
+		}
+	}
+	return nil
 }
 
 // submitChunks submits one small CUPS job at a time and waits for it to leave

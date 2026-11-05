@@ -94,3 +94,23 @@ func TestRetryOnlyFailedWebJobs(t *testing.T) {
 		t.Errorf("clone = %+v", clone)
 	}
 }
+
+func TestValidatePageRange(t *testing.T) {
+	cases := []struct {
+		value string
+		total int
+		ok    bool
+	}{
+		{"", 10, true},
+		{"1-2", 10, true},
+		{"1-5 8", 10, true},
+		{"1-20", 10, false},
+		{"abc", 10, false},
+	}
+	for _, tc := range cases {
+		err := validatePageRange(tc.value, tc.total)
+		if (err == nil) != tc.ok {
+			t.Errorf("validatePageRange(%q, %d) = %v, want ok=%v", tc.value, tc.total, err, tc.ok)
+		}
+	}
+}

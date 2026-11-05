@@ -14,6 +14,8 @@ const fileUrl = ref('')
 const dragging = ref(false)
 const submitting = ref(false)
 const jobs = ref<Job[]>([])
+const pageCount = ref<number | null>(null)
+const pageCountLoading = ref(false)
 
 const form = ref({
   page_range: '',
@@ -41,6 +43,11 @@ const paperChoices = computed(() => {
 })
 
 const supportsColor = computed(() => ppdOptions.value.some((o) => /color/i.test(o.keyword) || /color/i.test(o.text)))
+
+const pageRangePlaceholder = computed(() => {
+  if (pageCount.value) return `全部（共 ${pageCount.value} 页），如 1-${Math.min(pageCount.value, 2)}`
+  return '全部，如 1-2 或 1-5 8'
+})
 
 async function loadPPDOptions() {
   if (!selectedPrinter.value) return
@@ -90,27 +97,67 @@ function syncPolling() {
   }
 }
 
-function setFile(f: File | null) {
+let pageCountToken = 0
+
+async function setFile(f: File | null) {
   if (fileUrl.value) URL.revokeObjectURL(fileUrl.value)
   file.value = f
   fileUrl.value = f ? URL.createObjectURL(f) : ''
+  pageCount.value = null
+  const token = ++pageCountToken
+  if (!f) return
+  if (isImage.value) {
+    pageCount.value = 1
+    return
+  }
+  if (!f.name.toLowerCase().endsWith('.pdf')) return
+  pageCountLoading.value = true
+  try {
+    const { PDFDocument } = await import('pdf-lib')
+    const doc = await PDFDocument.load(await f.arrayBuffer(), { ignoreEncryption: true })
+    if (token === pageCountToken) pageCount.value = doc.getPageCount()
+  } catch {
+    if (token === pageCountToken) pageCount.value = null
+  } finally {
+    if (token === pageCountToken) pageCountLoading.value = false
+  }
 }
 
 function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement
-  if (input.files?.length) setFile(input.files[0])
+  if (input.files?.length) void setFile(input.files[0])
   input.value = ''
 }
 
 function onDrop(e: DragEvent) {
   dragging.value = false
   const f = e.dataTransfer?.files?.[0]
-  if (f) setFile(f)
+  if (f) void setFile(f)
+}
+
+function validatePageRange(range: string, total: number): string {
+  const text = range.trim()
+  if (!text) return ''
+  const tokens = text.split(/[\s,]+/).filter(Boolean)
+  for (const token of tokens) {
+    const m = token.match(/^(\d+)(?:-(\d+))?$/)
+    if (!m) return '页码格式不正确，请使用 1-2 或 1-5 8'
+    const start = Number(m[1])
+    const end = m[2] ? Number(m[2]) : start
+    if (start < 1 || end < start || end > total) {
+      return `页码范围不能超过文件页数（共 ${total} 页）`
+    }
+  }
+  return ''
 }
 
 async function submit() {
   if (!file.value) return toast.error('请先选择文件')
   if (!selectedPrinter.value) return toast.error('请先选择打印机')
+  if (pageCount.value) {
+    const rangeError = validatePageRange(form.value.page_range, pageCount.value)
+    if (rangeError) return toast.error(rangeError)
+  }
   submitting.value = true
   try {
     const fd = new FormData()
@@ -119,7 +166,7 @@ async function submit() {
     for (const [k, v] of Object.entries(form.value)) fd.append(k, String(v))
     const res = await api.upload<{ job_id: number; printer: string }>('/api/print', fd)
     toast.success(`已提交打印任务 #${res.job_id}（${res.printer}）`)
-    setFile(null)
+    await setFile(null)
     await loadJobs()
   } catch (e) {
     toast.error((e as Error).message)
@@ -227,7 +274,7 @@ onUnmounted(() => {
           <button class="preview-remove" title="移除文件" aria-label="移除文件" @click="setFile(null)">×</button>
           <div class="preview-head">
             <span class="file-name">{{ file.name }}</span>
-            <span class="file-sub">{{ formatSize(file.size) }}</span>
+            <span class="file-sub">{{ formatSize(file.size) }}<template v-if="pageCount"> · 共 {{ pageCount }} 页</template><template v-else-if="pageCountLoading"> · 读取页数…</template></span>
           </div>
           <iframe
             v-if="isPdf"
@@ -264,8 +311,8 @@ onUnmounted(() => {
             </select>
           </div>
           <div class="field">
-            <label>页码范围</label>
-            <input v-model="form.page_range" class="input" placeholder="全部，如 1-2 或 1-5 8" />
+            <label>页码范围<span v-if="pageCount" class="field-hint"> 共 {{ pageCount }} 页</span></label>
+            <input v-model="form.page_range" class="input" :placeholder="pageRangePlaceholder" />
           </div>
           <div class="field">
             <label>份数</label>

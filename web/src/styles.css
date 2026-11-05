@@ -1751,3 +1751,9 @@ table.table {
   border-radius: 12px;
   background: var(--surface-2);
 }
+
+.field-hint {
+  color: var(--text-3);
+  font-weight: 400;
+  font-size: 11.5px;
+}
