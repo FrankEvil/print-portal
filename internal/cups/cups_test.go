@@ -122,6 +122,20 @@ func TestParseChineseDeviceURIs(t *testing.T) {
 	}
 }
 
+func TestParseAccepting(t *testing.T) {
+	out := `canon-ir-adv-c5560-ppd正在接受请求，时间始于now
+DCP7060不接受请求，时间始于now
+printer RAW accepting requests since now
+printer OFF not accepting requests since now`
+	got := parseAccepting(out)
+	if !got["canon-ir-adv-c5560-ppd"] || !got["RAW"] {
+		t.Errorf("expected accepting queues: %+v", got)
+	}
+	if got["DCP7060"] || got["OFF"] {
+		t.Errorf("expected rejecting queues: %+v", got)
+	}
+}
+
 func TestSubmitParsesRequestID(t *testing.T) {
 	runner := &fakeRunner{stdout: map[string]string{"lp": "request id is DCP7060-7 (1 file(s))"}}
 	client := NewClient(runner, "127.0.0.1:631")

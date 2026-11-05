@@ -79,6 +79,7 @@ type PrinterStatus struct {
 	DeviceURI    string   `json:"device_uri"`
 	MakeModel    string   `json:"make_model"`
 	PrintingJob  string   `json:"printing_job,omitempty"`
+	Accepting    bool     `json:"accepting"`
 }
 
 var printerLineRE = regexp.MustCompile(`^printer\s+(\S+)\s+(.*)$`)
@@ -192,17 +193,50 @@ func parseDeviceURIs(out string) map[string]string {
 	return result
 }
 
+// parseAccepting parses `lpstat -a` output (English and Chinese).
+func parseAccepting(out string) map[string]bool {
+	result := map[string]bool{}
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.Contains(line, "正在接受请求") {
+			name := strings.TrimSpace(strings.SplitN(line, "正在接受请求", 2)[0])
+			if name != "" {
+				result[name] = true
+			}
+			continue
+		}
+		if strings.Contains(line, "不接受请求") || strings.Contains(line, "拒绝请求") {
+			name := strings.TrimSpace(strings.SplitN(line, "不接受请求", 2)[0])
+			result[name] = false
+			continue
+		}
+		if strings.HasPrefix(line, "printer ") {
+			rest := strings.TrimPrefix(line, "printer ")
+			accepting := strings.Contains(rest, "accepting requests") && !strings.Contains(rest, "not accepting requests")
+			name := strings.Fields(rest)[0]
+			result[name] = accepting
+		}
+	}
+	return result
+}
+
 func (c *Client) ListPrinters(ctx context.Context) ([]PrinterStatus, error) {
 	pOut, _, err := c.command(ctx, "lpstat", "-p")
 	if err != nil && pOut == "" {
 		return nil, err
 	}
 	vOut, _, _ := c.command(ctx, "lpstat", "-v")
+	aOut, _, _ := c.command(ctx, "lpstat", "-a")
 	statuses := parsePrinterStatuses(pOut)
 	uris := parseDeviceURIs(vOut)
+	accepting := parseAccepting(aOut)
 	out := make([]PrinterStatus, 0, len(statuses))
 	for name, st := range statuses {
 		st.DeviceURI = uris[name]
+		st.Accepting = accepting[name]
 		out = append(out, *st)
 	}
 	return out, nil

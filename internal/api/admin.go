@@ -62,6 +62,7 @@ type adminPrinter struct {
 	storage.Printer
 	State        string   `json:"state"`
 	StateReasons []string `json:"state_reasons"`
+	Accepting    bool     `json:"accepting"`
 	QueueLength  int      `json:"queue_length"`
 	PPDAddress   string   `json:"ppd_address"`
 	RAWAddress   string   `json:"raw_address"`
@@ -86,7 +87,7 @@ func (s *Server) adminPrinterList(ctx context.Context) ([]adminPrinter, error) {
 	for _, p := range printers {
 		st := byQueue[p.PPDQueue]
 		ap := adminPrinter{
-			Printer: p, State: st.State, StateReasons: st.StateReasons,
+			Printer: p, State: st.State, StateReasons: st.StateReasons, Accepting: st.Accepting,
 			QueueLength: queueLen[p.PPDQueue] + queueLen[p.RAWQueue],
 			PPDAddress:  fmt.Sprintf("ipp://%s/printers/%s", displayServer(s.cfg.CUPSServer), p.PPDQueue),
 			RAWAddress:  fmt.Sprintf("ipp://%s/printers/%s", displayServer(s.cfg.CUPSServer), p.RAWQueue),

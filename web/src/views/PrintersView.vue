@@ -33,10 +33,8 @@ const driverInput = ref<HTMLInputElement | null>(null)
 const saving = ref(false)
 const wizardForm = ref({ name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true })
 
-// Edit dialog (simple form)
-const editing = ref<AdminPrinter | null>(null)
-const editSaving = ref(false)
-const editForm = ref({ name: '', model: '', device_uri: '', is_default: false, is_shared: true })
+// Edit uses the same wizard as create
+const editingPrinter = ref<AdminPrinter | null>(null)
 
 const brands = computed(() => {
   const set = new Set<string>()
@@ -105,6 +103,7 @@ async function scanDevices(filter: 'all' | 'network' | 'usb') {
 }
 
 function openWizard() {
+  editingPrinter.value = null
   showWizard.value = true
   step.value = 1
   devices.value = []
@@ -215,17 +214,31 @@ async function savePrinter() {
   if (!wizardForm.value.ppd_queue.trim() || !wizardForm.value.raw_queue.trim()) return toast.error('请填写队列名')
   saving.value = true
   try {
-    await api.post('/api/admin/printers', {
-      name: wizardForm.value.name.trim(),
-      model: useEverywhere.value ? 'everywhere' : selectedModel.value,
-      ppd_queue: wizardForm.value.ppd_queue.trim(),
-      raw_queue: wizardForm.value.raw_queue.trim(),
-      device_uri: selectedDevice.value.device_uri,
-      is_default: wizardForm.value.is_default,
-      is_shared: wizardForm.value.is_shared,
-    })
-    toast.success('打印机已创建')
+    if (editingPrinter.value) {
+      await api.put(`/api/admin/printers/${encodeURIComponent(editingPrinter.value.name)}`, {
+        name: wizardForm.value.name.trim(),
+        model: useEverywhere.value ? 'everywhere' : selectedModel.value,
+        ppd_queue: editingPrinter.value.ppd_queue,
+        raw_queue: editingPrinter.value.raw_queue,
+        device_uri: selectedDevice.value.device_uri,
+        is_default: wizardForm.value.is_default,
+        is_shared: wizardForm.value.is_shared,
+      })
+      toast.success('打印机已更新')
+    } else {
+      await api.post('/api/admin/printers', {
+        name: wizardForm.value.name.trim(),
+        model: useEverywhere.value ? 'everywhere' : selectedModel.value,
+        ppd_queue: wizardForm.value.ppd_queue.trim(),
+        raw_queue: wizardForm.value.raw_queue.trim(),
+        device_uri: selectedDevice.value.device_uri,
+        is_default: wizardForm.value.is_default,
+        is_shared: wizardForm.value.is_shared,
+      })
+      toast.success('打印机已创建')
+    }
     showWizard.value = false
+    editingPrinter.value = null
     await load()
   } catch (e) {
     toast.error((e as Error).message)
@@ -235,31 +248,22 @@ async function savePrinter() {
 }
 
 function openEdit(p: AdminPrinter) {
-  editing.value = p
-  editForm.value = { name: p.name, model: p.model, device_uri: p.device_uri, is_default: p.is_default, is_shared: p.is_shared }
-}
-
-async function saveEdit() {
-  if (!editing.value) return
-  editSaving.value = true
-  try {
-    await api.put(`/api/admin/printers/${encodeURIComponent(editing.value.name)}`, {
-      name: editForm.value.name,
-      model: editForm.value.model,
-      ppd_queue: editing.value.ppd_queue,
-      raw_queue: editing.value.raw_queue,
-      device_uri: editForm.value.device_uri,
-      is_default: editForm.value.is_default,
-      is_shared: editForm.value.is_shared,
-    })
-    toast.success('打印机已更新')
-    editing.value = null
-    await load()
-  } catch (e) {
-    toast.error((e as Error).message)
-  } finally {
-    editSaving.value = false
+  editingPrinter.value = p
+  showWizard.value = true
+  step.value = 3
+  devices.value = []
+  selectedDevice.value = {
+    id: 0, kind: 'printer', name: p.name, model: p.model, brand: '',
+    device_uri: p.device_uri, ip: '', source: 'network', metadata: '', last_seen: '',
   }
+  selectedBrand.value = ''
+  selectedModel.value = p.model
+  useEverywhere.value = p.model === 'everywhere'
+  wizardForm.value = {
+    name: p.name, ppd_queue: p.ppd_queue, raw_queue: p.raw_queue,
+    is_default: p.is_default, is_shared: p.is_shared,
+  }
+  if (!models.value.length) loadModels()
 }
 
 async function remove(p: AdminPrinter) {
@@ -342,10 +346,10 @@ onMounted(load)
               <div style="display: flex; flex-wrap: wrap; gap: 6px">
                 <button class="btn btn-ghost btn-sm" @click="openEdit(p)">编辑</button>
                 <button class="btn btn-ghost btn-sm" @click="action(p, 'test')">测试页</button>
-                <button class="btn btn-ghost btn-sm" @click="action(p, 'pause')">暂停</button>
-                <button class="btn btn-ghost btn-sm" @click="action(p, 'resume')">恢复</button>
-                <button class="btn btn-ghost btn-sm" @click="action(p, 'accept')">接受任务</button>
-                <button class="btn btn-ghost btn-sm" @click="action(p, 'reject')">拒绝任务</button>
+                <button v-if="p.state === 'stopped'" class="btn btn-ghost btn-sm" @click="action(p, 'resume')">恢复</button>
+                <button v-else class="btn btn-ghost btn-sm" @click="action(p, 'pause')">暂停</button>
+                <button v-if="p.accepting" class="btn btn-ghost btn-sm" @click="action(p, 'reject')">拒绝任务</button>
+                <button v-else class="btn btn-ghost btn-sm" @click="action(p, 'accept')">接受任务</button>
                 <button class="btn btn-ghost btn-sm" @click="action(p, 'purge')">清空</button>
                 <button class="btn btn-ghost btn-sm" @click="loadOptions(p)">PPD 选项</button>
                 <button class="btn btn-danger btn-sm" @click="remove(p)">删除</button>
@@ -362,7 +366,7 @@ onMounted(load)
     <div v-if="showWizard" class="modal-overlay" @click.self="showWizard = false">
       <div class="modal wizard-modal">
         <div class="modal-head">
-          <h2 class="card-title">添加打印机</h2>
+          <h2 class="card-title">{{ editingPrinter ? '编辑打印机' : '添加打印机' }}</h2>
           <button class="modal-close" @click="showWizard = false">×</button>
         </div>
 
@@ -500,8 +504,8 @@ onMounted(load)
           </div>
           <div class="form-grid">
             <div class="field full"><label>打印机名称</label><input v-model="wizardForm.name" class="input" @blur="fillQueueNames" /></div>
-            <div class="field"><label>PPD 队列名</label><input v-model="wizardForm.ppd_queue" class="input" /></div>
-            <div class="field"><label>RAW 队列名</label><input v-model="wizardForm.raw_queue" class="input" /></div>
+            <div class="field"><label>PPD 队列名</label><input v-model="wizardForm.ppd_queue" class="input" :disabled="!!editingPrinter" /></div>
+            <div class="field"><label>RAW 队列名</label><input v-model="wizardForm.raw_queue" class="input" :disabled="!!editingPrinter" /></div>
             <div class="field full"><label>设备地址</label><input :value="selectedDevice?.device_uri" class="input" disabled /></div>
             <div class="field full"><label>驱动</label><input :value="useEverywhere ? 'IPP Everywhere（免驱动）' : selectedModel" class="input" disabled /></div>
             <div class="field"><label><input v-model="wizardForm.is_default" type="checkbox" /> 设为默认打印机</label></div>
@@ -515,29 +519,6 @@ onMounted(load)
           <button v-if="step === 1" class="btn btn-primary" @click="nextFromDevice">下一步</button>
           <button v-if="step === 2" class="btn btn-primary" @click="nextFromDriver">下一步</button>
           <button v-if="step === 3" class="btn btn-primary" :disabled="saving" @click="savePrinter">{{ saving ? '保存中…' : '保存' }}</button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
-
-  <!-- Edit dialog -->
-  <Teleport to="body">
-    <div v-if="editing" class="modal-overlay" @click.self="editing = null">
-      <div class="modal" style="max-width: 680px">
-        <div class="modal-head">
-          <h2 class="card-title">编辑打印机</h2>
-          <button class="modal-close" @click="editing = null">×</button>
-        </div>
-        <div class="form-grid">
-          <div class="field"><label>名称</label><input v-model="editForm.name" class="input" /></div>
-          <div class="field"><label>驱动 / 型号</label><input v-model="editForm.model" class="input" /></div>
-          <div class="field full"><label>设备地址</label><input v-model="editForm.device_uri" class="input" /></div>
-          <div class="field"><label><input v-model="editForm.is_default" type="checkbox" /> 默认打印机</label></div>
-          <div class="field"><label><input v-model="editForm.is_shared" type="checkbox" /> 局域网共享</label></div>
-        </div>
-        <div class="modal-foot">
-          <button class="btn btn-ghost" @click="editing = null">取消</button>
-          <button class="btn btn-primary" :disabled="editSaving" @click="saveEdit">{{ editSaving ? '保存中…' : '保存' }}</button>
         </div>
       </div>
     </div>

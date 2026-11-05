@@ -20,6 +20,7 @@ export interface AdminPrinter {
   is_shared: boolean
   state: string
   state_reasons: string[]
+  accepting: boolean
   queue_length: number
   ppd_address: string
   raw_address: string
