@@ -507,6 +507,19 @@ func (c *Client) Reject(ctx context.Context, queue string) error {
 // Purge cancels all jobs in a queue.
 func (c *Client) Purge(ctx context.Context, queue string) error {
 	_, stderr, err := c.command(ctx, "cancel", "-a", queue)
+	if err == nil {
+		return nil
+	}
+	// Some CUPS versions return non-zero when there was nothing to cancel.
+	// Treat that as success if the queue has no active jobs left.
+	if active, listErr := c.ListActiveJobs(ctx); listErr == nil {
+		for _, job := range active {
+			if job.Queue == queue {
+				return wrapErr("cancel -a", stderr, err)
+			}
+		}
+		return nil
+	}
 	return wrapErr("cancel -a", stderr, err)
 }
 
