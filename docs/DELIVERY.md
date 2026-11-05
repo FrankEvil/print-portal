@@ -142,10 +142,14 @@ pnpm build
 - 管理登录页：[admin-login.png](screenshots/admin-login.png)
 - 管理概览：[admin-dashboard.png](screenshots/admin-dashboard.png)
 - 打印机管理：[admin-printers.png](screenshots/admin-printers.png)
+- 添加打印机向导（选择设备）：[printer-wizard-step1.png](screenshots/printer-wizard-step1.png)
+- 添加打印机向导（选择驱动）：[printer-wizard-step2.png](screenshots/printer-wizard-step2.png)
+- 添加打印机向导（配置）：[printer-wizard-step3.png](screenshots/printer-wizard-step3.png)
 
 检查中发现并修复：
 
 - Vite `base: './'` 导致 `/admin/*` 深链接资源 404、页面空白 → 改为 `base: '/'`
+- 添加打印机从单表单改为三步向导：局域网/USB 扫描、TCP/IP 手动地址、设备 URI、品牌/型号驱动选择与搜索、上传驱动
 
 结果：打印页桌面/手机布局、管理登录与后台页面均正常渲染。
 

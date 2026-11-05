@@ -390,6 +390,7 @@ type Model struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Driver      string `json:"driver"`
+	Brand       string `json:"brand"`
 }
 
 // parseModelLines parses `lpinfo -m` output.
@@ -405,11 +406,47 @@ func parseModelLines(out string) []Model {
 			continue
 		}
 		name := fields[0]
-		desc := strings.Join(fields[1:], " ")
+		desc := cleanModelDescription(strings.Join(fields[1:], " "))
 		driver := modelDriver(name)
-		models = append(models, Model{Name: name, Description: desc, Driver: driver})
+		models = append(models, Model{Name: name, Description: desc, Driver: driver, Brand: brandFromDescription(desc)})
 	}
 	return models
+}
+
+func cleanModelDescription(desc string) string {
+	// macOS's lpinfo includes the local PPD filename in the description, e.g.
+	// "DCP-1510 series CUPS.gz Brother DCP-1510 series CUPS". Keep the human
+	// readable tail.
+	if idx := strings.Index(desc, " CUPS.gz "); idx >= 0 {
+		desc = desc[idx+len(" CUPS.gz "):]
+	}
+	desc = strings.TrimSuffix(desc, " CUPS")
+	return strings.TrimSpace(desc)
+}
+
+var brandNames = map[string]string{
+	"brother": "Brother", "hp": "HP", "hewlett-packard": "HP", "canon": "Canon",
+	"epson": "Epson", "samsung": "Samsung", "xerox": "Xerox", "lexmark": "Lexmark",
+	"ricoh": "Ricoh", "kyocera": "Kyocera", "konica": "Konica", "minolta": "Konica",
+	"dell": "Dell", "lenovo": "Lenovo", "pantum": "Pantum", "oki": "OKI", "sharp": "Sharp",
+	"toshiba": "Toshiba", "fuji": "Fuji", "panasonic": "Panasonic", "konica-minolta": "Konica",
+}
+
+func brandFromDescription(desc string) string {
+	fields := strings.Fields(desc)
+	if len(fields) == 0 {
+		return "其他"
+	}
+	// Prefer any known brand name anywhere in the description; some PPD
+	// descriptions start with the model ("DCP-1510 series ... Brother ...").
+	for _, field := range fields {
+		clean := strings.ToLower(strings.Trim(field, ",;()[]{}"))
+		if canonical, ok := brandNames[clean]; ok {
+			return canonical
+		}
+	}
+	first := strings.Trim(fields[0], ",;()[]")
+	return first
 }
 
 func modelDriver(name string) string {

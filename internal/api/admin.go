@@ -425,6 +425,7 @@ func (s *Server) handleDriverRefresh(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDriverModels(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
+	brand := strings.TrimSpace(r.URL.Query().Get("brand"))
 	idStr := r.PathValue("id")
 	var targetDriver string
 	if idStr != "" {
@@ -440,19 +441,38 @@ func (s *Server) handleDriverModels(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "models_failed", err.Error())
 		return
 	}
-	if targetDriver != "" {
-		filtered := models[:0]
-		for _, m := range models {
-			if strings.EqualFold(m.Driver, targetDriver) {
-				filtered = append(filtered, m)
-			}
+	filtered := models[:0]
+	for _, m := range models {
+		if targetDriver != "" && !strings.EqualFold(m.Driver, targetDriver) {
+			continue
 		}
-		models = filtered
+		if brand != "" && !strings.EqualFold(m.Brand, brand) {
+			continue
+		}
+		filtered = append(filtered, m)
 	}
-	if len(models) > 500 {
-		models = models[:500]
+	models = filtered
+	total := len(models)
+	limit := atoiDefault(r.URL.Query().Get("limit"), 800)
+	if limit <= 0 || limit > 5000 {
+		limit = 800
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"models": models, "truncated": len(models) >= 500})
+	offset := atoiDefault(r.URL.Query().Get("offset"), 0)
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(models) {
+		offset = len(models)
+	}
+	page := models[offset:]
+	truncated := false
+	if len(page) > limit {
+		page = page[:limit]
+		truncated = true
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"models": page, "total": total, "offset": offset, "limit": limit, "truncated": truncated,
+	})
 }
 
 func (s *Server) handleCUPSStatus(w http.ResponseWriter, r *http.Request) {

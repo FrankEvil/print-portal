@@ -138,15 +138,15 @@
 
 ### 6.4 设备发现/添加向导
 
-- 路由：`/admin/discovery`
+- 入口：管理 → 打印机 → 添加打印机（三步模态向导）
 - 自动发现：
   - USB：`lpinfo -v`，`usb://...`
   - 网络 IPP/AirPrint：`ippfind`、mDNS `_ipp._tcp`、`_ipps._tcp`
   - 扫描仪：mDNS `_uscan._tcp`、`_uscans._tcp`、`_scanner._tcp`
-- 展示：
-  - 设备名称/型号/IP/USB
-  - 设备类型（打印/扫描/一体机）
-  - 是否支持 IPP Everywhere
+- 向导步骤：
+  1. **选择设备**：扫描局域网 / 扫描 USB / 全部扫描；设备卡片展示名称、型号、URI、网络/USB 类型；支持 Standard TCP/IP (RAW/9100) 手动输入 IP + 端口；支持手动输入设备 URI（高级）
+  2. **选择驱动**：按品牌/型号选择，支持搜索品牌、型号或文件名；显示可用驱动型号总数；支持上传 PPD / 压缩包 / deb 驱动；网络设备可选用 IPP Everywhere 免驱动
+  3. **配置**：打印机名称、PPD/RAW 队列名、是否默认、是否共享；保存时自动创建双队列
 - 添加：
   - IPP Everywhere/AirPrint → `lpadmin -m everywhere`（免驱动）
   - USB → 读取 1284DeviceID（MFG/MDL），在驱动索引中匹配 PPD

@@ -817,6 +817,258 @@ table.table {
   }
 }
 
+/* ---------- Modal & printer wizard ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh 20px 40px;
+  z-index: 90;
+  overflow: auto;
+}
+
+.modal {
+  width: min(980px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.25);
+  padding: 24px 26px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.modal-close {
+  border: 0;
+  background: var(--surface-2);
+  color: var(--text-2);
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.wizard-steps {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  margin: 22px 0 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-3);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.wizard-step span {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.wizard-step.active {
+  color: var(--accent);
+}
+
+.wizard-step.active span {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.3);
+}
+
+.wizard-step.done span {
+  background: var(--success);
+  color: #fff;
+}
+
+.wizard-body {
+  min-height: 320px;
+}
+
+.wizard-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.wizard-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.device-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.device-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.device-card:hover {
+  border-color: var(--accent);
+}
+
+.device-card.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.device-icon {
+  width: 48px;
+  height: 40px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.device-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.device-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.device-sub {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  word-break: break-all;
+}
+
+.wizard-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 20px 0;
+}
+
+.manual-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.driver-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.driver-filter-grid.disabled {
+  opacity: 0.5;
+}
+
+.check-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 13.5px;
+}
+
+.selected-driver {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.modal-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 640px) {
+  .modal-overlay {
+    padding: 12px;
+  }
+
+  .modal {
+    padding: 18px;
+  }
+
+  .wizard-steps {
+    gap: 10px;
+    justify-content: space-between;
+  }
+
+  .wizard-step {
+    font-size: 12px;
+  }
+
+  .device-grid,
+  .driver-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-section-head {
+    flex-direction: column;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

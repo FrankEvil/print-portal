@@ -481,6 +481,7 @@ type Device struct {
 	Kind      string `json:"kind"`
 	Name      string `json:"name"`
 	Model     string `json:"model"`
+	Brand     string `json:"brand"`
 	DeviceURI string `json:"device_uri"`
 	IP        string `json:"ip"`
 	Source    string `json:"source"`

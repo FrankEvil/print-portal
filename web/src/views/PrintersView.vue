@@ -1,28 +1,67 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
 import { toast } from '../toast'
-import type { AdminPrinter, Model, PPDOption } from '../types'
+import type { AdminPrinter, Device, Model, PPDOption } from '../types'
 import StatusBadge from '../components/StatusBadge.vue'
 
 const printers = ref<AdminPrinter[]>([])
-const showForm = ref(false)
-const editing = ref<AdminPrinter | null>(null)
-const saving = ref(false)
-const form = ref({
-  name: '',
-  model: '',
-  ppd_queue: '',
-  raw_queue: '',
-  device_uri: '',
-  is_default: false,
-  is_shared: true,
-})
-const modelOptions = ref<Model[]>([])
-
 const optionsFor = ref('')
 const ppdOptions = ref<PPDOption[]>([])
 const optionValues = ref<Record<string, string>>({})
+
+// Create wizard
+const showWizard = ref(false)
+const step = ref(1)
+const devices = ref<Device[]>([])
+const scanning = ref(false)
+const deviceFilter = ref<'all' | 'network' | 'usb'>('all')
+const selectedDevice = ref<Device | null>(null)
+const manualMode = ref<'' | 'tcp' | 'uri'>('')
+const tcpIp = ref('')
+const tcpPort = ref(9100)
+const manualUri = ref('')
+const models = ref<Model[]>([])
+const modelTotal = ref(0)
+const modelsLoading = ref(false)
+const selectedBrand = ref('')
+const selectedModel = ref('')
+const modelSearch = ref('')
+const useEverywhere = ref(false)
+const uploading = ref(false)
+const driverInput = ref<HTMLInputElement | null>(null)
+const saving = ref(false)
+const wizardForm = ref({ name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true })
+
+// Edit dialog (simple form)
+const editing = ref<AdminPrinter | null>(null)
+const editSaving = ref(false)
+const editForm = ref({ name: '', model: '', device_uri: '', is_default: false, is_shared: true })
+
+const brands = computed(() => {
+  const set = new Set<string>()
+  for (const m of models.value) if (m.brand) set.add(m.brand)
+  return Array.from(set).sort((a, b) => a.localeCompare(b))
+})
+
+const visibleDevices = computed(() => {
+  if (deviceFilter.value === 'usb') return devices.value.filter((d) => d.device_uri.startsWith('usb://'))
+  if (deviceFilter.value === 'network') return devices.value.filter((d) => !d.device_uri.startsWith('usb://'))
+  return devices.value
+})
+
+const filteredModels = computed(() => {
+  let list = models.value
+  if (selectedBrand.value) list = list.filter((m) => m.brand === selectedBrand.value)
+  const q = modelSearch.value.trim().toLowerCase()
+  if (q) list = list.filter((m) => `${m.brand} ${m.description} ${m.name}`.toLowerCase().includes(q))
+  return list
+})
+
+const isNetworkDevice = computed(() => {
+  const uri = selectedDevice.value?.device_uri || ''
+  return uri.startsWith('ipp://') || uri.startsWith('ipps://') || uri.startsWith('dnssd://')
+})
 
 async function load() {
   try {
@@ -33,58 +72,188 @@ async function load() {
   }
 }
 
-function openCreate() {
-  editing.value = null
-  form.value = { name: '', model: '', ppd_queue: '', raw_queue: '', device_uri: '', is_default: false, is_shared: true }
-  showForm.value = true
-  loadModelOptions()
-}
-
-async function loadModelOptions() {
+async function loadModels() {
+  modelsLoading.value = true
   try {
-    const res = await api.get<{ models: Model[] }>('/api/admin/drivers/models?q=')
-    modelOptions.value = res.models.slice(0, 300)
-  } catch {
-    /* ignore */
+    const res = await api.get<{ models: Model[]; total: number }>('/api/admin/drivers/models?limit=5000')
+    models.value = res.models
+    modelTotal.value = res.total
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    modelsLoading.value = false
   }
 }
 
-function openEdit(p: AdminPrinter) {
-  editing.value = p
-  form.value = {
-    name: p.name,
-    model: p.model,
-    ppd_queue: p.ppd_queue,
-    raw_queue: p.raw_queue,
-    device_uri: p.device_uri,
-    is_default: p.is_default,
-    is_shared: p.is_shared,
+async function scanDevices(filter: 'all' | 'network' | 'usb') {
+  scanning.value = true
+  deviceFilter.value = filter
+  try {
+    const res = await api.get<{ devices: Device[] }>('/api/admin/discovery/printers')
+    devices.value = res.devices
+    toast.success(`发现 ${res.devices.length} 个设备`)
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    scanning.value = false
   }
-  showForm.value = true
 }
 
-async function save() {
+function openWizard() {
+  showWizard.value = true
+  step.value = 1
+  devices.value = []
+  selectedDevice.value = null
+  manualMode.value = ''
+  tcpIp.value = ''
+  tcpPort.value = 9100
+  manualUri.value = ''
+  selectedBrand.value = ''
+  selectedModel.value = ''
+  modelSearch.value = ''
+  useEverywhere.value = false
+  wizardForm.value = { name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true }
+  models.value = []
+  modelTotal.value = 0
+  scanDevices('all')
+}
+
+function chooseDevice(d: Device) {
+  selectedDevice.value = d
+  manualMode.value = ''
+  if (d.brand) selectedBrand.value = d.brand
+  if (d.model) {
+    const match = models.value.find((m) => m.description.toLowerCase() === d.model.toLowerCase() || m.description.toLowerCase().includes(d.model.toLowerCase()))
+    if (match) {
+      selectedModel.value = match.name
+      selectedBrand.value = match.brand
+    }
+  }
+  wizardForm.value.name = d.model || d.name || 'Printer'
+  fillQueueNames()
+}
+
+function applyManualDevice() {
+  if (manualMode.value === 'tcp') {
+    if (!tcpIp.value.trim()) return toast.error('请输入打印机 IP 地址')
+    const uri = `socket://${tcpIp.value.trim()}:${tcpPort.value || 9100}`
+    selectedDevice.value = { id: 0, kind: 'printer', name: `TCP/IP ${tcpIp.value.trim()}`, model: '', brand: '', device_uri: uri, ip: tcpIp.value.trim(), source: 'network', metadata: '', last_seen: '' }
+    wizardForm.value.name = `TCP/IP ${tcpIp.value.trim()}`
+    fillQueueNames()
+    return true
+  }
+  if (manualMode.value === 'uri') {
+    if (!manualUri.value.trim()) return toast.error('请输入设备 URI')
+    selectedDevice.value = { id: 0, kind: 'printer', name: 'Manual Printer', model: '', brand: '', device_uri: manualUri.value.trim(), ip: '', source: 'network', metadata: '', last_seen: '' }
+    wizardForm.value.name = 'Manual Printer'
+    fillQueueNames()
+    return true
+  }
+  return false
+}
+
+function nextFromDevice() {
+  if (manualMode.value) {
+    if (!applyManualDevice()) return
+    step.value = 2
+    loadModelsIfNeeded()
+    return
+  }
+  if (!selectedDevice.value) return toast.error('请选择设备或填写手动地址')
+  step.value = 2
+  loadModelsIfNeeded()
+}
+
+function loadModelsIfNeeded() {
+  if (!models.value.length && !modelsLoading.value) loadModels()
+}
+
+function nextFromDriver() {
+  if (!useEverywhere.value && !selectedModel.value) return toast.error('请选择驱动 / 型号')
+  step.value = 3
+  if (!wizardForm.value.name) wizardForm.value.name = selectedDevice.value?.model || selectedDevice.value?.name || 'Printer'
+  fillQueueNames()
+}
+
+function fillQueueNames() {
+  const base = slugify(wizardForm.value.name)
+  if (!wizardForm.value.ppd_queue) wizardForm.value.ppd_queue = `${base}-ppd`
+  if (!wizardForm.value.raw_queue) wizardForm.value.raw_queue = `${base}-raw`
+}
+
+function slugify(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'printer'
+}
+
+async function uploadDriver(e: Event) {
+  const input = e.target as HTMLInputElement
+  const f = input.files?.[0]
+  if (!f) return
+  uploading.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', f)
+    await api.upload('/api/admin/drivers/install', fd)
+    toast.success(`驱动 ${f.name} 已上传`)
+    await loadModels()
+  } catch (err) {
+    toast.error((err as Error).message)
+  } finally {
+    uploading.value = false
+    input.value = ''
+  }
+}
+
+async function savePrinter() {
+  if (!selectedDevice.value) return toast.error('设备信息丢失，请重新选择')
+  if (!wizardForm.value.name.trim()) return toast.error('请输入打印机名称')
+  if (!wizardForm.value.ppd_queue.trim() || !wizardForm.value.raw_queue.trim()) return toast.error('请填写队列名')
   saving.value = true
   try {
-    if (editing.value) {
-      await api.put(`/api/admin/printers/${encodeURIComponent(editing.value.name)}`, form.value)
-      toast.success('打印机已更新')
-    } else {
-      const slug = form.value.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '') || 'printer'
-      if (!form.value.ppd_queue) form.value.ppd_queue = `${slug}-ppd`
-      if (!form.value.raw_queue) form.value.raw_queue = `${slug}-raw`
-      await api.post('/api/admin/printers', form.value)
-      toast.success('打印机已创建')
-    }
-    showForm.value = false
+    await api.post('/api/admin/printers', {
+      name: wizardForm.value.name.trim(),
+      model: useEverywhere.value ? 'everywhere' : selectedModel.value,
+      ppd_queue: wizardForm.value.ppd_queue.trim(),
+      raw_queue: wizardForm.value.raw_queue.trim(),
+      device_uri: selectedDevice.value.device_uri,
+      is_default: wizardForm.value.is_default,
+      is_shared: wizardForm.value.is_shared,
+    })
+    toast.success('打印机已创建')
+    showWizard.value = false
     await load()
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
     saving.value = false
+  }
+}
+
+function openEdit(p: AdminPrinter) {
+  editing.value = p
+  editForm.value = { name: p.name, model: p.model, device_uri: p.device_uri, is_default: p.is_default, is_shared: p.is_shared }
+}
+
+async function saveEdit() {
+  if (!editing.value) return
+  editSaving.value = true
+  try {
+    await api.put(`/api/admin/printers/${encodeURIComponent(editing.value.name)}`, {
+      name: editForm.value.name,
+      model: editForm.value.model,
+      ppd_queue: editing.value.ppd_queue,
+      raw_queue: editing.value.raw_queue,
+      device_uri: editForm.value.device_uri,
+      is_default: editForm.value.is_default,
+      is_shared: editForm.value.is_shared,
+    })
+    toast.success('打印机已更新')
+    editing.value = null
+    await load()
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    editSaving.value = false
   }
 }
 
@@ -141,36 +310,11 @@ onMounted(load)
       <h1 class="admin-title">打印机</h1>
       <p class="admin-sub">管理物理打印机、PPD / RAW 双队列与默认选项</p>
     </div>
-    <button class="btn btn-primary" @click="openCreate">添加打印机</button>
+    <button class="btn btn-primary" @click="openWizard">添加打印机</button>
   </div>
 
-  <section v-if="showForm" class="card" style="margin-bottom: 20px">
-    <div class="section-head">
-      <h2 class="card-title">{{ editing ? '编辑打印机' : '添加打印机' }}</h2>
-      <button class="btn btn-ghost btn-sm" @click="showForm = false">关闭</button>
-    </div>
-    <div class="form-grid">
-      <div class="field"><label>名称</label><input v-model="form.name" class="input" placeholder="Brother DCP-7060D" /></div>
-      <div class="field">
-        <label>驱动 / 型号</label>
-        <input v-model="form.model" class="input" list="model-options" placeholder="drv:///brlaser.drv/br7060d.ppd 或 everywhere" />
-        <datalist id="model-options">
-          <option v-for="m in modelOptions" :key="m.name" :value="m.name">{{ m.description }}</option>
-        </datalist>
-      </div>
-      <div class="field"><label>PPD 队列名</label><input v-model="form.ppd_queue" class="input" :disabled="!!editing" placeholder="dcp7060d-ppd" /></div>
-      <div class="field"><label>RAW 队列名</label><input v-model="form.raw_queue" class="input" :disabled="!!editing" placeholder="dcp7060d-raw" /></div>
-      <div class="field full"><label>设备地址 device-uri</label><input v-model="form.device_uri" class="input" placeholder="usb://Brother/DCP-7060D?serial=... 或 ipp://..." /></div>
-      <div class="field"><label><input v-model="form.is_default" type="checkbox" /> 设为默认打印机</label></div>
-      <div class="field"><label><input v-model="form.is_shared" type="checkbox" /> 局域网共享</label></div>
-    </div>
-    <button class="btn btn-primary" style="margin-top: 16px" :disabled="saving" @click="save">
-      {{ saving ? '保存中…' : '保存' }}
-    </button>
-  </section>
-
   <section class="card">
-    <div v-if="!printers.length" class="empty">还没有打印机，点击右上角添加</div>
+    <div v-if="!printers.length" class="empty">还没有打印机，点击右上角「添加打印机」开始</div>
     <div v-else class="table-wrap">
       <table class="table">
         <thead>
@@ -207,6 +351,161 @@ onMounted(load)
       </table>
     </div>
   </section>
+
+  <!-- Create printer wizard -->
+  <Teleport to="body">
+    <div v-if="showWizard" class="modal-overlay" @click.self="showWizard = false">
+      <div class="modal wizard-modal">
+        <div class="modal-head">
+          <h2 class="card-title">添加打印机</h2>
+          <button class="modal-close" @click="showWizard = false">×</button>
+        </div>
+
+        <div class="wizard-steps">
+          <div class="wizard-step" :class="{ active: step === 1, done: step > 1 }"><span>1</span>选择设备</div>
+          <div class="wizard-step" :class="{ active: step === 2, done: step > 2 }"><span>2</span>选择驱动</div>
+          <div class="wizard-step" :class="{ active: step === 3 }"><span>3</span>配置</div>
+        </div>
+
+        <!-- Step 1: device -->
+        <div v-if="step === 1" class="wizard-body">
+          <div class="wizard-section-head">
+            <div>
+              <h3 class="wizard-title">可用设备</h3>
+              <p class="card-desc">自动发现局域网 IPP/AirPrint 与 USB 打印机</p>
+            </div>
+            <div style="display: flex; gap: 8px">
+              <button class="btn btn-ghost btn-sm" :disabled="scanning" @click="scanDevices('network')">扫描局域网</button>
+              <button class="btn btn-ghost btn-sm" :disabled="scanning" @click="scanDevices('usb')">扫描 USB</button>
+              <button class="btn btn-ghost btn-sm" :disabled="scanning" @click="scanDevices('all')">{{ scanning ? '扫描中…' : '全部扫描' }}</button>
+            </div>
+          </div>
+
+          <div v-if="scanning" class="empty">正在扫描设备…</div>
+          <div v-else-if="!visibleDevices.length" class="empty">未发现设备，请检查打印机是否连接并开启</div>
+          <div v-else class="device-grid">
+            <label v-for="d in visibleDevices" :key="d.device_uri" class="device-card" :class="{ selected: selectedDevice?.device_uri === d.device_uri }" @click="chooseDevice(d)">
+              <input type="radio" :checked="selectedDevice?.device_uri === d.device_uri" style="display: none" @click.stop="chooseDevice(d)" />
+              <div class="device-icon">{{ d.device_uri.startsWith('usb://') ? 'USB' : 'LAN' }}</div>
+              <div class="device-main">
+                <div class="device-name">{{ d.model || d.name }}</div>
+                <div class="device-sub">{{ d.device_uri }}</div>
+              </div>
+              <span class="status-badge is-neutral">{{ d.source === 'direct' ? 'USB' : '网络' }}</span>
+            </label>
+          </div>
+
+          <div class="wizard-divider"></div>
+          <div class="manual-section">
+            <button class="btn btn-ghost btn-sm" @click="manualMode = manualMode === 'tcp' ? '' : 'tcp'">Standard TCP/IP (RAW/9100)</button>
+            <div v-if="manualMode === 'tcp'" class="form-grid" style="margin-top: 12px">
+              <div class="field"><label>打印机 IP 地址</label><input v-model="tcpIp" class="input" placeholder="例如：192.168.1.100" /></div>
+              <div class="field"><label>端口</label><input v-model.number="tcpPort" type="number" class="input" placeholder="9100" /></div>
+            </div>
+            <button class="btn btn-ghost btn-sm" style="margin-left: 8px" @click="manualMode = manualMode === 'uri' ? '' : 'uri'">手动输入设备 URI</button>
+            <div v-if="manualMode === 'uri'" class="field" style="margin-top: 12px">
+              <label>设备 URI</label>
+              <input v-model="manualUri" class="input" placeholder="usb://... / ipp://... / socket://..." />
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: driver -->
+        <div v-else-if="step === 2" class="wizard-body">
+          <div class="wizard-section-head">
+            <div>
+              <h3 class="wizard-title">选择驱动</h3>
+              <p class="card-desc">已安装 {{ modelTotal }} 个驱动型号；按品牌、型号或文件名查找</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" :disabled="uploading" @click="driverInput?.click()">
+              {{ uploading ? '上传中…' : '上传新驱动' }}
+            </button>
+            <input ref="driverInput" type="file" accept=".ppd,.deb,.tar.gz,.tgz" style="display: none" @change="uploadDriver" />
+          </div>
+
+          <label v-if="isNetworkDevice" class="check-line">
+            <input v-model="useEverywhere" type="checkbox" />
+            使用 IPP Everywhere / AirPrint 免驱动
+          </label>
+
+          <div v-if="modelsLoading" class="empty">正在加载驱动型号…</div>
+          <template v-else>
+            <div class="driver-filter-grid" :class="{ disabled: useEverywhere }">
+              <div class="field">
+                <label>品牌</label>
+                <select v-model="selectedBrand" class="select" :disabled="useEverywhere">
+                  <option value="">全部品牌</option>
+                  <option v-for="b in brands" :key="b" :value="b">{{ b }}</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>型号</label>
+                <select v-model="selectedModel" class="select" :disabled="useEverywhere">
+                  <option value="">请选择型号</option>
+                  <option v-for="m in filteredModels.slice(0, 500)" :key="m.name" :value="m.name">{{ m.description }}</option>
+                </select>
+              </div>
+            </div>
+            <div class="field" style="margin-top: 12px">
+              <label>搜索品牌、型号或文件名</label>
+              <input v-model="modelSearch" class="input" placeholder="例如：Brother、DCP-7060、brlaser" :disabled="useEverywhere" />
+            </div>
+            <div v-if="!useEverywhere && !filteredModels.length" class="empty">没有匹配的驱动型号，尝试上传 PPD 或更换关键词</div>
+            <div v-if="selectedModel" class="selected-driver">
+              已选择：<strong>{{ selectedModel }}</strong>
+            </div>
+          </template>
+        </div>
+
+        <!-- Step 3: config -->
+        <div v-else class="wizard-body">
+          <div class="wizard-section-head">
+            <h3 class="wizard-title">配置</h3>
+          </div>
+          <div class="form-grid">
+            <div class="field full"><label>打印机名称</label><input v-model="wizardForm.name" class="input" @blur="fillQueueNames" /></div>
+            <div class="field"><label>PPD 队列名</label><input v-model="wizardForm.ppd_queue" class="input" /></div>
+            <div class="field"><label>RAW 队列名</label><input v-model="wizardForm.raw_queue" class="input" /></div>
+            <div class="field full"><label>设备地址</label><input :value="selectedDevice?.device_uri" class="input" disabled /></div>
+            <div class="field full"><label>驱动</label><input :value="useEverywhere ? 'IPP Everywhere（免驱动）' : selectedModel" class="input" disabled /></div>
+            <div class="field"><label><input v-model="wizardForm.is_default" type="checkbox" /> 设为默认打印机</label></div>
+            <div class="field"><label><input v-model="wizardForm.is_shared" type="checkbox" /> 局域网共享</label></div>
+          </div>
+        </div>
+
+        <div class="modal-foot">
+          <button v-if="step > 1" class="btn btn-ghost" @click="step--">上一步</button>
+          <span style="flex: 1"></span>
+          <button v-if="step === 1" class="btn btn-primary" @click="nextFromDevice">下一步</button>
+          <button v-if="step === 2" class="btn btn-primary" @click="nextFromDriver">下一步</button>
+          <button v-if="step === 3" class="btn btn-primary" :disabled="saving" @click="savePrinter">{{ saving ? '保存中…' : '保存' }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Edit dialog -->
+  <Teleport to="body">
+    <div v-if="editing" class="modal-overlay" @click.self="editing = null">
+      <div class="modal" style="max-width: 680px">
+        <div class="modal-head">
+          <h2 class="card-title">编辑打印机</h2>
+          <button class="modal-close" @click="editing = null">×</button>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>名称</label><input v-model="editForm.name" class="input" /></div>
+          <div class="field"><label>驱动 / 型号</label><input v-model="editForm.model" class="input" /></div>
+          <div class="field full"><label>设备地址</label><input v-model="editForm.device_uri" class="input" /></div>
+          <div class="field"><label><input v-model="editForm.is_default" type="checkbox" /> 默认打印机</label></div>
+          <div class="field"><label><input v-model="editForm.is_shared" type="checkbox" /> 局域网共享</label></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-ghost" @click="editing = null">取消</button>
+          <button class="btn btn-primary" :disabled="editSaving" @click="saveEdit">{{ editSaving ? '保存中…' : '保存' }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <section v-if="optionsFor" class="card" style="margin-top: 20px">
     <div class="section-head">

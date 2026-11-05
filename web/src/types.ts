@@ -78,6 +78,7 @@ export interface Model {
   name: string
   description: string
   driver: string
+  brand: string
 }
 
 export interface PPDOption {
@@ -107,6 +108,7 @@ export interface Device {
   kind: string
   name: string
   model: string
+  brand: string
   device_uri: string
   ip: string
   source: string
