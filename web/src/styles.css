@@ -1463,17 +1463,6 @@ table.table {
   flex-wrap: wrap;
 }
 
-.connection-kind {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 600;
-}
-
 .edit-section {
   margin-top: 18px;
   padding-top: 16px;
