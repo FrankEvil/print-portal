@@ -874,6 +874,9 @@ var allowedSettings = map[string]string{
 	"default_printer_id":   "0",
 	"language":             "zh",
 	"theme":                "auto",
+	"public_host":          "",
+	"cups_port":            "8631",
+	"web_port":             "8088",
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {

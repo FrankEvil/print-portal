@@ -81,6 +81,10 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*storage.Printer,
 	if in.IsDefault {
 		_ = s.cups.SetDefault(ctx, in.PPDQueue)
 	}
+	if in.IsShared {
+		_ = s.cups.SetPrinterShared(ctx, in.PPDQueue, true)
+		_ = s.cups.SetPrinterShared(ctx, in.RAWQueue, true)
+	}
 	p := &storage.Printer{
 		Name:      in.Name,
 		Model:     in.Model,
@@ -133,10 +137,15 @@ func (s *Service) Update(ctx context.Context, name string, in CreateInput) (*sto
 	if in.Name != "" && in.Name != p.Name {
 		p.Name = in.Name
 	}
+	sharedChanged := p.IsShared != in.IsShared
 	p.IsShared = in.IsShared
 	p.IsDefault = in.IsDefault
 	if err := s.store.UpdatePrinter(p); err != nil {
 		return nil, err
+	}
+	if sharedChanged {
+		_ = s.cups.SetPrinterShared(ctx, p.PPDQueue, p.IsShared)
+		_ = s.cups.SetPrinterShared(ctx, p.RAWQueue, p.IsShared)
 	}
 	if p.IsDefault {
 		_ = s.cups.SetDefault(ctx, p.PPDQueue)

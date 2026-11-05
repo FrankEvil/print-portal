@@ -142,6 +142,7 @@ pnpm build
 - 管理登录页：[admin-login.png](screenshots/admin-login.png)
 - 管理概览：[admin-dashboard.png](screenshots/admin-dashboard.png)
 - 打印机管理：[admin-printers.png](screenshots/admin-printers.png)
+- 共享连接信息：[admin-sharing.png](screenshots/admin-sharing.png)
 - 添加打印机向导（选择设备）：[printer-wizard-step1.png](screenshots/printer-wizard-step1.png)
 - 添加打印机向导（选择驱动）：[printer-wizard-step2.png](screenshots/printer-wizard-step2.png)
 - 添加打印机向导（配置）：[printer-wizard-step3.png](screenshots/printer-wizard-step3.png)

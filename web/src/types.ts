@@ -137,3 +137,25 @@ export interface ScanJob {
   created_at: string
   updated_at: string
 }
+
+export interface SharingPrinter {
+  id: number
+  name: string
+  model: string
+  state: string
+  is_default: boolean
+  is_shared: boolean
+  device_uri: string
+  ppd_queue: string
+  raw_queue: string
+  ppd_uri: string
+  raw_uri: string
+  web_url: string
+}
+
+export interface SharingInfo {
+  public_host: string
+  cups_port: string
+  web_port: string
+  printers: SharingPrinter[]
+}

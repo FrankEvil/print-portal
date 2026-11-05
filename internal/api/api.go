@@ -83,6 +83,7 @@ func (s *Server) routes() {
 
 	// Admin API (ADMIN_TOKEN).
 	s.admin("GET /api/admin/overview", s.handleOverview)
+	s.admin("GET /api/admin/sharing", s.handleSharing)
 	s.admin("GET /api/admin/printers", s.handleAdminPrinters)
 	s.admin("POST /api/admin/printers", s.handleAdminPrinters)
 	s.admin("GET /api/admin/printers/{name}", s.handleAdminPrinter)

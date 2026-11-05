@@ -259,6 +259,18 @@
   - 闭源驱动（Canon CAPT/UFR2、Brother brscan4 等）不预装，由用户上传
   - 驱动包安装需 `ADMIN_TOKEN`，安装前显示来源与许可证提示
 
+### 6.12 共享
+
+- 路由：`/admin/sharing`
+- 访问地址配置：主机/IP、CUPS 端口、Web 端口（保存后所有连接信息自动更新）
+- 每台打印机展示：
+  - **PPD 连接地址**：`ipp://<host>:<cups_port>/printers/<ppd_queue>`，用于网页打印 / 本地 PPD 客户端
+  - **RAW 连接地址**：`ipp://<host>:<cups_port>/printers/<raw_queue>`，用于本地 RAW 客户端
+  - **网页打印地址**：`http://<host>:<web_port>/`
+  - 复制按钮
+- 局域网共享开关（同步 `printer-is-shared`）
+- 客户端连接说明：macOS、Windows、Linux/CUPS
+
 ## 7. PPD 与 RAW 规则
 
 - 网页：只允许 PPD 队列

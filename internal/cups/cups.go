@@ -430,6 +430,16 @@ func (c *Client) SetDefault(ctx context.Context, queue string) error {
 	return wrapErr("lpadmin -d", stderr, err)
 }
 
+// SetPrinterShared toggles the per-queue printer-is-shared option.
+func (c *Client) SetPrinterShared(ctx context.Context, queue string, shared bool) error {
+	value := "false"
+	if shared {
+		value = "true"
+	}
+	_, stderr, err := c.command(ctx, "lpadmin", "-p", queue, "-o", "printer-is-shared="+value)
+	return wrapErr("lpadmin printer-is-shared", stderr, err)
+}
+
 // PPDOption is one selectable option from a PPD.
 type PPDOption struct {
 	Keyword     string   `json:"keyword"`

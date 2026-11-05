@@ -228,6 +228,11 @@
 - `GET /api/scans/{id}`
 - `GET /api/scans/{id}/download`
 
+### 共享
+
+- `GET /api/admin/sharing`：返回访问地址配置和每台打印机的 PPD / RAW / Web 连接地址
+- 访问地址通过 `/api/admin/settings` 的 `public_host`、`cups_port`、`web_port` 配置
+
 ### 应用设置
 
 - `GET /api/admin/settings`

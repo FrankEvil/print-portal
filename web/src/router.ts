@@ -13,6 +13,7 @@ const router = createRouter({
       children: [
         { path: '', name: 'admin-dashboard', component: () => import('./views/DashboardView.vue') },
         { path: 'printers', name: 'admin-printers', component: () => import('./views/PrintersView.vue') },
+        { path: 'sharing', name: 'admin-sharing', component: () => import('./views/SharingView.vue') },
         { path: 'drivers', name: 'admin-drivers', component: () => import('./views/DriversView.vue') },
         { path: 'cups', name: 'admin-cups', component: () => import('./views/CupsView.vue') },
         { path: 'jobs', name: 'admin-jobs', component: () => import('./views/JobsView.vue') },

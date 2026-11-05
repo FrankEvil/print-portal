@@ -119,6 +119,11 @@ curl -fsS -X POST "http://127.0.0.1:18088/api/admin/printers" \
 echo "== list printers =="
 curl -fsS "http://127.0.0.1:18088/api/printers" | grep -q '"queue":"dcp-ppd"' || fail "list printers"
 
+echo "== sharing info =="
+SHARING=$(curl -fsS "http://127.0.0.1:18088/api/admin/sharing" -H "X-Admin-Token: testtoken")
+echo "$SHARING" | grep -q 'ipp://.*/printers/dcp-ppd' || fail "sharing ppd uri"
+echo "$SHARING" | grep -q 'ipp://.*/printers/dcp-raw' || fail "sharing raw uri"
+
 echo "== public ppd options =="
 curl -fsS "http://127.0.0.1:18088/api/printers/1/ppd-options" | grep -q 'PageSize' || fail "public ppd options"
 

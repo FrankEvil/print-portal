@@ -23,6 +23,7 @@ function logout() {
       <nav class="admin-nav">
         <router-link to="/admin" exact-active-class="router-link-active">概览</router-link>
         <router-link to="/admin/printers">打印机</router-link>
+        <router-link to="/admin/sharing">共享</router-link>
         <router-link to="/admin/drivers">驱动管理</router-link>
         <router-link to="/admin/cups">CUPS 控制台</router-link>
         <router-link to="/admin/jobs">任务管理</router-link>
