@@ -86,6 +86,15 @@ func (s *Server) adminPrinterList(ctx context.Context) ([]adminPrinter, error) {
 	out := make([]adminPrinter, 0, len(printers))
 	for _, p := range printers {
 		st := byQueue[p.PPDQueue]
+		// If only the RAW queue exists, show a degraded state instead of
+		// "unknown"; web printing needs the PPD queue to be present.
+		if st.State == "" {
+			if raw, ok := byQueue[p.RAWQueue]; ok {
+				st = raw
+				st.State = "degraded"
+				st.StateReasons = append(st.StateReasons, "PPD 队列缺失")
+			}
+		}
 		ap := adminPrinter{
 			Printer: p, State: st.State, StateReasons: st.StateReasons, Accepting: st.Accepting,
 			QueueLength: queueLen[p.PPDQueue] + queueLen[p.RAWQueue],

@@ -552,14 +552,19 @@ function prettyDevice(uri: string) {
   return uri.length > 60 ? uri.slice(0, 60) + '…' : uri
 }
 
+let statusTimer: number | undefined
+
 onMounted(() => {
   load()
   loadModels()
   document.addEventListener('click', closeRowMenu)
+  // Keep printer states in sync with CUPS.
+  statusTimer = window.setInterval(load, 8000)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', closeRowMenu)
+  if (statusTimer) window.clearInterval(statusTimer)
 })
 </script>
 
