@@ -78,6 +78,11 @@ const editModelOptions = computed(() => {
 const editModelMissing = computed(() =>
   !!editForm.value.model && !editModelOptions.value.some((m) => m.name === editForm.value.model),
 )
+const editCurrentDriverLabel = computed(() => {
+  const match = models.value.find((m) => m.name === editForm.value.model)
+  return match?.description || editForm.value.model || '—'
+})
+const editNoMatch = computed(() => !!editSearch.value.trim() && editModelOptions.value.length === 0)
 
 const isNetworkDevice = computed(() => {
   const uri = selectedDevice.value?.device_uri || ''
@@ -608,7 +613,7 @@ onMounted(load)
             </button>
             <input ref="editDriverInput" type="file" accept=".ppd,.deb,.tar.gz,.tgz" style="display: none" @change="uploadEditDriver" />
           </div>
-          <p class="card-desc" style="margin-bottom: 10px">当前驱动：{{ editingPrinter.model || '—' }}</p>
+          <p class="card-desc" style="margin-bottom: 10px">当前驱动：{{ editCurrentDriverLabel }}</p>
           <div class="driver-filter-grid">
             <div class="field">
               <label>品牌</label>
@@ -621,7 +626,7 @@ onMounted(load)
               <label>型号</label>
               <select v-model="editForm.model" class="select">
                 <option v-if="editModelMissing" :value="editForm.model">
-                  当前：{{ editForm.model }}
+                  当前：{{ editCurrentDriverLabel }}
                 </option>
                 <option v-for="m in editModelOptions" :key="m.name" :value="m.name">{{ m.description }}</option>
               </select>
@@ -631,6 +636,9 @@ onMounted(load)
             <label>搜索型号</label>
             <input v-model="editSearch" class="input" placeholder="品牌、型号或文件名" />
           </div>
+          <p v-if="editNoMatch" class="admin-sub" style="margin-top: 8px; color: var(--warning)">
+            没有匹配的型号，当前驱动保持不变
+          </p>
         </section>
 
         <section class="edit-section">
