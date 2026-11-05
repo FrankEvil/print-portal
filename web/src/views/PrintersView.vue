@@ -15,7 +15,7 @@ const optionValues = ref<Record<string, string>>({})
 const showWizard = ref(false)
 const step = ref(1)
 const devices = ref<Device[]>([])
-const scanning = ref<{ network: boolean; usb: boolean }>({ network: false, usb: false })
+const scanning = ref<{ network: boolean; usb: boolean; all: boolean }>({ network: false, usb: false, all: false })
 const selectedDevice = ref<Device | null>(null)
 const manualMode = ref<'' | 'tcp' | 'uri'>('')
 const tcpIp = ref('')
@@ -114,7 +114,9 @@ async function loadModels() {
   }
 }
 
-async function startScan(scope: 'network' | 'usb') {
+type ScanScope = 'network' | 'usb' | 'all'
+
+async function startScan(scope: ScanScope) {
   if (scanning.value[scope]) return
   scanning.value[scope] = true
   try {
@@ -126,7 +128,7 @@ async function startScan(scope: 'network' | 'usb') {
   }
 }
 
-function pollScan(scope: 'network' | 'usb', scanID: string) {
+function pollScan(scope: ScanScope, scanID: string) {
   const timer = window.setInterval(async () => {
     try {
       const res = await api.get<{ status: string; devices: Device[]; error?: string }>(`/api/admin/discovery/scan/${scanID}`)
@@ -162,8 +164,8 @@ function isUSBDevice(d: Device) {
 
 // Keep devices from the other scan scope; replace this scope with the latest
 // result so devices that went offline disappear after a completed scan.
-function reconcileScope(scope: 'network' | 'usb', list: Device[]) {
-  const inScope = (d: Device) => (scope === 'usb' ? isUSBDevice(d) : !isUSBDevice(d))
+function reconcileScope(scope: ScanScope, list: Device[]) {
+  const inScope = (d: Device) => (scope === 'all' ? true : scope === 'usb' ? isUSBDevice(d) : !isUSBDevice(d))
   const others = devices.value.filter((d) => !inScope(d))
   const byURI = new Map<string, Device>()
   for (const d of list) byURI.set(d.device_uri, d)
@@ -190,7 +192,7 @@ function openWizard() {
   wizardForm.value = { name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true }
   models.value = []
   modelTotal.value = 0
-  startScan('network')
+  startScan('usb')
 }
 
 function chooseDevice(d: Device) {
@@ -484,18 +486,18 @@ onMounted(load)
             </div>
             <div style="display: flex; gap: 8px">
               <button class="btn btn-ghost btn-sm" :disabled="scanning.network" title="只扫描局域网 IPP/AirPrint 设备" @click="startScan('network')">
-                {{ scanning.network ? '扫描局域网中…' : '扫描局域网' }}
+                {{ scanning.network ? '局域网扫描中…' : '局域网扫描' }}
               </button>
-              <button class="btn btn-ghost btn-sm" :disabled="scanning.usb" title="扫描 USB / 本地连接设备" @click="startScan('usb')">
-                {{ scanning.usb ? '扫描中…' : '扫描' }}
+              <button class="btn btn-ghost btn-sm" :disabled="scanning.all" title="扫描局域网和本地/USB 设备" @click="startScan('all')">
+                {{ scanning.all ? '扫描中…' : '扫描' }}
               </button>
             </div>
           </div>
 
-          <div v-if="scanning.network || scanning.usb" class="admin-sub" style="margin-bottom: 10px">
+          <div v-if="scanning.network || scanning.usb || scanning.all" class="admin-sub" style="margin-bottom: 10px">
             正在扫描，发现设备会自动加入列表…
           </div>
-          <div v-if="!visibleDevices.length && !scanning.network && !scanning.usb" class="empty">未发现设备，请检查打印机是否连接并开启</div>
+          <div v-if="!visibleDevices.length && !scanning.network && !scanning.usb && !scanning.all" class="empty">未发现设备，请检查打印机是否连接并开启</div>
           <div v-else-if="visibleDevices.length" class="device-grid">
             <label v-for="d in visibleDevices" :key="d.device_uri" class="device-card" :class="{ selected: selectedDevice?.device_uri === d.device_uri }" @click="chooseDevice(d)">
               <input type="radio" :checked="selectedDevice?.device_uri === d.device_uri" style="display: none" @click.stop="chooseDevice(d)" />

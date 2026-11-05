@@ -101,9 +101,11 @@ func mergeDeviceLists(base, extra []storage.Device) []storage.Device {
 }
 
 // StartScan starts (or reuses) an asynchronous discovery scan for a scope.
-// scope = "network" or "usb".
+// scope = "network", "usb" or "all".
 func (s *Service) StartScan(scope string) string {
-	if scope != "usb" {
+	switch scope {
+	case "usb", "all":
+	default:
 		scope = "network"
 	}
 	s.mu.Lock()
@@ -164,6 +166,9 @@ func (s *Service) runScan(scope, id string) {
 }
 
 func scanMatches(scope, uri string) bool {
+	if scope == "all" {
+		return true
+	}
 	if scope == "usb" {
 		return strings.HasPrefix(uri, "usb://")
 	}
