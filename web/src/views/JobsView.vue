@@ -35,9 +35,9 @@ async function clearRecords() {
   if (clearing.value) return
   clearing.value = true
   try {
-    const res = await api.del<{ cleared: number }>('/api/admin/jobs')
+    const res = await api.del<{ cleared: number; cups_cleared?: boolean }>('/api/admin/jobs')
     showClearConfirm.value = false
-    toast.success(`已清理 ${res.cleared} 条打印记录`)
+    toast.success(`已清理 ${res.cleared} 条打印记录，CUPS 历史已同步`)
     await load()
   } catch (e) {
     toast.error((e as Error).message)
@@ -137,7 +137,7 @@ onUnmounted(() => {
   <ConfirmDialog
     :open="showClearConfirm"
     title="清空打印记录"
-    message="将删除所有已完成、失败和已取消的打印记录；正在打印的任务不受影响。"
+    message="将删除所有已完成、失败和已取消的打印记录，并同步清空 CUPS 历史；正在打印的任务不受影响。"
     confirm-text="清空记录"
     danger
     :busy="clearing"

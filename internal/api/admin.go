@@ -819,12 +819,18 @@ func (s *Server) handleCUPSLogs(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAdminJobs(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodDelete {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		if err := s.cups.ClearJobHistory(ctx); err != nil {
+			writeError(w, http.StatusConflict, "clear_cups_failed", err.Error())
+			return
+		}
 		cleared, err := s.store.ClearFinishedJobs()
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "clear_failed", err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "cleared": cleared})
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "cleared": cleared, "cups_cleared": true})
 		return
 	}
 	jobs, err := s.store.ListJobs(storage.JobFilter{

@@ -476,6 +476,20 @@ func (c *Client) RenderToRaw(ctx context.Context, ppdQueue, src, dst string, opt
 	return nil
 }
 
+// ClearJobHistory asks CUPS to drop completed job history and spool files.
+func (c *Client) ClearJobHistory(ctx context.Context) error {
+	args := []string{}
+	if c.server != "" {
+		args = append(args, "-h", c.server)
+	}
+	args = append(args, "PreserveJobHistory=No", "PreserveJobFiles=No")
+	_, stderr, err := c.runner.Run(ctx, "cupsctl", args...)
+	if err != nil {
+		return fmt.Errorf("cupsctl: %s: %w", strings.TrimSpace(stderr), err)
+	}
+	return nil
+}
+
 func (c *Client) Cancel(ctx context.Context, jobID string) error {
 	_, stderr, err := c.command(ctx, "cancel", jobID)
 	if err != nil {
