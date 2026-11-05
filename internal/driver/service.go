@@ -26,6 +26,7 @@ type Service struct {
 	dataDir string
 
 	mu       sync.Mutex
+	capMu    sync.Mutex
 	models   []cups.Model
 	cachedAt time.Time
 }

@@ -528,7 +528,12 @@ async function openMaintenance(p: AdminPrinter) {
   maintenanceOutput.value = ''
   maintenanceLoading.value = true
   try {
-    maintenanceCaps.value = await api.get<MaintenanceCapabilities>(`/api/admin/printers/${encodeURIComponent(p.name)}/maintenance`)
+    let caps = await api.get<MaintenanceCapabilities>(`/api/admin/printers/${encodeURIComponent(p.name)}/maintenance`)
+    if (caps.status === 'parsing') {
+      await new Promise((resolve) => setTimeout(resolve, 800))
+      caps = await api.get<MaintenanceCapabilities>(`/api/admin/printers/${encodeURIComponent(p.name)}/maintenance`)
+    }
+    maintenanceCaps.value = caps
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -929,8 +934,11 @@ onUnmounted(() => {
           <button class="modal-close" @click="maintenancePrinter = null">×</button>
         </div>
         <div v-if="maintenanceLoading" class="empty">正在读取驱动维护能力…</div>
+        <div v-else-if="maintenanceCaps?.status === 'parsing'" class="empty">
+          正在异步解析驱动维护能力，请稍后重试…
+        </div>
         <div v-else-if="!maintenanceCaps?.actions?.length" class="empty">
-          当前驱动未提供维护接口。仍可使用 CUPS 状态、PPD 选项和测试页。
+          {{ maintenanceCaps?.message || '当前驱动未提供维护接口。' }}仍可使用 CUPS 状态、PPD 选项和测试页。
         </div>
         <div v-else class="maintenance-list">
           <div v-for="action in maintenanceCaps.actions" :key="action.id" class="maintenance-item">

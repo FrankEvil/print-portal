@@ -20,6 +20,9 @@ func (s *Server) handlePrinterMaintenance(w http.ResponseWriter, r *http.Request
 	action := r.PathValue("action")
 	if action == "" {
 		caps := s.drivers.MaintenanceCapabilities(r.Context(), p.Model)
+		if caps.Status == "parsing" {
+			s.parseCapabilitiesAsync(p.Model)
+		}
 		writeJSON(w, http.StatusOK, caps)
 		return
 	}

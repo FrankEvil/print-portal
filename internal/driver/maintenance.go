@@ -32,15 +32,70 @@ type maintenanceManifest struct {
 // MaintenanceCapabilities describes what a driver can expose to the UI.
 type MaintenanceCapabilities struct {
 	Driver  string              `json:"driver"`
+	Status  string              `json:"status"` // ready | none | parsing
+	Message string              `json:"message,omitempty"`
 	Actions []MaintenanceAction `json:"actions"`
+}
+
+type capabilityCache struct {
+	Driver   string              `json:"driver"`
+	Status   string              `json:"status"`
+	Message  string              `json:"message,omitempty"`
+	Actions  []MaintenanceAction `json:"actions"`
+	ParsedAt string              `json:"parsed_at"`
 }
 
 var maintenanceID = regexp.MustCompile(`^[a-z0-9_-]+$`)
 
-// MaintenanceCapabilities loads the manifest for the driver behind a PPD model.
-// A driver without a manifest simply has no maintenance actions.
+// MaintenanceCapabilities returns cached capabilities. If the driver has not
+// been parsed yet, the caller should call EnsureCapabilities asynchronously.
 func (s *Service) MaintenanceCapabilities(ctx context.Context, model string) *MaintenanceCapabilities {
-	out := &MaintenanceCapabilities{}
+	if cached := s.loadCapabilityCache(model); cached != nil {
+		return cached
+	}
+	return &MaintenanceCapabilities{Status: "parsing", Message: "正在解析驱动维护能力"}
+}
+
+// EnsureCapabilities parses the selected driver once and caches the result.
+func (s *Service) EnsureCapabilities(ctx context.Context, model string) *MaintenanceCapabilities {
+	s.capMu.Lock()
+	defer s.capMu.Unlock()
+	if cached := s.loadCapabilityCache(model); cached != nil {
+		return cached
+	}
+	driverName, actions := s.resolveManifest(ctx, model)
+	status := "none"
+	message := "当前驱动未提供维护接口"
+	if len(actions) > 0 {
+		status = "ready"
+		message = ""
+	}
+	caps := &MaintenanceCapabilities{Driver: driverName, Status: status, Message: message, Actions: actions}
+	cache := capabilityCache{Driver: driverName, Status: status, Message: message, Actions: actions, ParsedAt: time.Now().Format(time.RFC3339)}
+	if data, err := json.Marshal(cache); err == nil {
+		dir := filepath.Join(s.dataDir, "drivers", "capabilities")
+		if err := os.MkdirAll(dir, 0o755); err == nil {
+			_ = os.WriteFile(filepath.Join(dir, sanitizeName(model)+".json"), data, 0o644)
+		}
+	}
+	return caps
+}
+
+func (s *Service) loadCapabilityCache(model string) *MaintenanceCapabilities {
+	path := filepath.Join(s.dataDir, "drivers", "capabilities", sanitizeName(model)+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var cache capabilityCache
+	if json.Unmarshal(data, &cache) != nil {
+		return nil
+	}
+	return &MaintenanceCapabilities{Driver: cache.Driver, Status: cache.Status, Message: cache.Message, Actions: cache.Actions}
+}
+
+// resolveManifest finds and parses maintenance.json for the driver behind a PPD model.
+func (s *Service) resolveManifest(ctx context.Context, model string) (string, []MaintenanceAction) {
 	driverName := ""
 	models, err := s.Models(ctx)
 	if err == nil {
@@ -65,21 +120,25 @@ func (s *Service) MaintenanceCapabilities(ctx context.Context, model string) *Ma
 		if err := json.Unmarshal(data, &manifest); err != nil {
 			continue
 		}
+		var actions []MaintenanceAction
 		for _, action := range manifest.Actions {
-			if !validMaintenanceAction(action) {
-				continue
+			if validMaintenanceAction(action) {
+				actions = append(actions, action)
 			}
-			out.Actions = append(out.Actions, action)
 		}
-		out.Driver = candidate
-		break
+		if len(actions) > 0 {
+			return candidate, actions
+		}
 	}
-	return out
+	return driverName, nil
 }
 
 // RunMaintenance executes one whitelisted action from the driver manifest.
 func (s *Service) RunMaintenance(ctx context.Context, model, actionID string) (string, error) {
 	caps := s.MaintenanceCapabilities(ctx, model)
+	if caps.Status != "ready" {
+		caps = s.EnsureCapabilities(ctx, model)
+	}
 	for _, action := range caps.Actions {
 		if action.ID != actionID {
 			continue

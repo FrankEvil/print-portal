@@ -172,5 +172,7 @@ export interface MaintenanceAction {
 
 export interface MaintenanceCapabilities {
   driver: string
+  status: 'ready' | 'none' | 'parsing'
+  message?: string
   actions: MaintenanceAction[] | null
 }

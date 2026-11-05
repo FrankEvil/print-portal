@@ -138,6 +138,7 @@ func (s *Server) handleAdminPrinters(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, "create_failed", err.Error())
 			return
 		}
+		s.parseCapabilitiesAsync(p.Model)
 		writeJSON(w, http.StatusCreated, p)
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -361,7 +362,19 @@ func (s *Server) handleDiscoverAndCreate(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusConflict, "create_failed", err.Error())
 		return
 	}
+	s.parseCapabilitiesAsync(p.Model)
 	writeJSON(w, http.StatusCreated, p)
+}
+
+func (s *Server) parseCapabilitiesAsync(model string) {
+	if strings.TrimSpace(model) == "" {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s.drivers.EnsureCapabilities(ctx, model)
+	}()
 }
 
 func (s *Server) handleDrivers(w http.ResponseWriter, r *http.Request) {
