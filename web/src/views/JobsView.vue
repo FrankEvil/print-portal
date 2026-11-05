@@ -12,8 +12,16 @@ const status = ref('')
 const source = ref('')
 const query = ref('')
 let timer: number | undefined
+let searchTimer: number | undefined
 const showClearConfirm = ref(false)
 const clearing = ref(false)
+
+function onSearchInput() {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(() => {
+    void load()
+  }, 300)
+}
 
 async function load() {
   try {
@@ -67,6 +75,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  if (searchTimer) clearTimeout(searchTimer)
 })
 </script>
 
@@ -98,8 +107,8 @@ onUnmounted(() => {
         class="input"
         style="width: 220px"
         placeholder="搜索文件 / 用户 / 状态"
+        @input="onSearchInput"
         @keyup.enter="load"
-        @change="load"
       />
       <button class="btn btn-ghost btn-sm" @click="showClearConfirm = true">清空打印记录</button>
       <button class="btn btn-ghost btn-sm" @click="load">刷新</button>
