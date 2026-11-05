@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api } from '../api'
 import { toast } from '../toast'
 import type { AdminPrinter, Device, Model, PPDOption } from '../types'
@@ -39,6 +39,7 @@ const editUploading = ref(false)
 const editDriverInput = ref<HTMLInputElement | null>(null)
 const editForm = ref({ name: '', model: '', is_default: false, is_shared: true })
 const editBrand = ref('')
+const rowMenu = ref<{ printer: AdminPrinter; top: number; left: number } | null>(null)
 
 const brands = computed(() => {
   const set = new Set<string>()
@@ -462,6 +463,44 @@ async function action(p: AdminPrinter, name: string) {
   }
 }
 
+function toggleRowMenu(p: AdminPrinter, event: MouseEvent) {
+  if (rowMenu.value?.printer.id === p.id) {
+    rowMenu.value = null
+    return
+  }
+  const button = event.currentTarget as HTMLElement
+  const rect = button.getBoundingClientRect()
+  const menuWidth = 180
+  const menuHeight = 160
+  const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8))
+  const top = rect.bottom + menuHeight > window.innerHeight ? rect.top - menuHeight - 6 : rect.bottom + 6
+  rowMenu.value = { printer: p, top, left }
+}
+
+function closeRowMenu(event: MouseEvent) {
+  const target = event.target as Element
+  if (target.closest('.row-menu') || target.closest('[data-row-menu]')) return
+  rowMenu.value = null
+}
+
+function menuLoadOptions() {
+  const p = rowMenu.value?.printer
+  rowMenu.value = null
+  if (p) loadOptions(p)
+}
+
+async function menuPurge() {
+  const p = rowMenu.value?.printer
+  rowMenu.value = null
+  if (p) await action(p, 'purge')
+}
+
+async function menuRemove() {
+  const p = rowMenu.value?.printer
+  rowMenu.value = null
+  if (p) await remove(p)
+}
+
 async function loadOptions(p: AdminPrinter) {
   optionsFor.value = p.name
   try {
@@ -516,6 +555,11 @@ function prettyDevice(uri: string) {
 onMounted(() => {
   load()
   loadModels()
+  document.addEventListener('click', closeRowMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeRowMenu)
 })
 </script>
 
@@ -542,8 +586,8 @@ onMounted(() => {
               <div class="model-label">{{ prettyModel(p) }}<span v-if="p.is_default"> · 默认</span></div>
             </td>
             <td class="queue-cell">
-              <div class="queue-line"><span class="queue-tag">PPD</span><span class="queue-name">{{ p.ppd_queue }}</span></div>
-              <div class="queue-line"><span class="queue-tag">RAW</span><span class="queue-name">{{ p.raw_queue }}</span></div>
+              <div class="queue-line"><span class="queue-tag is-ppd">PPD</span><span class="queue-name">{{ p.ppd_queue }}</span></div>
+              <div class="queue-line"><span class="queue-tag is-raw">RAW</span><span class="queue-name">{{ p.raw_queue }}</span></div>
             </td>
             <td><div class="device-summary" :title="p.device_uri">{{ prettyDevice(p.device_uri) }}</div></td>
             <td>
@@ -560,14 +604,7 @@ onMounted(() => {
                 <button v-else class="btn btn-ghost btn-sm" @click="action(p, 'pause')">暂停</button>
                 <button v-if="p.accepting" class="btn btn-ghost btn-sm" @click="action(p, 'reject')">拒绝任务</button>
                 <button v-else class="btn btn-ghost btn-sm" @click="action(p, 'accept')">接受任务</button>
-                <details class="action-menu">
-                  <summary class="btn btn-ghost btn-sm">更多</summary>
-                  <div class="action-menu-panel">
-                    <button class="btn btn-ghost btn-sm" @click="loadOptions(p)">PPD 选项</button>
-                    <button class="btn btn-ghost btn-sm" @click="action(p, 'purge')">清空队列</button>
-                    <button class="btn btn-danger btn-sm" @click="remove(p)">删除打印机</button>
-                  </div>
-                </details>
+                <button class="row-menu-trigger" data-row-menu title="更多操作" @click.stop="toggleRowMenu(p, $event)">⋮</button>
               </div>
             </td>
           </tr>
@@ -800,6 +837,21 @@ onMounted(() => {
           <button class="btn btn-primary" :disabled="editSaving" @click="saveEdit">{{ editSaving ? '保存中…' : '保存' }}</button>
         </div>
       </div>
+    </div>
+  </Teleport>
+
+  <!-- Row action dropdown (teleported so the table cannot clip it) -->
+  <Teleport to="body">
+    <div
+      v-if="rowMenu"
+      class="row-menu"
+      :style="{ top: rowMenu.top + 'px', left: rowMenu.left + 'px' }"
+      @click.stop
+    >
+      <button class="row-menu-item" @click="menuLoadOptions">PPD 默认选项</button>
+      <button class="row-menu-item" @click="menuPurge">清空队列</button>
+      <div class="row-menu-divider"></div>
+      <button class="row-menu-item is-danger" @click="menuRemove">删除打印机</button>
     </div>
   </Teleport>
 
