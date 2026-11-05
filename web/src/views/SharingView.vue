@@ -178,7 +178,7 @@ onMounted(load)
           <code>{{ p.ppd_uri }}</code>
           <div class="share-box-actions">
             <button class="btn btn-ghost btn-sm" @click="copy(p.ppd_uri)">复制地址</button>
-            <span>支持页码、双面、份数</span>
+            <span>服务器 PPD 转换 · 支持页码/双面</span>
           </div>
         </div>
 
@@ -190,12 +190,47 @@ onMounted(load)
           <code>{{ p.raw_uri }}</code>
           <div class="share-box-actions">
             <button class="btn btn-ghost btn-sm" @click="copy(p.raw_uri)">复制地址</button>
-            <span>客户端自行渲染</span>
+            <span>需本地驱动 · 原样透传</span>
           </div>
         </div>
       </div>
     </div>
   </details>
+
+  <section v-if="info?.printers.length" class="card share-guide" style="margin-top: 20px">
+    <h2 class="card-title">PPD 与 RAW 怎么选</h2>
+    <div class="share-guide-grid">
+      <div class="share-guide-card is-ppd">
+        <div class="share-guide-head">
+          <span class="queue-tag is-ppd">PPD</span>
+          <strong>推荐大多数客户端</strong>
+        </div>
+        <p>服务器上的 CUPS 使用 PPD 驱动完成格式转换，客户端一般不需要安装厂商驱动。支持服务器端设置页码、双面、份数、纸张和颜色，网页打印固定使用这个队列。</p>
+        <h3>连接过程</h3>
+        <ol>
+          <li>在 Mac / Windows 添加 IPP 打印机，地址填上面的 PPD 连接地址。</li>
+          <li>驱动选择 IPP Everywhere、系统自动匹配或服务器上已安装的 PPD 型号。</li>
+          <li>客户端直接打印；页码、双面等参数由 CUPS 服务器处理。</li>
+        </ol>
+      </div>
+
+      <div class="share-guide-card is-raw">
+        <div class="share-guide-head">
+          <span class="queue-tag is-raw">RAW</span>
+          <strong>适合已有本地驱动的客户端</strong>
+        </div>
+        <p>RAW 队列没有 PPD，CUPS 原样透传客户端发来的数据。<strong>本地必须先安装对应打印机厂商驱动</strong>，由本地驱动完成渲染和页面设置；服务器端不支持页码、双面、份数等参数转换。</p>
+        <h3>连接过程</h3>
+        <ol>
+          <li>先在 Mac / Windows 安装对应型号的厂商驱动。</li>
+          <li>添加 IPP 打印机，地址填上面的 RAW 连接地址，并选择刚安装的本地驱动。</li>
+          <li>在客户端驱动的打印对话框中设置双面、纸张、份数等，再提交打印。</li>
+          <li>客户端渲染后的数据通过 RAW 队列原样发送给打印机。</li>
+        </ol>
+      </div>
+    </div>
+    <p class="share-guide-note">简单记：<strong>PPD 由服务器转换，客户端可以不装驱动；RAW 由本地驱动渲染，本地必须装驱动。</strong> 网页打印始终走 PPD，不使用本地 RAW。</p>
+  </section>
 
   <section v-if="info?.printers.length" class="card" style="margin-top: 20px">
     <h2 class="card-title">客户端连接方法</h2>
