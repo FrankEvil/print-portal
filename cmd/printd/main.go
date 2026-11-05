@@ -80,6 +80,16 @@ func main() {
 		}
 	}()
 
+	// Recreate missing queues if the external CUPS config was reset.
+	go func() {
+		time.Sleep(2 * time.Second)
+		ensureCtx, ensureCancel := context.WithTimeout(ctx, 60*time.Second)
+		defer ensureCancel()
+		if err := printerService.EnsureQueues(ensureCtx); err != nil {
+			logger.Printf("ensure printer queues: %v", err)
+		}
+	}()
+
 	server := api.New(cfg, store, cupsClient, jobManager, printerService, driverService, discoveryService, scanService, logger)
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,

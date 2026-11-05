@@ -59,6 +59,41 @@ func (in CreateInput) validate() error {
 	return nil
 }
 
+// EnsureQueues recreates missing CUPS queues from the saved printer records.
+// It is used at startup so a CUPS config reset does not leave a printer in a
+// permanently degraded state.
+func (s *Service) EnsureQueues(ctx context.Context) error {
+	printers, err := s.store.ListPrinters()
+	if err != nil {
+		return err
+	}
+	statuses, err := s.cups.ListPrinters(ctx)
+	if err != nil {
+		return err
+	}
+	present := make(map[string]bool, len(statuses))
+	for _, st := range statuses {
+		present[st.Name] = true
+	}
+	var problems []string
+	for _, p := range printers {
+		if !present[p.PPDQueue] {
+			if err := s.cups.AddPrinter(ctx, p.PPDQueue, p.DeviceURI, p.Model, p.PPDFile); err != nil {
+				problems = append(problems, fmt.Sprintf("recreate %s: %v", p.PPDQueue, err))
+			}
+		}
+		if !present[p.RAWQueue] {
+			if err := s.cups.AddPrinter(ctx, p.RAWQueue, p.DeviceURI, "", ""); err != nil {
+				problems = append(problems, fmt.Sprintf("recreate %s: %v", p.RAWQueue, err))
+			}
+		}
+	}
+	if len(problems) > 0 {
+		return errors.New(strings.Join(problems, "; "))
+	}
+	return nil
+}
+
 // Create makes a printer record and both CUPS queues.
 func (s *Service) Create(ctx context.Context, in CreateInput) (*storage.Printer, error) {
 	if err := in.validate(); err != nil {
