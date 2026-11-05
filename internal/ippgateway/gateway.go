@@ -40,6 +40,13 @@ func (g *Gateway) Start(ctx context.Context) error {
 		return fmt.Errorf("parse CUPS target: %w", err)
 	}
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+	director := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		director(req)
+		// CUPS validates the Host header; forward as the loopback target
+		// instead of the LAN address used by the client.
+		req.Host = targetURL.Host
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		queue, ok := queueFromPath(r.URL.Path)
