@@ -577,6 +577,8 @@ func modelDriver(name string) string {
 		}
 	case strings.HasPrefix(name, "foomatic:"):
 		return "foomatic"
+	case strings.HasPrefix(name, "foomatic-db"):
+		return "foomatic"
 	case name == "everywhere":
 		return "everywhere"
 	}

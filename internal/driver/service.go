@@ -88,7 +88,7 @@ func (s *Service) Refresh(ctx context.Context) error {
 		license string
 	}{
 		{"brlaser", packageVersion("printer-driver-brlaser"), "GPL-2.0"},
-		{"foomatic", packageVersion("foomatic-db"), "GPL-2.0"},
+		{"foomatic", packageVersion("foomatic-db-compressed-ppds"), "GPL-2.0"},
 	}
 	for _, b := range builtins {
 		state := "missing"
