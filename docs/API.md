@@ -97,6 +97,10 @@
 
 任务详情。Web 任务包含打印参数与预览地址；本地任务仅含 CUPS 元数据（队列、用户、大小、状态时间线），无文件内容。
 
+### GET `/api/jobs/{id}/file`
+
+返回 Web 任务实际送去打印的转换后 PDF（inline），用于核对打印内容。仅 `source=web` 且转换已完成的任务可用。
+
 ### DELETE `/api/jobs/{id}`
 
 取消任务（等价于 `cancel <job-id>`）。

@@ -261,6 +261,32 @@ func (s *Server) handleJobPreview(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, path)
 }
 
+// handleJobFile serves the converted PDF exactly as it was sent to CUPS.
+func (s *Server) handleJobFile(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", err.Error())
+		return
+	}
+	j, err := s.store.GetJob(id)
+	if err != nil || j == nil {
+		writeError(w, http.StatusNotFound, "not_found", "job not found")
+		return
+	}
+	if j.Source != "web" {
+		writeError(w, http.StatusNotFound, "not_found", "本地任务没有原始文件")
+		return
+	}
+	path := filepath.Join(s.cfg.DataDir, "jobs", fmt.Sprintf("%d", id), "converted.pdf")
+	if _, err := os.Stat(path); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "converted file not available")
+		return
+	}
+	w.Header().Set("Content-Disposition", "inline")
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	http.ServeFile(w, r, path)
+}
+
 func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 	id, err := parseID(r)
 	if err != nil {

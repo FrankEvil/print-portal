@@ -23,6 +23,10 @@ async function load() {
   }
 }
 
+function openJobFile(id: number) {
+  window.open(`/api/jobs/${id}/file`, '_blank')
+}
+
 async function act(j: Job, action: string) {
   if (action === 'cancel' && !confirm(`取消任务 #${j.id}？`)) return
   try {
@@ -99,6 +103,7 @@ onUnmounted(() => {
             <td class="admin-sub">{{ new Date(j.created_at).toLocaleString('zh-CN', { hour12: false }) }}</td>
             <td>
               <div style="display: flex; gap: 6px; flex-wrap: wrap">
+                <button v-if="j.source === 'web' && ['submitted','queued','printing','completed','failed'].includes(j.status)" class="btn btn-ghost btn-sm" @click="openJobFile(j.id)">查看文件</button>
                 <button v-if="['pending','converting','submitted','queued','printing'].includes(j.status)" class="btn btn-ghost btn-sm" @click="act(j, 'cancel')">取消</button>
                 <button v-if="['failed','cancelled'].includes(j.status) && j.source === 'web'" class="btn btn-ghost btn-sm" @click="act(j, 'retry')">重试</button>
                 <button v-if="j.cups_job_id && ['queued','printing'].includes(j.status)" class="btn btn-ghost btn-sm" @click="act(j, 'hold')">暂停</button>

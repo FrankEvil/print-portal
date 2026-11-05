@@ -127,6 +127,10 @@ async function submit() {
   }
 }
 
+function openJobFile(id: number) {
+  window.open(`/api/jobs/${id}/file`, '_blank')
+}
+
 async function cancelJob(id: number) {
   try {
     await api.del(`/api/jobs/${id}`)
@@ -326,6 +330,9 @@ onUnmounted(() => {
             </div>
           </div>
           <StatusBadge :status="j.status" />
+          <button v-if="j.source === 'web' && ['submitted', 'queued', 'printing', 'completed', 'failed'].includes(j.status)" class="btn btn-ghost btn-sm" @click="openJobFile(j.id)">
+            查看文件
+          </button>
           <button v-if="['pending', 'converting', 'submitted', 'queued', 'printing'].includes(j.status)" class="btn btn-ghost btn-sm" @click="cancelJob(j.id)">
             取消
           </button>
