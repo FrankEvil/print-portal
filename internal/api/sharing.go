@@ -31,7 +31,9 @@ func (s *Server) handleSharing(w http.ResponseWriter, r *http.Request) {
 	if err != nil || host == "" {
 		host = r.Host
 	}
-	if configured, ok, _ := s.store.GetSetting("public_host"); ok && strings.TrimSpace(configured) != "" {
+	if configuredHost := strings.TrimSpace(s.cfg.PublicHost); configuredHost != "" {
+		host = configuredHost
+	} else if configured, ok, _ := s.store.GetSetting("public_host"); ok && strings.TrimSpace(configured) != "" {
 		configured = strings.TrimSpace(configured)
 		if !isLoopbackHost(configured) {
 			host = configured
@@ -83,7 +85,7 @@ func (s *Server) handleSharing(w http.ResponseWriter, r *http.Request) {
 
 func isLoopbackHost(host string) bool {
 	host = strings.Trim(host, "[]")
-	if strings.EqualFold(host, "localhost") {
+	if host == "" || strings.EqualFold(host, "localhost") {
 		return true
 	}
 	ip := net.ParseIP(host)

@@ -18,6 +18,7 @@ type Config struct {
 	FnOSPrefix  string
 	FnOSBaseURL string
 	FnOSPort    string
+	PublicHost  string
 	MaxUploadMB int
 	CUPSServer  string
 	IPPAddr     string
@@ -37,6 +38,7 @@ func Load() Config {
 		FnOSPrefix:  env("PRINT_PORTAL_FNOS_PREFIX", ""),
 		FnOSBaseURL: env("PRINT_PORTAL_FNOS_BASE_URL", ""),
 		FnOSPort:    env("PRINT_PORTAL_FNOS_PORT", ""),
+		PublicHost:  env("PRINT_PORTAL_PUBLIC_HOST", ""),
 		MaxUploadMB: envInt("MAX_UPLOAD_MB", 200),
 		CUPSServer:  env("CUPS_SERVER", "127.0.0.1:631"),
 		IPPAddr:     env("PRINT_PORTAL_IPP_ADDR", "0.0.0.0:8631"),
