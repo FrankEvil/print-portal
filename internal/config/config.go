@@ -14,6 +14,8 @@ type Config struct {
 	AdminToken  string
 	AuthMode    string
 	SocketPath  string
+	FnOSPrefix  string
+	FnOSBaseURL string
 	MaxUploadMB int
 	CUPSServer  string
 	IPPAddr     string
@@ -29,6 +31,8 @@ func Load() Config {
 		AdminToken:  env("ADMIN_TOKEN", ""),
 		AuthMode:    env("PRINT_PORTAL_AUTH_MODE", "token"),
 		SocketPath:  env("PRINTD_SOCKET", ""),
+		FnOSPrefix:  env("PRINT_PORTAL_FNOS_PREFIX", "/app/print-portal"),
+		FnOSBaseURL: env("PRINT_PORTAL_FNOS_BASE_URL", ""),
 		MaxUploadMB: envInt("MAX_UPLOAD_MB", 200),
 		CUPSServer:  env("CUPS_SERVER", "127.0.0.1:631"),
 		IPPAddr:     env("PRINT_PORTAL_IPP_ADDR", "0.0.0.0:8631"),

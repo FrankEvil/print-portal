@@ -246,7 +246,36 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func (s *Server) fnosLoginURL(r *http.Request) string {
+	base := strings.TrimRight(s.cfg.FnOSBaseURL, "/")
+	if base == "" {
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		base = scheme + "://" + host
+	}
+	return base + "/" + strings.TrimLeft(s.cfg.FnOSPrefix, "/")
+}
+
 func (s *Server) staticHandler() http.Handler {
+	if s.cfg.AuthMode == "fnos" && s.cfg.FnOSPrefix != "" {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/healthz" || strings.HasPrefix(r.URL.Path, "/api/") || strings.TrimSpace(r.Header.Get("X-Trim-Userid")) != "" {
+				if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/healthz" {
+					http.NotFound(w, r)
+					return
+				}
+				http.FileServer(http.Dir(s.cfg.StaticDir)).ServeHTTP(w, r)
+				return
+			}
+			http.Redirect(w, r, s.fnosLoginURL(r), http.StatusFound)
+		})
+	}
 	if s.cfg.StaticDir == "" {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/healthz" {

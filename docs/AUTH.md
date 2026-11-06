@@ -53,6 +53,7 @@ X-Trim-Username
 - `X-Trim-Isadmin != true`：管理 API 返回 403
 - 不需要用户输入 `ADMIN_TOKEN`
 - 必须先登录 fnOS
+- 直接访问 8088 时会自动跳转到飞牛网关入口，触发 fnOS 登录/授权
 - 不应直接暴露 8088 端口给公网
 
 应用包：
