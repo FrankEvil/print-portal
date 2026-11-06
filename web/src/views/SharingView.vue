@@ -6,6 +6,7 @@ import type { SharingInfo, SharingPrinter } from '../types'
 import StatusBadge from '../components/StatusBadge.vue'
 
 const info = ref<SharingInfo | null>(null)
+const authMode = ref<'token' | 'fnos'>('token')
 const settings = ref({ public_host: '', cups_port: '8631', web_port: '8088' })
 const savingSettings = ref(false)
 const loading = ref(false)
@@ -20,6 +21,7 @@ async function load() {
   try {
     const res = await api.get<SharingInfo>('/api/admin/sharing')
     info.value = res
+    authMode.value = res.auth_mode || 'token'
     settings.value = { public_host: res.public_host, cups_port: res.cups_port, web_port: res.web_port }
   } catch (e) {
     toast.error((e as Error).message)
@@ -113,7 +115,7 @@ onMounted(load)
     <button class="btn btn-ghost btn-sm" :disabled="loading" @click="load">刷新</button>
   </div>
 
-  <section class="card">
+  <section v-if="authMode !== 'fnos'" class="card">
     <div class="section-head">
       <div>
         <h2 class="card-title">访问地址</h2>

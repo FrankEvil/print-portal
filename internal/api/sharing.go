@@ -76,6 +76,7 @@ func (s *Server) handleSharing(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
+		"auth_mode":   s.cfg.AuthMode,
 		"public_host": host,
 		"cups_port":   cupsPort,
 		"web_port":    webPort,

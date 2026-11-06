@@ -156,6 +156,7 @@ export interface SharingPrinter {
 }
 
 export interface SharingInfo {
+  auth_mode?: 'token' | 'fnos'
   public_host: string
   cups_port: string
   web_port: string
