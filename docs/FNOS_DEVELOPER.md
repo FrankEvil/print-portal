@@ -106,7 +106,7 @@ Print Portal 需要：
 
 ## 7. 飞牛先锋开发者上架申请单字段
 
-申请单：<https://trim-nas.feishu.cn/share/base/form/shrcn9ewk59TfoFWVAPMPy6aWSc>
+申请单：飞牛官方开发者群/申请页提供的「飞牛先锋开发者应用上架申请」表单
 
 建议填写：
 
