@@ -91,6 +91,18 @@ func isLoopbackHost(host string) bool {
 }
 
 func detectLANIP() string {
+	// Prefer the address selected by the host's default route. This avoids
+	// returning a Docker bridge address when the app runs with host network.
+	if conn, err := net.Dial("udp", "223.5.5.5:80"); err == nil {
+		if addr, ok := conn.LocalAddr().(*net.UDPAddr); ok {
+			conn.Close()
+			if ip4 := addr.IP.To4(); ip4 != nil && !ip4.IsLoopback() && !ip4.IsLinkLocalUnicast() {
+				return ip4.String()
+			}
+		} else {
+			conn.Close()
+		}
+	}
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return ""
@@ -98,6 +110,10 @@ func detectLANIP() string {
 	var fallback string
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		name := strings.ToLower(iface.Name)
+		if strings.HasPrefix(name, "docker") || strings.HasPrefix(name, "br-") || strings.HasPrefix(name, "veth") || strings.HasPrefix(name, "virbr") || strings.HasPrefix(name, "cni") {
 			continue
 		}
 		addrs, err := iface.Addrs()
