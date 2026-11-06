@@ -10,6 +10,16 @@
             "protocol": "",
             "url": "/app/print-portal",
             "allUsers": true
+        },
+        "print-portal.NewPage": {
+            "title": "Print Portal（新页面）",
+            "desc": "在浏览器新页面打开 Print Portal",
+            "icon": "images/{0}.png",
+            "type": "url",
+            "port": "5666",
+            "protocol": "http",
+            "url": "/app/print-portal",
+            "allUsers": true
         }
     }
 }
