@@ -74,6 +74,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/printers", s.handleListPrinters)
 	s.mux.HandleFunc("GET /api/printers/{id}/ppd-options", s.handlePublicPPDOptions)
 	s.mux.HandleFunc("POST /api/print", s.handlePrint)
+	s.mux.HandleFunc("POST /api/print/nas", s.handlePrintNAS)
 	s.mux.HandleFunc("GET /api/jobs", s.handleListJobs)
 	s.mux.HandleFunc("GET /api/jobs/{id}", s.handleGetJob)
 	s.mux.HandleFunc("GET /api/jobs/{id}/preview", s.handleJobPreview)

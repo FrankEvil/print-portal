@@ -2,6 +2,7 @@ appname         = print-portal
 version         = 0.1.8
 display_name    = Print Portal
 platform        = x86
+micro_app        = true
 maintainer      = Print Portal
 maintainer_url  = https://github.com/FrankEvil/print-portal
 distributor     = Print Portal

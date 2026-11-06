@@ -186,6 +186,126 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handlePrintNAS(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		PrinterID   int64  `json:"printer_id"`
+		Path        string `json:"path"`
+		PageRange   string `json:"page_range"`
+		Duplex      string `json:"duplex"`
+		Copies      int    `json:"copies"`
+		PaperSize   string `json:"paper_size"`
+		Orientation string `json:"orientation"`
+		ColorMode   string `json:"color_mode"`
+		Scaling     string `json:"scaling"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	if body.PrinterID <= 0 {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_printer", "printer_id is required")
+		return
+	}
+	if strings.TrimSpace(body.Path) == "" {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_path", "path is required")
+		return
+	}
+	p, err := s.store.GetPrinter(body.PrinterID)
+	if err != nil || p == nil {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_printer", "printer not found")
+		return
+	}
+	src, err := filepath.Abs(filepath.Clean(body.Path))
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_path", "invalid path")
+		return
+	}
+	real, err := filepath.EvalSymlinks(src)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_path", "file not found")
+		return
+	}
+	if !s.allowedNASPath(real) {
+		writeError(w, http.StatusForbidden, "path_forbidden", "path is outside the configured NAS roots")
+		return
+	}
+	info, err := os.Stat(real)
+	if err != nil || !info.Mode().IsRegular() {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_path", "file not found")
+		return
+	}
+	filename := sanitizeFilename(filepath.Base(real))
+	ext := strings.ToLower(filepath.Ext(filename))
+	if !allowedExt[ext] {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_file_type", "仅支持 PDF、JPEG、PNG、WebP、Office 文档、PostScript")
+		return
+	}
+	srcFile, err := os.Open(real)
+	if err != nil {
+		writeError(w, http.StatusForbidden, "read_failed", "cannot read selected file")
+		return
+	}
+	defer srcFile.Close()
+	_ = os.MkdirAll(filepath.Join(s.cfg.DataDir, "uploads"), 0o755)
+	dst := filepath.Join(s.cfg.DataDir, "uploads", fmt.Sprintf("%d-%s", time.Now().UnixNano(), filename))
+	out, err := os.Create(dst)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
+	if _, err := io.Copy(out, srcFile); err != nil {
+		out.Close()
+		_ = os.Remove(dst)
+		writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
+	out.Close()
+
+	copies := body.Copies
+	if copies < 1 {
+		copies = 1
+	}
+	if copies > 99 {
+		copies = 99
+	}
+	j := &storage.Job{
+		PrinterID: body.PrinterID, Source: "web", Filename: filename, SourceIP: clientIP(r),
+		PageRange: strings.TrimSpace(body.PageRange), Duplex: defaultStr(body.Duplex, "one-sided"),
+		Copies: copies, PaperSize: defaultStr(body.PaperSize, "A4"),
+		Orientation: defaultStr(body.Orientation, "portrait"), ColorMode: defaultStr(body.ColorMode, "monochrome"),
+		Scaling: defaultStr(body.Scaling, "auto"), Status: "pending", StoredPath: dst,
+	}
+	if err := s.store.CreateJob(j); err != nil {
+		_ = os.Remove(dst)
+		writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
+	s.jobs.Wake()
+	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": j.ID, "status": "pending", "filename": filename, "printer": p.Name})
+}
+
+func (s *Server) allowedNASPath(path string) bool {
+	roots := strings.Split(s.cfg.NASRoots, ",")
+	if len(roots) == 0 {
+		return false
+	}
+	for _, root := range roots {
+		root = strings.TrimSpace(root)
+		if root == "" {
+			continue
+		}
+		absRoot, err := filepath.Abs(filepath.Clean(root))
+		if err != nil {
+			continue
+		}
+		rel, err := filepath.Rel(absRoot, path)
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
+}
+
 type jobResponse struct {
 	storage.Job
 	PrinterName string `json:"printer_name"`

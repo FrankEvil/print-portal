@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { TrimApp } from '@trimjs/web-app'
 import { api, apiUrl } from '../api'
 import { toast } from '../toast'
 import type { Job, PPDOption, Printer } from '../types'
@@ -10,6 +11,8 @@ const printers = ref<Printer[]>([])
 const selectedPrinter = ref<number | null>(null)
 const ppdOptions = ref<PPDOption[]>([])
 const file = ref<File | null>(null)
+const nasPath = ref('')
+const authMode = ref<'token' | 'fnos'>('token')
 const fileUrl = ref('')
 const dragging = ref(false)
 const submitting = ref(false)
@@ -29,6 +32,7 @@ const form = ref({
 
 let pollTimer: number | undefined
 
+const nasName = computed(() => nasPath.value.split(/[\\/]/).pop() || '')
 const isPdf = computed(() => file.value?.name.toLowerCase().endsWith('.pdf'))
 const isImage = computed(() => {
   const n = file.value?.name.toLowerCase() || ''
@@ -101,6 +105,7 @@ let pageCountToken = 0
 
 async function setFile(f: File | null) {
   if (fileUrl.value) URL.revokeObjectURL(fileUrl.value)
+  if (f) nasPath.value = ''
   file.value = f
   fileUrl.value = f ? URL.createObjectURL(f) : ''
   pageCount.value = null
@@ -120,6 +125,49 @@ async function setFile(f: File | null) {
     if (token === pageCountToken) pageCount.value = null
   } finally {
     if (token === pageCountToken) pageCountLoading.value = false
+  }
+}
+
+function clearSource() {
+  nasPath.value = ''
+  void setFile(null)
+}
+
+async function pickNasFile() {
+  const sdk = new TrimApp()
+  if (sdk.isStandaloneWeb) {
+    toast.error('请从飞牛应用中心打开后选择 NAS 文件')
+    return
+  }
+  try {
+    const result = await sdk.pickUserFile({
+      directory: false,
+      multiple: false,
+      title: '选择要打印的文件',
+      okText: '选择',
+      accept: ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.ps'],
+      sidebarGroup: ['myFiles', 'otherShare', 'favorites'],
+    })
+    const path = result?.data?.[0]
+    if (path) {
+      nasPath.value = path
+      file.value = null
+      if (fileUrl.value) URL.revokeObjectURL(fileUrl.value)
+      fileUrl.value = ''
+      pageCount.value = null
+      toast.success('已从 NAS 选择文件')
+    }
+  } catch (e) {
+    toast.error((e as Error).message || '选择 NAS 文件失败')
+  }
+}
+
+async function loadAuthMode() {
+  try {
+    const cfg = await api.get<{ mode: 'token' | 'fnos' }>('/api/auth/config')
+    authMode.value = cfg.mode
+  } catch {
+    /* default token */
   }
 }
 
@@ -152,7 +200,7 @@ function validatePageRange(range: string, total: number): string {
 }
 
 async function submit() {
-  if (!file.value) return toast.error('请先选择文件')
+  if (!file.value && !nasPath.value) return toast.error('请先选择文件')
   if (!selectedPrinter.value) return toast.error('请先选择打印机')
   if (pageCount.value) {
     const rangeError = validatePageRange(form.value.page_range, pageCount.value)
@@ -160,13 +208,23 @@ async function submit() {
   }
   submitting.value = true
   try {
-    const fd = new FormData()
-    fd.append('file', file.value)
-    fd.append('printer_id', String(selectedPrinter.value))
-    for (const [k, v] of Object.entries(form.value)) fd.append(k, String(v))
-    const res = await api.upload<{ job_id: number; printer: string }>('/api/print', fd)
+    let res: { job_id: number; printer: string }
+    if (nasPath.value) {
+      res = await api.post<{ job_id: number; printer: string }>('/api/print/nas', {
+        printer_id: selectedPrinter.value,
+        path: nasPath.value,
+        ...form.value,
+      })
+    } else {
+      const fd = new FormData()
+      fd.append('file', file.value!)
+      fd.append('printer_id', String(selectedPrinter.value))
+      for (const [k, v] of Object.entries(form.value)) fd.append(k, String(v))
+      res = await api.upload<{ job_id: number; printer: string }>('/api/print', fd)
+    }
     toast.success(`已提交打印任务 #${res.job_id}（${res.printer}）`)
     await setFile(null)
+    nasPath.value = ''
     await loadJobs()
   } catch (e) {
     toast.error((e as Error).message)
@@ -215,6 +273,7 @@ function openInNewWindow() {
 }
 
 onMounted(async () => {
+  await loadAuthMode()
   await loadPrinters()
   await loadPPDOptions()
   await loadJobs()
@@ -256,13 +315,16 @@ onUnmounted(() => {
       <section class="card">
         <div class="section-head">
           <div>
-            <h2 class="card-title">{{ file ? '文件预览' : '选择文件' }}</h2>
+            <h2 class="card-title">{{ file || nasPath ? '文件预览' : '选择文件' }}</h2>
             <p class="card-desc">支持 PDF、图片、Word / Excel / PPT、PostScript，单次一个文件</p>
           </div>
+          <button v-if="authMode === 'fnos'" class="btn btn-ghost btn-sm" type="button" @click="pickNasFile">
+            从 NAS 选择
+          </button>
         </div>
 
         <label
-          v-if="!file"
+          v-if="!file && !nasPath"
           class="dropzone"
           :class="{ dragging }"
           @dragover.prevent="dragging = true"
@@ -275,7 +337,22 @@ onUnmounted(() => {
           <div class="file-sub">最大 200MB</div>
         </label>
 
-        <div v-else class="preview-shell">
+        <div v-else-if="nasPath" class="preview-shell">
+          <button class="preview-remove" title="移除文件" aria-label="移除文件" @click="clearSource">×</button>
+          <div class="preview-head">
+            <span class="file-name">{{ nasName }}</span>
+            <span class="file-sub">来自 NAS · 已授权</span>
+          </div>
+          <div class="file-card" style="width: 100%; margin-top: 14px">
+            <div class="file-thumb"><span>NAS</span></div>
+            <div class="file-meta">
+              <div class="file-name">{{ nasName }}</div>
+              <div class="file-sub">{{ nasPath }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="file" class="preview-shell">
           <button class="preview-remove" title="移除文件" aria-label="移除文件" @click="setFile(null)">×</button>
           <div class="preview-head">
             <span class="file-name">{{ file.name }}</span>
@@ -362,7 +439,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <button class="btn btn-primary" style="width: 100%; margin-top: 18px" :disabled="submitting || !file" @click="submit">
+        <button class="btn btn-primary" style="width: 100%; margin-top: 18px" :disabled="submitting || (!file && !nasPath)" @click="submit">
           {{ submitting ? '提交中…' : '打印' }}
         </button>
         <p class="card-desc" style="text-align: center; margin-top: 10px">提交后即可离开，任务在后台排队处理</p>

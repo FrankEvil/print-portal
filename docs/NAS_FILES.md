@@ -1,6 +1,39 @@
 # 使用 NAS 上的文件打印
 
-目前 Print Portal 的网页打印页是「上传客户端文件 → 服务器保存 → 提交打印」，还没有内置 NAS 文件选择器。
+目前普通版网页打印页是「上传客户端文件 → 服务器保存 → 提交打印」。
+
+fnOS 版已经接入原生文件选择器：页面上的「从 NAS 选择」会调用飞牛 `@trimjs/web-app` 的 `pickUserFile`，用户授权后直接把 NAS 文件路径提交给后端读取，不需要先下载再上传。
+
+## fnOS 原生文件选择器（已实现）
+
+fnOS 版使用：
+
+```text
+@trimjs/web-app
+pickUserFile()
+```
+
+应用包配置：
+
+- `manifest` 增加 `micro_app=true`
+- `config/resource` 增加：
+  ```json
+  "api-scope": ["trim.file.userAccess"]
+  ```
+- 容器挂载：
+  ```yaml
+  - /vol1:/vol1:ro
+  - /vol2:/vol2:ro
+  - PRINT_PORTAL_NAS_ROOTS=/vol1,/vol2
+  ```
+
+前端按钮：
+
+```text
+从 NAS 选择
+```
+
+选择后的路径由 `POST /api/print/nas` 提交，路径限制在 `/vol1`、`/vol2` 内。
 
 ## 方式一：把 NAS 共享目录挂载到容器
 

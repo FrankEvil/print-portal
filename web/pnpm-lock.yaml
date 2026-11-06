@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@trimjs/web-app':
+        specifier: ^0.5.0
+        version: 0.5.0
       pdf-lib:
         specifier: ^1.17.1
         version: 1.17.1
@@ -347,6 +350,9 @@ packages:
     resolution: {integrity: sha512-Khj/vrKCpdbiAWYbJAeSy4D5iep+qwW/86lNoKvdleJYGxgbRE7h87+5d5T9D7gt8NcqhNFpreRgIg8T4bLzKQ==}
     cpu: [x64]
     os: [win32]
+
+  '@trimjs/web-app@0.5.0':
+    resolution: {integrity: sha512-YHDVSUDP4CYoMAkplNyv+IxB0bTTH8IYPikQEx4RrSoOe3/oQC8wCa8OrXTc57EcYJW1gYC7EC+Z1q5vGEvipA==}
 
   '@types/estree@1.0.10':
     resolution: {integrity: sha512-lTyOMnOcmRBzdCv6/4zUZCrEhV0xrqQiUZBZtVcbmLHBXKLnN8q89v/wKRF/Q0HbwVsqbIG3o5HDoFl9sduM+g==}
@@ -771,6 +777,8 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.67.5':
     optional: true
+
+  '@trimjs/web-app@0.5.0': {}
 
   '@types/estree@1.0.10': {}
 

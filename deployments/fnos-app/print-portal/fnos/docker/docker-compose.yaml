@@ -11,12 +11,15 @@ services:
       - ${TRIM_PKGVAR:?}/cups-spool:/var/spool/cups
       - ${TRIM_PKGVAR:?}/cups-log:/var/log/cups
       - /dev/bus/usb:/dev/bus/usb
+      - /vol1:/vol1:ro
+      - /vol2:/vol2:ro
       - ${TRIM_APPDEST:?}:/run/print-portal
     environment:
       - TZ=Asia/Shanghai
       - PRINT_PORTAL_AUTH_MODE=fnos
       - PRINTD_SOCKET=/run/print-portal/app.sock
       - PRINT_PORTAL_APP_NAME=print-portal
+      - PRINT_PORTAL_NAS_ROOTS=/vol1,/vol2
       - PRINTD_ADDR=:8088
       - CUPS_SERVER=127.0.0.1:631
       - PRINT_PORTAL_IPP_ADDR=0.0.0.0:8631
