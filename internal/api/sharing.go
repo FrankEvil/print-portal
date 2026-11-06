@@ -32,7 +32,17 @@ func (s *Server) handleSharing(w http.ResponseWriter, r *http.Request) {
 		host = r.Host
 	}
 	if configured, ok, _ := s.store.GetSetting("public_host"); ok && strings.TrimSpace(configured) != "" {
-		host = strings.TrimSpace(configured)
+		configured = strings.TrimSpace(configured)
+		if !isLoopbackHost(configured) {
+			host = configured
+		}
+	}
+	// Requests arriving through the fnOS unified gateway use a Unix socket,
+	// so r.Host is often localhost. Show the NAS LAN address instead.
+	if isLoopbackHost(host) {
+		if lan := detectLANIP(); lan != "" {
+			host = lan
+		}
 	}
 	cupsPort := settingOr(s.store, "cups_port", "8631")
 	webPort := settingOr(s.store, "web_port", "8088")
@@ -69,6 +79,52 @@ func (s *Server) handleSharing(w http.ResponseWriter, r *http.Request) {
 		"web_port":    webPort,
 		"printers":    out,
 	})
+}
+
+func isLoopbackHost(host string) bool {
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func detectLANIP() string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return ""
+	}
+	var fallback string
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			ip4 := ip.To4()
+			if ip4 == nil || ip4.IsLoopback() || ip4.IsLinkLocalUnicast() {
+				continue
+			}
+			if ip4.IsPrivate() {
+				return ip4.String()
+			}
+			if fallback == "" {
+				fallback = ip4.String()
+			}
+		}
+	}
+	return fallback
 }
 
 func settingOr(store *storage.Store, key, fallback string) string {

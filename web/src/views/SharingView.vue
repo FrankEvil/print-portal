@@ -117,11 +117,11 @@ onMounted(load)
     <div class="section-head">
       <div>
         <h2 class="card-title">访问地址</h2>
-        <p class="card-desc">局域网客户端使用这里的地址连接；保存后所有连接信息自动更新</p>
+        <p class="card-desc">局域网客户端使用这里的地址连接；fnOS 环境会自动使用 NAS 的局域网 IP，也可手动覆盖</p>
       </div>
     </div>
     <div class="form-grid">
-      <div class="field"><label>主机 / IP 地址</label><input v-model="settings.public_host" class="input" placeholder="例如 192.168.2.30" /></div>
+      <div class="field"><label>主机 / IP 地址（自动检测）</label><input v-model="settings.public_host" class="input" placeholder="例如 192.168.2.30" /></div>
       <div class="field"><label>CUPS 端口</label><input v-model="settings.cups_port" class="input" placeholder="8631" /></div>
       <div class="field"><label>Web 端口</label><input v-model="settings.web_port" class="input" placeholder="8088" /></div>
     </div>
