@@ -3,6 +3,7 @@
 - [PRD](PRD.md)
 - [架构](ARCHITECTURE.md)
 - [认证模式](AUTH.md)
+- [使用 NAS 文件打印](NAS_FILES.md)
 - [API](API.md)
 - [数据模型](DATA_MODEL.md)
 - [路线图](ROADMAP.md)

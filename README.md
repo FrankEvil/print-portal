@@ -241,6 +241,7 @@ docker exec print-portal lpstat -o
 - [API 文档](docs/API.md)
 - [架构设计](docs/ARCHITECTURE.md)
 - [认证模式](docs/AUTH.md)
+- [使用 NAS 文件打印](docs/NAS_FILES.md)
 
 ## 10. 开发
 

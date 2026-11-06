@@ -76,6 +76,86 @@ http://<主机 IP>:8088/
 
 如果使用 USB 打印机，需要确认 compose 中挂载了 `/dev/bus/usb` 并有 `privileged: true`。
 
+
+## 4.1 普通版使用预构建镜像
+
+普通版不需要从源码构建，直接使用 GitHub Container Registry 镜像：
+
+```bash
+cp .env.example .env
+# 编辑 .env：
+#   ADMIN_TOKEN=你的访问令牌
+#   PRINT_PORTAL_PUBLIC_HOST=192.168.2.30
+
+docker compose -f docker-compose.standalone.yml up -d
+```
+
+首次启动会拉取：
+
+```text
+ghcr.io/frankevil/print-portal:0.1.8
+```
+
+更新：
+
+```bash
+docker compose -f docker-compose.standalone.yml pull
+docker compose -f docker-compose.standalone.yml up -d
+```
+
+普通版特点：
+
+- Token 登录
+- 显示「访问地址」配置
+- 支持 `PRINT_PORTAL_PUBLIC_HOST`
+- 不依赖 fnOS 统一网关
+
+## 4.2 快速验证 / 热更新
+
+只改 Go 后端时，不需要重新构建完整镜像：
+
+```bash
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64   go build -trimpath -ldflags='-s -w'   -o printd-linux-arm64 ./cmd/printd
+
+docker compose -f docker-compose.local.yml build
+docker compose -f docker-compose.local.yml up -d
+```
+
+只改前端时：
+
+```bash
+cd web && pnpm build && cd ..
+docker compose -f docker-compose.local.yml build
+docker compose -f docker-compose.local.yml up -d
+```
+
+fnOS 设备上临时验证可以直接替换容器内文件：
+
+```bash
+# Go 二进制
+docker cp /tmp/printd-linux-amd64 print-portal:/usr/local/bin/printd
+docker restart print-portal
+
+# 前端静态文件
+docker cp /tmp/print-portal-dist.tgz print-portal:/tmp/dist.tgz
+docker exec print-portal sh -c 'mkdir -p /opt/print-portal/web && tar -xzf /tmp/dist.tgz -C /opt/print-portal/web'
+```
+
+热更新的改动只用于测试；正式更新仍然需要重新构建镜像和 fpk。
+
+## 4.3 fnOS 版与普通版差异
+
+| 功能 | fnOS 版 | 普通版 |
+|---|---|---|
+| 登录 | 飞牛统一网关 | Print Portal Token |
+| 入口 | `/app/<appname>` | `http://NAS:8088/` |
+| 访问地址配置 | 隐藏 | 显示 |
+| Token 登录页 | 不显示 | 显示 |
+| IPP 地址 | 自动生成 | 自动/可配置 |
+| 更新 | fpk 安装 | Docker 镜像更新 |
+
+两个版本共用同一套业务代码，通过 `PRINT_PORTAL_AUTH_MODE` 区分。
+
 ## 5. fnOS 部署
 
 fnOS 推荐使用预构建方式。先在构建机生成 Linux amd64 二进制和前端：
