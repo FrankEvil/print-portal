@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.8
+
+- 增加 Epson ESC/P-R 驱动（EPSON ET-1110 等）
+
 ## 0.1.7
 
 - fnOS 模式隐藏访问地址配置，由统一网关管理
