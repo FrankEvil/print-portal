@@ -1,5 +1,5 @@
 appname         = print-portal
-version         = 0.1.2
+version         = 0.1.3
 display_name    = Print Portal
 platform        = x86
 maintainer      = Print Portal

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- 修复 fnOS 5666 端口跳转与网关 API 路由
+
 ## 0.1.2
 
 - 修复 fnOS 网关下 API/SPA 路由前缀

@@ -300,6 +300,9 @@ func (s *Server) fnosLoginURL(r *http.Request) string {
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
 		}
+		if s.cfg.FnOSPort != "" {
+			host = net.JoinHostPort(host, s.cfg.FnOSPort)
+		}
 		base = scheme + "://" + host
 	}
 	return base + "/" + strings.TrimLeft(s.cfg.FnOSPrefix, "/")
