@@ -17,7 +17,6 @@ services:
       - PRINT_PORTAL_AUTH_MODE=fnos
       - PRINTD_SOCKET=/run/print-portal/app.sock
       - PRINT_PORTAL_APP_NAME=print-portal
-      - PRINT_PORTAL_FNOS_PORT=5666
       - PRINTD_ADDR=:8088
       - CUPS_SERVER=127.0.0.1:631
       - PRINT_PORTAL_IPP_ADDR=0.0.0.0:8631

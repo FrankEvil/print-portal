@@ -210,6 +210,10 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleString('zh-CN', { hour12: false })
 }
 
+function openInNewWindow() {
+  window.open(window.location.href, '_blank', 'noopener')
+}
+
 onMounted(async () => {
   await loadPrinters()
   await loadPPDOptions()
@@ -236,6 +240,7 @@ onUnmounted(() => {
         <router-link to="/" class="router-link-active">打印</router-link>
         <router-link to="/scan">扫描</router-link>
         <router-link to="/admin">管理</router-link>
+        <button class="nav-link-btn" type="button" @click="openInNewWindow">新窗口</button>
       </nav>
     </header>
 

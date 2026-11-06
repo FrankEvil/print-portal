@@ -291,6 +291,9 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 
 func (s *Server) fnosLoginURL(r *http.Request) string {
 	base := strings.TrimRight(s.cfg.FnOSBaseURL, "/")
+	if base == "" && s.cfg.FnOSPort == "" {
+		return ""
+	}
 	if base == "" {
 		scheme := "http"
 		if r.TLS != nil {
@@ -330,7 +333,11 @@ func (s *Server) staticHandler() http.Handler {
 				return
 			}
 			if strings.TrimSpace(r.Header.Get("X-Trim-Userid")) == "" {
-				http.Redirect(w, r, s.fnosLoginURL(r), http.StatusFound)
+				if target := s.fnosLoginURL(r); target != "" {
+					http.Redirect(w, r, target, http.StatusFound)
+					return
+				}
+				http.Error(w, "fnOS login required; open from the fnOS app center", http.StatusUnauthorized)
 				return
 			}
 			s.serveStaticFile(w, r, path, prefix)

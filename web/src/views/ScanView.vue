@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { api } from '../api'
+import { api, apiUrl } from '../api'
 import { toast } from '../toast'
 import type { ScanJob, Scanner } from '../types'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -52,11 +52,15 @@ async function scan() {
 }
 
 function downloadUrl(id: number) {
-  return `/api/scans/${id}/download`
+  return apiUrl(`/api/scans/${id}/download`)
 }
 
 function previewUrl(id: number) {
-  return `/api/scans/${id}/download?inline=1`
+  return apiUrl(`/api/scans/${id}/download?inline=1`)
+}
+
+function openInNewWindow() {
+  window.open(window.location.href, '_blank', 'noopener')
 }
 
 onMounted(discover)
@@ -73,9 +77,10 @@ onMounted(discover)
         </div>
       </div>
       <nav class="nav">
-        <a href="/">打印</a>
+        <router-link to="/">打印</router-link>
         <router-link to="/scan" class="router-link-active">扫描</router-link>
         <router-link to="/admin">管理</router-link>
+        <button class="nav-link-btn" type="button" @click="openInNewWindow">新窗口</button>
       </nav>
     </header>
 
