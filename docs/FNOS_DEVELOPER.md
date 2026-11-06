@@ -103,3 +103,48 @@ Print Portal 需要：
 | 适合 | 快速测试、社区分发 | 正式面向 fnOS 用户 |
 
 建议先用第三方仓库完成 `.fpk` 实机验证，再申请官方开发者上架。
+
+## 7. 飞牛先锋开发者上架申请单字段
+
+申请单：<https://trim-nas.feishu.cn/share/base/form/shrcn9ewk59TfoFWVAPMPy6aWSc>
+
+建议填写：
+
+| 字段 | 建议值 |
+|---|---|
+| 上架类型 | 新应用上架 |
+| 平台 | x86 |
+| fpk | `dist/print-portal_0.1.0_x86.fpk` |
+| 系统 | fnOS |
+| 截图（辅助审核） | `docs/screenshots/print-desktop.png`、`print-mobile.png`、`admin-printers.png` |
+| 应用名称 | Print Portal / 打印门户（不能以「飞牛」开头） |
+| 发布者 | 你的发布者名称 |
+| 微信昵称/联系方式 | 你的实际联系方式（必填） |
+| 开发者 | Print Portal contributors（开源项目） |
+| 版本号 | `0.1.0`（必须三段式） |
+| 备注 | 单用户局域网打印门户：内置 CUPS，网页上传即打印；支持 PPD / RAW 双队列、文件预览、页码范围、任务管理、驱动管理；需要 USB 打印机。 |
+
+### 表单自查项
+
+官方申请单明确说明：
+
+1. **root 权限应用无法上架**：当前模板的 Docker Compose 使用 `privileged: true`，提交前必须向平台确认是否允许，或改为非 privileged / 企业合作流程
+2. 鉴权优先接入飞牛统一网关，不要监听公网端口；当前应用有自己的 `ADMIN_TOKEN`，需要评估是否满足审核要求
+3. `platform` 只能是 `x86`、`arm` 或 `all`，且要真机验证
+4. 文件读写接口要校验路径，避免路径穿越
+5. 版本号必须三段式，例如 `0.1.0`
+6. 应用名称不能以「飞牛」开头
+7. 应用详情页截图必填（不会显示在应用中心）
+
+### 当前提交状态
+
+- [x] 应用包模板
+- [x] 64/256 图标
+- [x] `.fpk` 结构验证
+- [x] GHCR 镜像 workflow 构建成功（`ghcr.io/frankevil/print-portal:0.1.0`）
+- [ ] 确认 `privileged: true` 审核政策
+- [ ] 用最终镜像重新生成 fpk
+- [ ] 准备应用详情页截图
+- [ ] 填写发布者 / 微信联系方式
+- [ ] 提交申请单
+
