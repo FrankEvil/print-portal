@@ -11,7 +11,7 @@ services:
       - ${TRIM_PKGVAR:?}/cups-spool:/var/spool/cups
       - ${TRIM_PKGVAR:?}/cups-log:/var/log/cups
       - /dev/bus/usb:/dev/bus/usb
-      - ${TRIM_APPDEST:?}/target:/run/print-portal
+      - ${TRIM_APPDEST:?}:/run/print-portal
     environment:
       - TZ=Asia/Shanghai
       - PRINT_PORTAL_AUTH_MODE=fnos
