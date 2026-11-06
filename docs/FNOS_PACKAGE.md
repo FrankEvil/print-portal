@@ -39,7 +39,7 @@ deployments/fnos-app/
 fnOS 的 Docker 应用包**不包含应用镜像本身**，只包含 `docker-compose.yaml`。安装时 fnOS 会从镜像仓库拉取：
 
 ```text
-ghcr.io/your-github-account/print-portal:${VERSION}
+ghcr.io/frankevil/print-portal:${VERSION}
 ```
 
 因此上架前必须：
@@ -106,3 +106,21 @@ print-portal_0.1.0_x86.fpk
 - [ ] 构建 x86 / arm 产物（如需要）
 - [ ] 在 fnOS 上实际安装测试
 - [ ] 确认 8088 / 8631 端口和防火墙规则
+
+## 7. GitHub Actions 自动构建镜像
+
+仓库已包含：
+
+```text
+.github/workflows/docker-publish.yml
+```
+
+推送 `main` 或 tag `v0.1.0` 后，会在 GitHub Actions 中构建并推送：
+
+```text
+ghcr.io/frankevil/print-portal:latest
+ghcr.io/frankevil/print-portal:0.1.0
+ghcr.io/frankevil/print-portal:sha-<commit>
+```
+
+首次发布后，需要在 GitHub Packages 页面把该镜像设置为 **Public**，否则 fnOS 应用中心无法匿名拉取。

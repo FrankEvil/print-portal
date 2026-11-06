@@ -8,4 +8,4 @@
 deployments/fnos-app/print-portal/fnos/docker/docker-compose.yaml
 ```
 
-中的 `ghcr.io/your-github-account/print-portal`。
+中的 `ghcr.io/frankevil/print-portal`。
