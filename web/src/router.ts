@@ -39,6 +39,9 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const mode = await getAuthMode()
+  if (mode === 'fnos' && to.path === '/admin/login') {
+    return { path: '/' }
+  }
   if (mode === 'token' && !adminToken.value && to.path !== '/admin/login') {
     return { path: '/admin/login', query: { redirect: to.fullPath } }
   }
