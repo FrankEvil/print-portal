@@ -9,6 +9,7 @@ import (
 // Config is the P1 runtime configuration.
 type Config struct {
 	Addr        string
+	AppName     string
 	DataDir     string
 	StaticDir   string
 	AdminToken  string
@@ -25,14 +26,15 @@ type Config struct {
 
 // Load reads configuration from environment variables.
 func Load() Config {
-	return Config{
+	cfg := Config{
 		Addr:        env("PRINTD_ADDR", ":8088"),
+		AppName:     env("PRINT_PORTAL_APP_NAME", "print-portal"),
 		DataDir:     env("PRINT_PORTAL_DATA", "data"),
 		StaticDir:   env("PRINT_PORTAL_STATIC", ""),
 		AdminToken:  env("ADMIN_TOKEN", ""),
 		AuthMode:    env("PRINT_PORTAL_AUTH_MODE", "token"),
 		SocketPath:  env("PRINTD_SOCKET", ""),
-		FnOSPrefix:  env("PRINT_PORTAL_FNOS_PREFIX", "/app/print-portal"),
+		FnOSPrefix:  env("PRINT_PORTAL_FNOS_PREFIX", ""),
 		FnOSBaseURL: env("PRINT_PORTAL_FNOS_BASE_URL", ""),
 		FnOSPort:    env("PRINT_PORTAL_FNOS_PORT", ""),
 		MaxUploadMB: envInt("MAX_UPLOAD_MB", 200),
@@ -40,6 +42,10 @@ func Load() Config {
 		IPPAddr:     env("PRINT_PORTAL_IPP_ADDR", "0.0.0.0:8631"),
 		Version:     env("PRINT_PORTAL_VERSION", "0.1.0"),
 	}
+	if cfg.FnOSPrefix == "" {
+		cfg.FnOSPrefix = "/app/" + cfg.AppName
+	}
+	return cfg
 }
 
 // EnsureDataDir creates the data directory if it does not exist.
