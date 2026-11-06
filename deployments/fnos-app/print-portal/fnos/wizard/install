@@ -1,0 +1,22 @@
+[
+    {
+        "stepTitle": "Print Portal 设置",
+        "items": [
+            {
+                "type": "tips",
+                "helpText": "Print Portal 是单用户局域网打印门户，安装后访问 <code>http://&lt;NAS地址&gt;:8088/</code>。<br><br>请设置管理员 Token，用于登录管理后台。安装后如需修改 Token，请编辑应用的 <code>docker/docker-compose.yaml</code> 中的 <code>ADMIN_TOKEN</code> 并重启应用。"
+            },
+            {
+                "type": "password",
+                "field": "wizard_admin_token",
+                "label": "管理员 Token",
+                "placeholder": "请设置一个强随机字符串",
+                "initValue": "",
+                "rules": [
+                    { "required": true, "message": "请设置管理员 Token" },
+                    { "min": 8, "message": "Token 至少 8 位" }
+                ]
+            }
+        ]
+    }
+]

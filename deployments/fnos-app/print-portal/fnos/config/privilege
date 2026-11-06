@@ -1,0 +1,7 @@
+{
+    "defaults": {
+        "run-as": "package"
+    },
+    "username": "print-portal",
+    "groupname": "print-portal"
+}

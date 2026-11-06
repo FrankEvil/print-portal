@@ -234,6 +234,7 @@ docker exec print-portal lpstat -o
 
 - [用户使用指南](docs/USER_GUIDE.md)
 - [分享给别人使用](docs/SHARING.md)
+- [fnOS 应用包 / 上架说明](docs/FNOS_PACKAGE.md)
 - [部署说明](docs/DEPLOYMENT.md)
 - [常见问题](docs/FAQ.md)
 - [API 文档](docs/API.md)

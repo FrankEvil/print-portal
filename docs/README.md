@@ -8,6 +8,7 @@
 - [部署](DEPLOYMENT.md)
 - [用户使用指南](USER_GUIDE.md)
 - [分享给别人使用](SHARING.md)
+- [fnOS 应用包 / 上架说明](FNOS_PACKAGE.md)
 - [常见问题](FAQ.md)
 - [技术决策](DECISIONS.md)
 - [交付文档](DELIVERY.md)

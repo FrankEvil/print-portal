@@ -1,0 +1,8 @@
+#!/bin/bash
+
+service_postinst() {
+    mkdir -p "${TRIM_PKGVAR}/data" \
+             "${TRIM_PKGVAR}/cups-etc" \
+             "${TRIM_PKGVAR}/cups-spool" \
+             "${TRIM_PKGVAR}/cups-log" 2>/dev/null || true
+}

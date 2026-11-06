@@ -1,0 +1,25 @@
+{
+    "port-config": {
+        "protocol-file": "print-portal.sc"
+    },
+    "data-share": {
+        "shares": [
+            {
+                "name": "Print Portal",
+                "permission": {
+                    "rw": [
+                        "print-portal"
+                    ]
+                }
+            }
+        ]
+    },
+    "docker-project": {
+        "projects": [
+            {
+                "name": "print-portal",
+                "path": "docker"
+            }
+        ]
+    }
+}

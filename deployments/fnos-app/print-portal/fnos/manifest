@@ -1,0 +1,15 @@
+appname         = print-portal
+version         = 0.1.0
+display_name    = Print Portal
+platform        = x86
+maintainer      = Print Portal
+maintainer_url  = https://github.com/your-github-account/print-portal
+distributor     = Print Portal
+distributor_url = https://github.com/your-github-account/print-portal
+desktop_uidir   = ui
+desktop_applaunchname = print-portal.Application
+service_port    = 8088
+checkport       = false
+desc            = 单用户局域网打印门户：内置 CUPS，网页上传即打印，支持 PPD / RAW 双队列、文件预览、任务管理和驱动管理。
+source          = thirdparty
+checksum        =

@@ -1,0 +1,20 @@
+services:
+  print-portal:
+    # Publish this image first, then replace the placeholder below.
+    image: ${DOCKER_MIRROR}ghcr.io/your-github-account/print-portal:${VERSION}
+    container_name: print-portal
+    network_mode: host
+    privileged: true
+    volumes:
+      - ${TRIM_PKGVAR:?}/data:/app/data
+      - ${TRIM_PKGVAR:?}/cups-etc:/etc/cups
+      - ${TRIM_PKGVAR:?}/cups-spool:/var/spool/cups
+      - ${TRIM_PKGVAR:?}/cups-log:/var/log/cups
+      - /dev/bus/usb:/dev/bus/usb
+    environment:
+      - TZ=Asia/Shanghai
+      - ADMIN_TOKEN=${wizard_admin_token:-change-me}
+      - PRINTD_ADDR=:8088
+      - CUPS_SERVER=127.0.0.1:631
+      - PRINT_PORTAL_IPP_ADDR=0.0.0.0:8631
+    restart: unless-stopped
