@@ -32,6 +32,7 @@ RUN sed -i "s|deb.debian.org|${APT_MIRROR}|g; s|security.debian.org|${APT_MIRROR
     cups-filters \
     cups-ipp-utils \
     printer-driver-brlaser \
+    printer-driver-escpr \
     foomatic-db-compressed-ppds \
     foomatic-db-engine \
     imagemagick \
