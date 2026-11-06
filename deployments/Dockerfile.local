@@ -1,0 +1,11 @@
+# Fast local-dev image: reuse the already-built runtime image (CUPS, LibreOffice,
+# etc.) and only replace the Go binary and frontend assets.
+FROM print-portal-print-portal:latest
+
+COPY printd-linux-arm64 /usr/local/bin/printd
+RUN rm -rf /opt/print-portal/web/* && mkdir -p /opt/print-portal/web
+COPY web/dist/ /opt/print-portal/web/
+COPY deployments/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

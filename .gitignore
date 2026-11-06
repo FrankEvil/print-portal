@@ -29,3 +29,6 @@ data/
 # IDE
 .idea/
 .vscode/
+
+# Local prebuilt binary for fast Docker build
+/printd-linux-arm64

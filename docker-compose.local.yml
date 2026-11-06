@@ -2,7 +2,8 @@ services:
   print-portal:
     build:
       context: .
-      dockerfile: deployments/Dockerfile
+      dockerfile: deployments/Dockerfile.local
+    image: print-portal-local:latest
     container_name: print-portal-local
     restart: unless-stopped
     network_mode: host
