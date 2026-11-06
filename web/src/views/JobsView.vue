@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
-import { api } from '../api'
+import { api, apiUrl } from '../api'
 import { toast } from '../toast'
 import type { Job } from '../types'
 import { formatJobParams } from '../jobDisplay'
@@ -38,7 +38,7 @@ async function load() {
 }
 
 function openJobFile(id: number) {
-  window.open(`/api/jobs/${id}/file`, '_blank')
+  window.open(apiUrl(`/api/jobs/${id}/file`), '_blank')
 }
 
 async function clearRecords() {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { api } from '../api'
+import { api, apiUrl } from '../api'
 import { toast } from '../toast'
 import type { Job, PPDOption, Printer } from '../types'
 import { formatJobParams } from '../jobDisplay'
@@ -176,7 +176,7 @@ async function submit() {
 }
 
 function openJobFile(id: number) {
-  window.open(`/api/jobs/${id}/file`, '_blank')
+  window.open(apiUrl(`/api/jobs/${id}/file`), '_blank')
 }
 
 async function cancelJob(id: number) {
@@ -233,9 +233,9 @@ onUnmounted(() => {
         </div>
       </div>
       <nav class="nav">
-        <a href="/" class="router-link-active">打印</a>
-        <a href="/scan">扫描</a>
-        <a href="/admin">管理</a>
+        <router-link to="/" class="router-link-active">打印</router-link>
+        <router-link to="/scan">扫描</router-link>
+        <router-link to="/admin">管理</router-link>
       </nav>
     </header>
 

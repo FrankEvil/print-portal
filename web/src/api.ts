@@ -2,6 +2,17 @@ import { ref } from 'vue'
 
 const TOKEN_KEY = 'print_portal_admin_token'
 
+// When the app is opened through the fnOS unified gateway, all API calls
+// must stay under /app/<appname>; direct deployments keep the root prefix.
+export const apiBase = (() => {
+  const match = window.location.pathname.match(/^\/app\/[^/]+/)
+  return match ? match[0] : ''
+})()
+
+export function apiUrl(path: string): string {
+  return path.startsWith('/api/') ? apiBase + path : path
+}
+
 export const adminToken = ref<string>(sessionStorage.getItem(TOKEN_KEY) || '')
 
 export function setAdminToken(token: string) {
@@ -26,7 +37,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (options.body && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
-  const res = await fetch(path, { ...options, headers })
+  const res = await fetch(apiUrl(path), { ...options, headers })
   if (!res.ok) {
     let code = 'request_failed'
     let message = `HTTP ${res.status}`

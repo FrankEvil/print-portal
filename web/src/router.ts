@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { adminToken, api } from './api'
+import { adminToken, api, apiBase } from './api'
 
 let authMode: 'token' | 'fnos' | null = null
 
@@ -15,7 +15,7 @@ async function getAuthMode(): Promise<'token' | 'fnos'> {
 }
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(apiBase ? `${apiBase}/` : '/'),
   routes: [
     { path: '/', name: 'print', component: () => import('./views/PrintView.vue') },
     { path: '/scan', name: 'scan', component: () => import('./views/ScanView.vue') },

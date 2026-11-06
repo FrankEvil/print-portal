@@ -140,7 +140,26 @@ func (s *Server) routes() {
 
 // Handler returns the root handler.
 func (s *Server) Handler() http.Handler {
-	return s.loggingMiddleware(s.authMiddleware(s.mux))
+	return s.loggingMiddleware(s.stripGatewayPrefix(s.authMiddleware(s.mux)))
+}
+
+func (s *Server) stripGatewayPrefix(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.AuthMode == "fnos" && s.cfg.FnOSPrefix != "" {
+			prefix := strings.TrimRight(s.cfg.FnOSPrefix, "/")
+			if strings.HasPrefix(r.URL.Path, prefix) {
+				r2 := r.Clone(r.Context())
+				u := *r.URL
+				u.Path = strings.TrimPrefix(u.Path, prefix)
+				if u.Path == "" {
+					u.Path = "/"
+				}
+				r2.URL = &u
+				r = r2
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) authMiddleware(next http.Handler) http.Handler {

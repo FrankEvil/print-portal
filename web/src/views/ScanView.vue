@@ -74,8 +74,8 @@ onMounted(discover)
       </div>
       <nav class="nav">
         <a href="/">打印</a>
-        <a href="/scan" class="router-link-active">扫描</a>
-        <a href="/admin">管理</a>
+        <router-link to="/scan" class="router-link-active">扫描</router-link>
+        <router-link to="/admin">管理</router-link>
       </nav>
     </header>
 

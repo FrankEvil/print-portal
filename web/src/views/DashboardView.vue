@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { api } from '../api'
+import { api, apiUrl } from '../api'
 import type { Job, Overview } from '../types'
 import StatusBadge from '../components/StatusBadge.vue'
 import { formatJobParams } from '../jobDisplay'
@@ -20,7 +20,7 @@ async function load() {
 }
 
 function openJobFile(id: number) {
-  window.open(`/api/jobs/${id}/file`, '_blank')
+  window.open(apiUrl(`/api/jobs/${id}/file`), '_blank')
 }
 
 onMounted(load)
