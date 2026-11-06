@@ -176,3 +176,9 @@ export interface MaintenanceCapabilities {
   message?: string
   actions: MaintenanceAction[] | null
 }
+
+export interface AuthConfig {
+  mode: 'token' | 'fnos'
+  token_login: boolean
+  auth_required: boolean
+}

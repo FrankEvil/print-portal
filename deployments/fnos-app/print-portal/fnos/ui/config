@@ -4,10 +4,11 @@
             "title": "Print Portal",
             "desc": "局域网打印门户",
             "icon": "images/{0}.png",
-            "type": "url",
-            "port": "8088",
-            "protocol": "http",
-            "url": "/",
+            "type": "iframe",
+            "gatewayPrefix": "/app/print-portal",
+            "gatewaySocket": "app.sock",
+            "protocol": "",
+            "url": "/app/print-portal",
             "allUsers": true
         }
     }

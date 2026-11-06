@@ -12,6 +12,8 @@ type Config struct {
 	DataDir     string
 	StaticDir   string
 	AdminToken  string
+	AuthMode    string
+	SocketPath  string
 	MaxUploadMB int
 	CUPSServer  string
 	IPPAddr     string
@@ -25,6 +27,8 @@ func Load() Config {
 		DataDir:     env("PRINT_PORTAL_DATA", "data"),
 		StaticDir:   env("PRINT_PORTAL_STATIC", ""),
 		AdminToken:  env("ADMIN_TOKEN", ""),
+		AuthMode:    env("PRINT_PORTAL_AUTH_MODE", "token"),
+		SocketPath:  env("PRINTD_SOCKET", ""),
 		MaxUploadMB: envInt("MAX_UPLOAD_MB", 200),
 		CUPSServer:  env("CUPS_SERVER", "127.0.0.1:631"),
 		IPPAddr:     env("PRINT_PORTAL_IPP_ADDR", "0.0.0.0:8631"),

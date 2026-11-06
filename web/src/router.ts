@@ -1,5 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { adminToken } from './api'
+import { adminToken, api } from './api'
+
+let authMode: 'token' | 'fnos' | null = null
+
+async function getAuthMode(): Promise<'token' | 'fnos'> {
+  if (authMode) return authMode
+  try {
+    const cfg = await api.get<{ mode: 'token' | 'fnos' }>('/api/auth/config')
+    authMode = cfg.mode
+  } catch {
+    authMode = 'token'
+  }
+  return authMode
+}
 
 const router = createRouter({
   history: createWebHistory(),
@@ -24,8 +37,9 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
-  if (to.path.startsWith('/admin') && to.path !== '/admin/login' && !adminToken.value) {
+router.beforeEach(async (to) => {
+  const mode = await getAuthMode()
+  if (mode === 'token' && !adminToken.value && to.path !== '/admin/login') {
     return { path: '/admin/login', query: { redirect: to.fullPath } }
   }
   return true

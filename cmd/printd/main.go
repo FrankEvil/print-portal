@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -101,6 +102,20 @@ func main() {
 	}()
 
 	server := api.New(cfg, store, cupsClient, jobManager, printerService, driverService, discoveryService, scanService, logger)
+	if cfg.SocketPath != "" {
+		_ = os.MkdirAll(filepath.Dir(cfg.SocketPath), 0o755)
+		_ = os.Remove(cfg.SocketPath)
+		if ln, err := net.Listen("unix", cfg.SocketPath); err != nil {
+			logger.Printf("gateway socket listen %s: %v", cfg.SocketPath, err)
+		} else {
+			logger.Printf("gateway socket listening on %s", cfg.SocketPath)
+			go func() {
+				if err := http.Serve(ln, server.Handler()); err != nil {
+					logger.Printf("gateway socket serve: %v", err)
+				}
+			}()
+		}
+	}
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           server.Handler(),

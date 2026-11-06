@@ -68,6 +68,8 @@ func New(
 func (s *Server) routes() {
 	// Public API.
 	s.mux.HandleFunc("GET /healthz", s.handleHealth)
+	s.mux.HandleFunc("GET /api/auth/config", s.handleAuthConfig)
+	s.mux.HandleFunc("POST /api/auth/login", s.handleAuthLogin)
 	s.mux.HandleFunc("GET /api/printers", s.handleListPrinters)
 	s.mux.HandleFunc("GET /api/printers/{id}/ppd-options", s.handlePublicPPDOptions)
 	s.mux.HandleFunc("POST /api/print", s.handlePrint)
@@ -137,7 +139,50 @@ func (s *Server) routes() {
 
 // Handler returns the root handler.
 func (s *Server) Handler() http.Handler {
-	return s.loggingMiddleware(s.mux)
+	return s.loggingMiddleware(s.authMiddleware(s.mux))
+}
+
+func (s *Server) authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Empty mode is the legacy/test default; production always sets token
+		// or fnos via config.Load.
+		if s.cfg.AuthMode == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Static files are public so the login page can load; all API routes
+		// except the two auth endpoints require authentication.
+		if !strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api/auth/config" || r.URL.Path == "/api/auth/login" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if s.cfg.AuthMode == "fnos" {
+			if strings.TrimSpace(r.Header.Get("X-Trim-Userid")) == "" {
+				writeError(w, http.StatusUnauthorized, "unauthorized", "fnOS login required")
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+		if s.cfg.AdminToken == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(tokenFromRequest(r)), []byte(s.cfg.AdminToken)) != 1 {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "invalid or missing token")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func tokenFromRequest(r *http.Request) string {
+	token := r.Header.Get("X-Admin-Token")
+	if token == "" {
+		auth := r.Header.Get("Authorization")
+		token = strings.TrimPrefix(auth, "Bearer ")
+	}
+	return token
 }
 
 func (s *Server) admin(pattern string, h http.HandlerFunc) {
@@ -146,22 +191,52 @@ func (s *Server) admin(pattern string, h http.HandlerFunc) {
 
 func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get("X-Admin-Token")
-		if token == "" {
-			auth := r.Header.Get("Authorization")
-			token = strings.TrimPrefix(auth, "Bearer ")
-		}
-		if s.cfg.AdminToken == "" {
-			// Development mode: no token configured. Log once per request at most.
+		if s.cfg.AuthMode == "fnos" {
+			if strings.TrimSpace(r.Header.Get("X-Trim-Userid")) == "" || r.Header.Get("X-Trim-Isadmin") != "true" {
+				writeError(w, http.StatusForbidden, "forbidden", "fnOS administrator required")
+				return
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
-		if subtle.ConstantTimeCompare([]byte(token), []byte(s.cfg.AdminToken)) != 1 {
+		if s.cfg.AdminToken == "" {
+			// Development mode: no token configured.
+			next.ServeHTTP(w, r)
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(tokenFromRequest(r)), []byte(s.cfg.AdminToken)) != 1 {
 			writeError(w, http.StatusUnauthorized, "unauthorized", "invalid or missing ADMIN_TOKEN")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) handleAuthConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"mode":          s.cfg.AuthMode,
+		"token_login":   s.cfg.AuthMode != "fnos",
+		"auth_required": true,
+	})
+}
+
+func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.AuthMode == "fnos" {
+		writeError(w, http.StatusBadRequest, "not_supported", "fnOS authentication is handled by the gateway")
+		return
+	}
+	var body struct {
+		Token string `json:"token"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	if s.cfg.AdminToken == "" || subtle.ConstantTimeCompare([]byte(body.Token), []byte(s.cfg.AdminToken)) == 1 {
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+		return
+	}
+	writeError(w, http.StatusUnauthorized, "unauthorized", "invalid token")
 }
 
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {

@@ -2,6 +2,7 @@
 
 - [PRD](PRD.md)
 - [架构](ARCHITECTURE.md)
+- [认证模式](AUTH.md)
 - [API](API.md)
 - [数据模型](DATA_MODEL.md)
 - [路线图](ROADMAP.md)

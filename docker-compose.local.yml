@@ -13,6 +13,7 @@ services:
       - cups-spool-local:/var/spool/cups
       - cups-log-local:/var/log/cups
     environment:
+      PRINT_PORTAL_AUTH_MODE: "token"
       ADMIN_TOKEN: "demo123"
       PRINTD_ADDR: ":8088"
       CUPS_SERVER: "127.0.0.1:631"

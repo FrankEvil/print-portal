@@ -240,6 +240,7 @@ docker exec print-portal lpstat -o
 - [常见问题](docs/FAQ.md)
 - [API 文档](docs/API.md)
 - [架构设计](docs/ARCHITECTURE.md)
+- [认证模式](docs/AUTH.md)
 
 ## 10. 开发
 

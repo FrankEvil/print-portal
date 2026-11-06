@@ -15,9 +15,9 @@ async function login() {
   const previous = adminToken.value
   setAdminToken(token.value.trim())
   try {
-    await api.get('/api/admin/overview')
+    await api.post('/api/auth/login', { token: token.value.trim() })
     toast.success('登录成功')
-    router.replace((route.query.redirect as string) || '/admin')
+    router.replace((route.query.redirect as string) || '/')
   } catch (e) {
     setAdminToken(previous)
     toast.error((e as Error).message)
@@ -33,15 +33,15 @@ async function login() {
       <div class="brand-mark">P</div>
       <div>
         <div class="brand-name">Print Portal</div>
-        <div class="brand-sub">管理后台</div>
+        <div class="brand-sub">访问登录</div>
       </div>
     </div>
     <div class="card">
-      <h1 class="card-title" style="font-size: 22px">管理员登录</h1>
-      <p class="card-desc">输入部署时配置的 ADMIN_TOKEN 以进入管理后台</p>
+      <h1 class="card-title" style="font-size: 22px">Print Portal 登录</h1>
+      <p class="card-desc">输入部署时配置的访问 Token</p>
       <div class="field" style="margin-top: 18px">
-        <label>ADMIN_TOKEN</label>
-        <input v-model="token" type="password" class="input" placeholder="请输入管理令牌" @keyup.enter="login" />
+        <label>访问 Token</label>
+        <input v-model="token" type="password" class="input" placeholder="请输入访问令牌" @keyup.enter="login" />
       </div>
       <button class="btn btn-primary" style="width: 100%; margin-top: 16px" :disabled="loading" @click="login">
         {{ loading ? '验证中…' : '登录' }}

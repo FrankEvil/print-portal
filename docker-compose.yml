@@ -16,6 +16,7 @@ services:
       - cups-spool:/var/spool/cups
       - cups-log:/var/log/cups
     environment:
+      PRINT_PORTAL_AUTH_MODE: "token"
       ADMIN_TOKEN: "change-me"
       PRINTD_ADDR: ":8088"
       CUPS_SERVER: "127.0.0.1:631"
