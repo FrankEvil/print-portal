@@ -1,113 +1,177 @@
-# Print Portal 部署设计
+# 部署说明
 
-## 1. 目标
+本文说明如何把 Print Portal 部署到一台局域网主机（NAS / 小主机 / Docker 服务器）。
 
-一个 Docker 容器包含：
+## 1. 运行条件
+
+- Linux x86_64 或 ARM64 主机
+- Docker 24+
+- Docker Compose v2
+- USB 打印机（可选；也支持网络打印机）
+- 局域网固定 IP
+
+容器包含：
 
 - CUPS 2.4
-- brlaser / cups-filters
-- Go 服务
-- Vue 静态前端
-- LibreOffice / Ghostscript / Poppler / sane-airscan
+- 打印驱动（brlaser、cups-filters、foomatic 索引）
+- LibreOffice / Ghostscript / Poppler / ImageMagick
+- Go 服务 + Vue 静态前端
+- sane-airscan（扫描，可选）
 
-不依赖宿主机单独安装 CUPS。
+宿主机不需要单独安装 CUPS 或 LibreOffice。
 
-## 2. 驱动
-
-- 打印：`printer-driver-brlaser`（Debian 包，开源 GPLv2），官方支持 Brother DCP-7060D
-- 型号索引：`foomatic-db` / `foomatic-db-compressed-ppds`（只作索引，不代表驱动可用）
-- 过滤器：`cups-filters`
-- 扫描：Brother `brscan4`（闭源，P1 收尾项，需从 Brother 官网下载并打包）
-- 其他驱动：不预装，P1 驱动管理页支持上传安装第三方驱动包（gutenprint/escpr/hplip/splix/foo2zjs/Canon 等）
-- 网络打印机：CUPS 内置 IPP Everywhere（`-m everywhere`），免驱动
-- PPD 兜底：管理页支持手动上传 PPD 文件
-- 许可证：默认只预装开源可再分发驱动，闭源驱动由用户上传
-
-## 3. 端口
-
-| 端口 | 用途 | 访问范围 |
-|---|---|---|
-| 8088 | Web 打印/管理 | 局域网 |
-| 8631 | printd IPP 网关（PPD/RAW，按打印机校验允许访问） | 局域网 |
-| 631 | CUPS 内部端口（仅 127.0.0.1） | 仅容器内 |
-
-## 4. USB
-
-```yaml
-devices:
-  - /dev/bus/usb:/dev/bus/usb
-privileged: true
-```
-
-CUPS 使用 `usb://Brother/DCP-7060D?serial=...`。
-
-## 5. 目录持久化
+## 2. 目录结构
 
 ```text
-/app/data            SQLite、上传临时文件、扫描文件、drivers/（驱动包与 PPD）
-/etc/cups            打印机/PPD/cupsd.conf
-/var/spool/cups      打印队列
-/var/log/cups        CUPS 日志
+cmd/printd/                 Go 服务入口
+internal/                   Go 后端
+web/                        Vue 前端
+deployments/
+  Dockerfile                完整多阶段构建
+  Dockerfile.fnos           fnOS 预构建镜像（快）
+  Dockerfile.local          本地开发快速镜像
+  entrypoint.sh             CUPS + printd 启动入口
+docker-compose.yml          通用构建
+docker-compose.fnos.yml     fnOS 部署
+docker-compose.local.yml    本地开发
 ```
 
-## 6. 示例 compose
+## 3. 配置
 
-```yaml
-services:
-  print-portal:
-    build:
-      context: ..
-      dockerfile: deployments/Dockerfile
-    container_name: print-portal
-    restart: unless-stopped
-    privileged: true
-    ports:
-      - "192.168.2.30:8088:8088"
-      - "192.168.2.30:8631:8631"
-    volumes:
-      - /dev/bus/usb:/dev/bus/usb
-      - print-data:/app/data
-      - cups-etc:/etc/cups
-      - cups-spool:/var/spool/cups
-      - cups-log:/var/log/cups
-    environment:
-      ADMIN_TOKEN: "change-me"
-      CUPS_SERVER: "127.0.0.1:631"
-      PRINT_PORTAL_IPP_ADDR: "0.0.0.0:8631"
+环境变量：
 
-volumes:
-  print-data:
-  cups-etc:
-  cups-spool:
-  cups-log:
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `ADMIN_TOKEN` | 无 | 管理后台和 `/api/admin/*` 的访问 Token，必须设置 |
+| `PRINTD_ADDR` | `:8088` | Web 监听地址 |
+| `CUPS_SERVER` | `127.0.0.1:631` | 容器内 CUPS 地址 |
+| `PRINT_PORTAL_IPP_ADDR` | `0.0.0.0:8631` | IPP 网关监听地址；生产建议绑定局域网 IP |
+| `MAX_UPLOAD_MB` | `200` | 单文件上传大小上限（也可在设置页调整） |
+
+管理 Token 必须是足够长的随机字符串，不要使用默认值。
+
+## 4. 通用 Docker 部署
+
+```bash
+cp .env.example .env
+# 编辑 .env，至少设置 ADMIN_TOKEN
+# 并修改 docker-compose.yml 中的主机 IP 和端口绑定
+docker compose up -d --build
 ```
 
-## 7. 启动顺序
+访问：
 
-容器入口：
+```text
+http://<主机 IP>:8088/
+```
 
-1. 初始化 CUPS 配置目录并启动 mDNS（允许发现时使用）
-2. 启动 `cupsd`（仅 `127.0.0.1:631`）
-3. 等待 CUPS socket 就绪
-4. 启动 `printd`（Web 8088 + IPP 网关 8631）
-5. 退出时优雅停止 cupsd
+如果使用 USB 打印机，需要确认 compose 中挂载了 `/dev/bus/usb` 并有 `privileged: true`。
 
-推荐用 `s6-overlay` 或 `supervisord` 管理两个进程。
+## 5. fnOS 部署
 
-## 8. 从现有 cups-web 迁移
+fnOS 推荐使用预构建方式。先在构建机生成 Linux amd64 二进制和前端：
 
-1. 停止 cups-web 应用，避免它占用 8631/USB
-2. 备份现有 PPD、printers.conf、cupsd.conf
-3. 将 brlaser PPD 复制到镜像
-4. 启动 print-portal
-5. 用页面添加打印机，或导入配置
-6. 验证网页 PPD 打印、本地 PPD/RAW 打印
-7. 确认无误后卸载 cups-web
+```bash
+# 在项目根目录
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+  -trimpath -ldflags='-s -w' -o printd-linux-amd64 ./cmd/printd
 
-## 9. 安全
+cd web && pnpm install && pnpm build
+```
 
-- 端口绑定 `192.168.2.30`，不暴露公网
-- 管理 API 必须 `ADMIN_TOKEN`
-- CUPS 仅监听局域网
-- 容器内 `cupsd` / `printd` 以 root 运行（CUPS 管理与 `lpadmin` 需要），USB 通过 privileged 或 device 映射；单用户局域网环境接受该权限模型
-- 定期备份 `/app/data` 和 `/etc/cups`
+然后把 `printd-linux-amd64`、`web/dist` 和 `deployments/` 一起放到 fnOS 项目目录：
+
+```bash
+cd /vol2/1000/docker-images/print-portal
+docker compose -f docker-compose.fnos.yml up -d --build
+```
+
+当前 `docker-compose.fnos.yml` 使用：
+
+- `network_mode: host`：保留 mDNS / USB / 局域网发现
+- `PRINT_PORTAL_IPP_ADDR: "192.168.2.30:8631"`：只监听局域网 IP
+- `web-proxy` sidecar：把 `8080` 暴露给 fnOS 域名反代
+
+### 5.1 fnOS 域名
+
+`web-proxy` 是一个 nginx sidecar：
+
+```text
+fnOS 域名 → print-portal-web-proxy:8080
+             → host.docker.internal:8088
+```
+
+在 fnOS 中把域名反代到 `print-portal-web-proxy` 的 `8080`。
+
+### 5.2 fnOS 防火墙
+
+建议在 fnOS 防火墙中：
+
+- 允许 `192.168.2.0/24` 访问 TCP 8631
+- 拒绝其他来源访问 8631
+- 公网只开放 Web 入口（8080 或 8088）
+
+不要把 8631 暴露到公网。
+
+## 6. 端口
+
+| 端口 | 用途 | 建议访问范围 |
+|---|---|---|
+| 8088 | Web 打印 / 管理 | 局域网 |
+| 8631 | printd IPP 网关 | 仅局域网 |
+| 8080 | fnOS Web 代理（可选） | 按域名反代配置 |
+| 631 | 容器内 CUPS | 仅 127.0.0.1 |
+
+## 7. 数据持久化
+
+必须持久化：
+
+```text
+/app/data           SQLite、上传文件、任务、驱动
+/etc/cups           打印机 / PPD / cupsd.conf
+/var/spool/cups     打印队列
+/var/log/cups       CUPS 日志
+```
+
+`docker-compose.fnos.yml` 使用宿主机目录；通用 compose 使用 named volumes。
+
+## 8. 启动流程
+
+`entrypoint.sh`：
+
+1. 初始化 `/etc/cups` 配置
+2. 启动 `cupsd`（仅 127.0.0.1:631）
+3. 等待 CUPS ready
+4. 启动 `printd`（Web + IPP 网关）
+5. 退出时停止子进程
+
+CUPS 创建的任务文件权限由 `inotify` 监听修正，避免 `lp` 过滤器无法读取任务文件。
+
+## 9. 更新
+
+```bash
+# 备份
+tar -czf print-portal-backup.tgz data cups-etc cups-spool cups-log
+
+# 更新镜像
+docker compose -f docker-compose.fnos.yml build
+docker compose -f docker-compose.fnos.yml up -d
+```
+
+## 10. 升级 / 回滚
+
+- 代码更新前保留 `data/`、`cups-etc/` 备份
+- 若新版本异常，停止容器并替换回旧二进制 / 镜像后启动
+- 数据库迁移是向前兼容的；不要用旧版本打开已升级的数据库
+
+## 11. 故障排查
+
+```bash
+docker compose ps
+docker compose logs -f print-portal
+docker exec print-portal lpstat -p
+docker exec print-portal lpstat -o
+curl http://127.0.0.1:8088/healthz
+```
+
+打印机长时间显示 `Sending data to printer` 时，先检查打印机面板是否缺纸、卡纸或 USB 连接异常。
