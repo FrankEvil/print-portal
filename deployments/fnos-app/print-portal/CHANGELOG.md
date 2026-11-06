@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.9
+
+- 接入 fnOS 原生文件选择器，支持直接打印 NAS 文件
+
 ## 0.1.8
 
 - 增加 Epson ESC/P-R 驱动（EPSON ET-1110 等）
