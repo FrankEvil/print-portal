@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -239,6 +240,29 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	writeError(w, http.StatusUnauthorized, "unauthorized", "invalid token")
 }
 
+func (s *Server) serveStaticFile(w http.ResponseWriter, r *http.Request, path, prefix string) {
+	clean := filepath.Clean(strings.TrimPrefix(path, "/"))
+	if clean == "." {
+		clean = ""
+	}
+	full := filepath.Join(s.cfg.StaticDir, clean)
+	if info, err := os.Stat(full); err == nil && !info.IsDir() {
+		http.ServeFile(w, r, full)
+		return
+	}
+	index := filepath.Join(s.cfg.StaticDir, "index.html")
+	body, err := os.ReadFile(index)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if prefix != "" {
+		body = bytes.ReplaceAll(body, []byte(`"/assets/`), []byte(`"`+prefix+`/assets/`))
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(body)
+}
+
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Printf("%s %s %s", clientIP(r), r.Method, r.URL.Path)
@@ -264,16 +288,30 @@ func (s *Server) fnosLoginURL(r *http.Request) string {
 
 func (s *Server) staticHandler() http.Handler {
 	if s.cfg.AuthMode == "fnos" && s.cfg.FnOSPrefix != "" {
+		prefix := strings.TrimRight(s.cfg.FnOSPrefix, "/")
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/healthz" || strings.HasPrefix(r.URL.Path, "/api/") || strings.TrimSpace(r.Header.Get("X-Trim-Userid")) != "" {
-				if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/healthz" {
-					http.NotFound(w, r)
-					return
+			path := r.URL.Path
+			if strings.HasPrefix(path, prefix) {
+				path = strings.TrimPrefix(path, prefix)
+				if path == "" {
+					path = "/"
 				}
-				http.FileServer(http.Dir(s.cfg.StaticDir)).ServeHTTP(w, r)
+			}
+			if path == "/healthz" || strings.HasPrefix(path, "/api/") {
+				http.NotFound(w, r)
 				return
 			}
-			http.Redirect(w, r, s.fnosLoginURL(r), http.StatusFound)
+			// Static assets are harmless and must load even if the gateway
+			// does not forward identity headers on asset requests.
+			if strings.HasPrefix(path, "/assets/") {
+				s.serveStaticFile(w, r, path, prefix)
+				return
+			}
+			if strings.TrimSpace(r.Header.Get("X-Trim-Userid")) == "" {
+				http.Redirect(w, r, s.fnosLoginURL(r), http.StatusFound)
+				return
+			}
+			s.serveStaticFile(w, r, path, prefix)
 		})
 	}
 	if s.cfg.StaticDir == "" {
