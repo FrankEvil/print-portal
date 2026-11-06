@@ -52,10 +52,19 @@ docker-compose.local.yml    本地开发
 
 ## 4. 通用 Docker 部署
 
+推荐使用预构建镜像的独立版 compose：
+
+```bash
+cp .env.example .env
+# 编辑 .env，至少设置 ADMIN_TOKEN 和 PRINT_PORTAL_PUBLIC_HOST
+docker compose -f docker-compose.standalone.yml up -d
+```
+
+也可以从源码构建：
+
 ```bash
 cp .env.example .env
 # 编辑 .env，至少设置 ADMIN_TOKEN
-# 并修改 docker-compose.yml 中的主机 IP 和端口绑定
 docker compose up -d --build
 ```
 
