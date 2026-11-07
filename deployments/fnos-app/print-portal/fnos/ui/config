@@ -3,7 +3,7 @@
         "print-portal.Application": {
             "title": "Print Portal",
             "desc": "局域网打印门户",
-            "icon": "images/{0}.png",
+            "icon": "images/icon_{0}.png",
             "type": "iframe",
             "gatewayPrefix": "/app/print-portal",
             "gatewaySocket": "app.sock",

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.7
+
+- 修复 fnOS 桌面图标不显示：图标改用 images/icon_{0}.png 约定
+
 ## 0.2.6
 
 - 修复 fnOS 桌面图标不显示（manifest 格式与 appname 对齐）
