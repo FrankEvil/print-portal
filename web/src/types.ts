@@ -35,6 +35,7 @@ export type JobStatus =
   | 'converting'
   | 'submitted'
   | 'queued'
+  | 'held'
   | 'printing'
   | 'completed'
   | 'failed'

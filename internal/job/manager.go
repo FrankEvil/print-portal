@@ -339,7 +339,7 @@ func (m *Manager) syncStatuses(ctx context.Context) {
 				continue
 			}
 			switch j.Status {
-			case "submitted", "queued", "printing":
+			case "submitted", "queued", "printing", "held":
 				if _, ok := activeIDs[j.CupsJobID]; ok {
 					if printing[queueOfJob(j.CupsJobID)] == j.CupsJobID {
 						j.Status = "printing"

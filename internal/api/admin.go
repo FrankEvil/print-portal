@@ -897,6 +897,7 @@ func (s *Server) handleAdminJobAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, "hold_failed", err.Error())
 			return
 		}
+		_ = s.store.UpdateJobStatus(id, "held", "")
 	case "release":
 		if j.CupsJobID == "" {
 			writeError(w, http.StatusConflict, "release_failed", "job has no CUPS id")
@@ -906,6 +907,7 @@ func (s *Server) handleAdminJobAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, "release_failed", err.Error())
 			return
 		}
+		_ = s.store.UpdateJobStatus(id, "queued", "")
 	case "restart":
 		if j.CupsJobID == "" {
 			writeError(w, http.StatusConflict, "restart_failed", "job has no CUPS id")

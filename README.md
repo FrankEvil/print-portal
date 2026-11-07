@@ -4,7 +4,7 @@
 
 Print Portal 是一个面向 **家庭、小办公室、fnOS NAS** 的单用户局域网打印中心。它把 CUPS、打印驱动、文件转换、网页上传、IPP 网关、AirPrint 广播和任务管理整合进一个 Docker 容器，让没有打印服务器的普通 USB / 网络打印机也能被电脑、手机、平板直接使用。
 
-> 当前版本：`0.2.3` · 许可证：Apache-2.0
+> 当前版本：`0.2.4` · 许可证：Apache-2.0
 
 ## 界面预览
 
@@ -218,7 +218,7 @@ docker compose up -d --build
 fnOS 用户使用 fpk：
 
 ```text
-dist/print-portal_0.2.3_x86.fpk
+dist/print-portal_0.2.4_x86.fpk
 ```
 
 启动后访问：

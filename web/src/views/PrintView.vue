@@ -97,7 +97,7 @@ async function loadJobs() {
 
 function syncPolling() {
   const active = jobs.value.some((j) =>
-    ['pending', 'converting', 'submitted', 'queued', 'printing'].includes(j.status),
+    ['pending', 'converting', 'submitted', 'queued', 'printing', 'held'].includes(j.status),
   )
   if (active && !pollTimer) pollTimer = window.setInterval(loadJobs, 2000)
   if (!active && pollTimer) {
@@ -515,7 +515,7 @@ onUnmounted(() => {
           <button v-if="j.source === 'web' && ['submitted', 'queued', 'printing', 'completed', 'failed'].includes(j.status)" class="btn btn-ghost btn-sm" @click="openJobFile(j.id)">
             查看文件
           </button>
-          <button v-if="['pending', 'converting', 'submitted', 'queued', 'printing'].includes(j.status)" class="btn btn-ghost btn-sm" @click="cancelJob(j.id)">
+          <button v-if="['pending', 'converting', 'submitted', 'queued', 'printing', 'held'].includes(j.status)" class="btn btn-ghost btn-sm" @click="cancelJob(j.id)">
             取消
           </button>
           <button v-if="['failed', 'cancelled'].includes(j.status) && j.source === 'web'" class="btn btn-ghost btn-sm" @click="retryJob(j.id)">
