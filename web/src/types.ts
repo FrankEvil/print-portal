@@ -19,6 +19,7 @@ export interface AdminPrinter {
   is_default: boolean
   is_shared: boolean
   allow_discovery: boolean
+  airprint_enabled: boolean
   state: string
   state_reasons: string[]
   accepting: boolean
@@ -43,7 +44,7 @@ export interface Job {
   id: number
   printer_id: number
   printer_name: string
-  source: 'web' | 'local'
+  source: 'web' | 'local' | 'test'
   filename: string
   source_ip: string
   cups_user: string
@@ -147,6 +148,7 @@ export interface SharingPrinter {
   is_default: boolean
   is_shared: boolean
   allow_discovery: boolean
+  airprint_enabled: boolean
   device_uri: string
   ppd_queue: string
   raw_queue: string

@@ -101,6 +101,7 @@ onUnmounted(() => {
         <option value="">全部来源</option>
         <option value="web">网页</option>
         <option value="local">本地</option>
+        <option value="test">测试页</option>
       </select>
       <input
         v-model="query"
@@ -124,20 +125,20 @@ onUnmounted(() => {
         </thead>
         <tbody>
           <tr v-for="j in jobs" :key="j.id">
-            <td>#{{ j.id }}</td>
-            <td>
-              <div style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ j.filename }}</div>
+            <td data-label="ID">#{{ j.id }}</td>
+            <td class="job-file-cell" data-label="文件">
+              <div class="job-file-name" style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ j.filename }}</div>
               <div v-if="j.cups_user" class="admin-sub">{{ j.cups_user }}</div>
             </td>
-            <td>{{ j.printer_name }}</td>
-            <td>{{ j.source === 'web' ? '网页' : '本地' }}</td>
-            <td class="admin-sub">{{ formatJobParams(j) }}</td>
-            <td>
+            <td data-label="打印机">{{ j.printer_name }}</td>
+            <td data-label="来源">{{ j.source === 'web' ? '网页' : j.source === 'test' ? '测试页' : '本地' }}</td>
+            <td class="admin-sub" data-label="参数">{{ formatJobParams(j) }}</td>
+            <td data-label="状态">
               <StatusBadge :status="j.status" />
               <div v-if="j.error_message" class="admin-sub" style="color: var(--danger); max-width: 220px">{{ j.error_message }}</div>
             </td>
-            <td class="admin-sub">{{ new Date(j.created_at).toLocaleString('zh-CN', { hour12: false }) }}</td>
-            <td>
+            <td class="admin-sub" data-label="时间">{{ new Date(j.created_at).toLocaleString('zh-CN', { hour12: false }) }}</td>
+            <td data-label="操作">
               <div style="display: flex; gap: 6px; flex-wrap: wrap">
                 <button v-if="j.source === 'web' && ['submitted','queued','printing','completed','failed'].includes(j.status)" class="btn btn-ghost btn-sm" @click="openJobFile(j.id)">查看文件</button>
                 <button v-if="['pending','converting','submitted','queued','printing'].includes(j.status)" class="btn btn-ghost btn-sm" @click="act(j, 'cancel')">取消</button>

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- 内置 AirPrint / Mopria mDNS 广播（每台打印机独立开关）
+- 无宿主 Avahi / D-Bus 依赖
+- 改进移动端管理页面
+- 共享页 AirPrint 状态标签与地址复制图标
+- 任务管理导入最近 AirPrint / IPP 任务
+
 ## 0.1.9
 
 - 接入 fnOS 原生文件选择器，支持直接打印 NAS 文件

@@ -85,7 +85,7 @@ onMounted(async () => {
       <h1 class="admin-title">驱动管理</h1>
       <p class="admin-sub">内置驱动、驱动包与型号索引；状态区分可用 / 降级 / 缺失</p>
     </div>
-    <div style="display: flex; gap: 8px">
+    <div class="driver-actions">
       <button class="btn btn-ghost" @click="refresh">刷新状态</button>
       <button class="btn btn-primary" :disabled="installing" @click="fileInput?.click()">
         {{ installing ? '安装中…' : '上传驱动 / PPD' }}
@@ -104,19 +104,19 @@ onMounted(async () => {
     </p>
     <div v-if="!drivers.length" class="empty">暂无驱动信息</div>
     <div v-else class="table-wrap">
-      <table class="table">
+      <table class="table drivers-table">
         <thead>
           <tr><th>驱动</th><th>版本</th><th>类型</th><th>状态</th><th>型号数</th><th>许可证</th><th>操作</th></tr>
         </thead>
         <tbody>
           <tr v-for="d in drivers" :key="d.id">
-            <td><strong>{{ d.name }}</strong></td>
-            <td>{{ d.version || '—' }}</td>
-            <td>{{ d.kind === 'builtin' ? '内置' : d.kind === 'package' ? '驱动包' : 'PPD' }}</td>
-            <td><StatusBadge :status="d.state" /></td>
-            <td>{{ d.models_count }}</td>
-            <td>{{ d.license || '—' }}</td>
-            <td>
+            <td class="driver-name-cell" data-label="驱动"><strong>{{ d.name }}</strong></td>
+            <td data-label="版本">{{ d.version || '—' }}</td>
+            <td data-label="类型">{{ d.kind === 'builtin' ? '内置' : d.kind === 'package' ? '驱动包' : 'PPD' }}</td>
+            <td data-label="状态"><StatusBadge :status="d.state" /></td>
+            <td data-label="型号数">{{ d.models_count }}</td>
+            <td data-label="许可证">{{ d.license || '—' }}</td>
+            <td data-label="操作">
               <button v-if="d.kind !== 'builtin'" class="btn btn-danger btn-sm" @click="uninstall(d)">卸载</button>
               <span v-else class="admin-sub">只读</span>
             </td>
@@ -124,13 +124,30 @@ onMounted(async () => {
         </tbody>
       </table>
     </div>
+    <div v-if="drivers.length" class="driver-mobile-list">
+      <article v-for="d in drivers" :key="d.id" class="driver-mobile-card">
+        <div class="driver-mobile-head">
+          <strong>{{ d.name }}</strong>
+          <StatusBadge :status="d.state" />
+        </div>
+        <div class="driver-mobile-meta">
+          <span>{{ d.kind === 'builtin' ? '内置' : d.kind === 'package' ? '驱动包' : 'PPD' }}</span>
+          <span>v{{ d.version || '—' }}</span>
+          <span>{{ d.models_count }} 个型号</span>
+          <span>{{ d.license || '—' }}</span>
+        </div>
+        <div v-if="d.kind !== 'builtin'" class="driver-mobile-foot">
+          <button class="btn btn-danger btn-sm" @click="uninstall(d)">卸载</button>
+        </div>
+      </article>
+    </div>
   </section>
 
   <section class="card" style="margin-top: 20px">
     <div class="section-head">
       <h2 class="card-title">型号索引</h2>
       <div style="display: flex; gap: 8px">
-        <input v-model="query" class="input" style="width: 240px" placeholder="搜索型号，如 DCP-7060" @keyup.enter="searchModels" />
+        <input v-model="query" class="input driver-search" style="width: 240px" placeholder="搜索型号，如 DCP-7060" @keyup.enter="searchModels" />
         <button class="btn btn-ghost btn-sm" @click="searchModels">搜索</button>
       </div>
     </div>
@@ -139,16 +156,23 @@ onMounted(async () => {
     </p>
     <div v-if="!models.length" class="empty">没有匹配型号</div>
     <div v-else class="table-wrap" style="max-height: 380px">
-      <table class="table">
+      <table class="table models-table">
         <thead><tr><th>PPD 名称</th><th>型号描述</th><th>所属驱动</th></tr></thead>
         <tbody>
           <tr v-for="m in models" :key="m.name">
-            <td style="word-break: break-all">{{ m.name }}</td>
-            <td>{{ m.description }}</td>
-            <td>{{ m.driver }}</td>
+            <td class="driver-model-name" data-label="PPD 名称" style="word-break: break-all">{{ m.name }}</td>
+            <td data-label="型号描述">{{ m.description }}</td>
+            <td data-label="所属驱动">{{ m.driver }}</td>
           </tr>
         </tbody>
       </table>
+    </div>
+    <div v-if="models.length" class="model-mobile-list">
+      <article v-for="m in models" :key="m.name" class="model-mobile-card">
+        <strong>{{ m.description || m.name }}</strong>
+        <small>{{ m.name }}</small>
+        <span>{{ m.driver }}</span>
+      </article>
     </div>
   </section>
 </template>

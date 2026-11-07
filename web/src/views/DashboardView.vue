@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { api, apiUrl } from '../api'
+import { api } from '../api'
 import type { Job, Overview } from '../types'
 import StatusBadge from '../components/StatusBadge.vue'
 import { formatJobParams } from '../jobDisplay'
@@ -19,10 +19,6 @@ async function load() {
   }
 }
 
-function openJobFile(id: number) {
-  window.open(apiUrl(`/api/jobs/${id}/file`), '_blank')
-}
-
 onMounted(load)
 </script>
 
@@ -32,7 +28,7 @@ onMounted(load)
       <h1 class="admin-title">概览</h1>
       <p class="admin-sub">CUPS 与打印任务状态一览</p>
     </div>
-    <button class="btn btn-ghost btn-sm" @click="load">刷新</button>
+    <button class="btn btn-ghost btn-sm btn-refresh" @click="load">↻ <span class="refresh-label">刷新</span></button>
   </div>
 
   <div class="stat-grid" v-if="overview">
@@ -58,6 +54,24 @@ onMounted(load)
     </div>
   </div>
 
+  <div class="quick-grid">
+    <router-link to="/admin/printers" class="quick-card">
+      <span class="quick-icon">⌁</span>
+      <span><strong>打印机</strong><small>添加或管理设备</small></span>
+      <span class="quick-arrow">→</span>
+    </router-link>
+    <router-link to="/admin/jobs" class="quick-card">
+      <span class="quick-icon">▣</span>
+      <span><strong>任务管理</strong><small>查看打印队列和记录</small></span>
+      <span class="quick-arrow">→</span>
+    </router-link>
+    <router-link to="/admin/sharing" class="quick-card">
+      <span class="quick-icon">⇄</span>
+      <span><strong>共享设置</strong><small>局域网连接与权限</small></span>
+      <span class="quick-arrow">→</span>
+    </router-link>
+  </div>
+
   <section class="card" style="margin-top: 20px">
     <div class="section-head">
       <h2 class="card-title">最近任务</h2>
@@ -67,23 +81,20 @@ onMounted(load)
     <div v-else class="table-wrap">
       <table class="table">
         <thead>
-          <tr><th>ID</th><th>文件</th><th>打印机</th><th>参数</th><th>状态</th><th>操作</th><th>时间</th></tr>
+          <tr><th>ID</th><th>文件</th><th>打印机</th><th>来源</th><th>参数</th><th>状态</th><th>时间</th></tr>
         </thead>
         <tbody>
           <tr v-for="j in jobs" :key="j.id">
-            <td>#{{ j.id }}</td>
-            <td>
-              <div style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ j.filename }}</div>
-              <div class="admin-sub">{{ j.source === 'web' ? '网页' : '本地' }}</div>
+            <td data-label="ID">#{{ j.id }}</td>
+            <td class="job-file-cell" data-label="文件">
+              <div class="job-file-name" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ j.filename }}</div>
+              <div class="admin-sub">{{ j.source === 'web' ? '网页' : j.source === 'test' ? '测试页' : '本地' }}</div>
             </td>
-            <td>{{ j.printer_name }}</td>
-            <td class="admin-sub">{{ formatJobParams(j) }}</td>
-            <td><StatusBadge :status="j.status" /></td>
-            <td>
-              <button v-if="j.source === 'web' && ['submitted','queued','printing','completed','failed'].includes(j.status)" class="btn btn-ghost btn-sm" @click="openJobFile(j.id)">查看文件</button>
-              <span v-else class="admin-sub">—</span>
-            </td>
-            <td class="admin-sub">{{ new Date(j.created_at).toLocaleString('zh-CN', { hour12: false }) }}</td>
+            <td data-label="打印机">{{ j.printer_name }}</td>
+            <td data-label="来源">{{ j.source === 'web' ? '网页' : j.source === 'test' ? '测试页' : '本地' }}</td>
+            <td class="admin-sub" data-label="参数">{{ formatJobParams(j) }}</td>
+            <td data-label="状态"><StatusBadge :status="j.status" /></td>
+            <td class="admin-sub" data-label="时间">{{ new Date(j.created_at).toLocaleString('zh-CN', { hour12: false }) }}</td>
           </tr>
         </tbody>
       </table>

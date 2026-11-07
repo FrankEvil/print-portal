@@ -494,6 +494,8 @@ p {
 
 /* ---------- Tables ---------- */
 .table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -1069,6 +1071,8 @@ table.table {
   gap: 4px;
   color: var(--text-3);
   font-size: 12px;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .share-expand::after {
@@ -1773,4 +1777,1515 @@ table.table {
   font: inherit;
   cursor: pointer;
   padding: 0;
+}
+
+/* Mobile admin navigation */
+.admin-mobile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-mobile-top .brand {
+  margin: 0;
+}
+
+.admin-mobile-home {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text-2);
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.admin-mobile-toggle {
+  display: none;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.admin-sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+@media (max-width: 900px) {
+  .admin-shell {
+    display: block;
+  }
+
+  .admin-sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    height: auto;
+    padding: 12px 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    flex-direction: column;
+    align-items: stretch;
+    overflow: visible;
+  }
+
+  .admin-mobile-top {
+    width: 100%;
+  }
+
+  .admin-mobile-home {
+    display: inline-flex;
+  }
+
+  .admin-sidebar.menu-open .admin-sidebar-footer {
+    display: flex;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+  }
+
+  .admin-mobile-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .admin-nav {
+    display: none;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    padding-top: 8px;
+  }
+
+  .admin-sidebar.menu-open .admin-nav {
+    display: grid;
+  }
+
+  .admin-nav a {
+    padding: 10px 12px;
+    min-height: 40px;
+  }
+
+  .admin-sidebar-footer {
+    display: none;
+  }
+
+  .admin-content {
+    padding: 20px 16px 48px;
+  }
+}
+
+/* Mobile card layout for admin tables */
+@media (max-width: 640px) {
+  .admin-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .admin-header > .btn {
+    width: 100%;
+  }
+
+  .admin-actions {
+    width: 100%;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  .admin-actions .select,
+  .admin-actions .input {
+    width: 100% !important;
+  }
+
+  .table-wrap {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .table {
+    display: block;
+    border: 0;
+    background: transparent;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table tr {
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  }
+
+  .table td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 5px 0;
+    border: 0;
+    text-align: right;
+  }
+
+  .table td[data-label] {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 12px;
+    text-align: left;
+  }
+
+  .table td::before {
+    content: attr(data-label);
+    flex: 0 0 72px;
+    color: var(--text-3);
+    font-size: 12px;
+    text-align: left;
+    font-weight: 500;
+  }
+
+  .table td.printer-name-cell {
+    display: block;
+    text-align: left;
+    padding: 0 0 10px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .table td.printer-name-cell::before {
+    display: none;
+  }
+
+  .table td.job-file-cell {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 0 12px;
+    align-items: baseline;
+    text-align: left;
+    padding: 0 0 10px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .table td.job-file-cell::before {
+    display: block;
+    grid-column: 1;
+    margin: 0;
+  }
+
+  .job-file-name {
+    grid-column: 2;
+    max-width: 100% !important;
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .table td.job-file-cell > .admin-sub {
+    display: none;
+  }
+
+  .table td[data-label="状态"] .status-badge {
+    width: fit-content;
+    justify-self: start;
+  }
+
+  .table td[data-label="操作"] {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    padding-top: 12px;
+    margin-top: 6px;
+    border-top: 1px solid var(--line);
+  }
+
+  .table td[data-label="操作"]::before {
+    display: block;
+    flex: 0 0 auto;
+    margin: 0;
+  }
+
+  .table td[data-label="操作"] .row-actions,
+  .table td[data-label="操作"] > div {
+    display: flex;
+    flex: 1;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .table td.queue-cell {
+    display: block;
+    text-align: left;
+    padding-top: 8px;
+  }
+
+  .table td.queue-cell::before {
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .queue-cell .queue-line {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    white-space: normal;
+    margin: 5px 0;
+  }
+
+  .queue-name {
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+
+  .device-summary {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+
+  .status-cell {
+    justify-content: flex-start;
+  }
+
+  .device-summary {
+    max-width: 65%;
+    text-align: right;
+  }
+
+  .share-printer-summary {
+    align-items: flex-start;
+    padding: 16px;
+  }
+
+  .share-printer-body {
+    padding: 14px 16px 18px;
+  }
+
+  .share-body-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .share-switches {
+    gap: 10px;
+  }
+
+  .share-box-actions {
+    flex-wrap: wrap;
+  }
+
+  .share-printer-title {
+    flex-wrap: wrap;
+  }
+}
+
+/* Dashboard */
+.stat {
+  position: relative;
+  overflow: hidden;
+}
+
+.stat::after {
+  content: '';
+  position: absolute;
+  width: 92px;
+  height: 92px;
+  right: -30px;
+  top: -32px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  opacity: 0.7;
+}
+
+.stat > * {
+  position: relative;
+  z-index: 1;
+}
+
+.stat:nth-child(2)::after { background: var(--success-soft); }
+.stat:nth-child(3)::after { background: var(--warning-soft); }
+.stat:nth-child(4)::after { background: var(--info-soft); }
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.quick-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.quick-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-card);
+}
+
+.quick-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 19px;
+  flex-shrink: 0;
+}
+
+.quick-card strong,
+.quick-card small {
+  display: block;
+}
+
+.quick-card strong {
+  font-size: 14px;
+}
+
+.quick-card small {
+  color: var(--text-3);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.quick-arrow {
+  margin-left: auto;
+  color: var(--text-3);
+}
+
+@media (max-width: 640px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .stat {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .stat-value {
+    font-size: 24px;
+  }
+
+  .stat-value.small {
+    font-size: 16px;
+    padding-top: 7px;
+  }
+
+  .quick-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .quick-card {
+    padding: 13px 14px;
+  }
+
+  .quick-card small {
+    display: none;
+  }
+}
+
+
+@media (max-width: 900px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px;
+  }
+
+  .stat {
+    padding: 12px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    letter-spacing: 0.03em;
+  }
+
+  .stat-value {
+    font-size: 22px;
+  }
+
+  .admin-sub {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* CUPS console mobile */
+@media (max-width: 640px) {
+  .cups-settings-card,
+  .cups-config-card {
+    padding: 16px;
+  }
+
+  .cups-settings-grid {
+    gap: 0;
+  }
+
+  .cups-settings-grid .field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(130px, 46%);
+    align-items: center;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .cups-settings-grid .field:first-child {
+    padding-top: 4px;
+  }
+
+  .cups-settings-grid .field:last-child {
+    border-bottom: 0;
+  }
+
+  .cups-settings-grid .field > label {
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .cups-settings-grid .field > .admin-sub {
+    grid-column: 2;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .cups-save-btn {
+    width: 100%;
+    margin-top: 14px !important;
+  }
+
+  .cups-config-card .section-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .cups-config-card textarea {
+    min-height: 260px !important;
+    font-size: 12px;
+  }
+}
+
+/* Drivers mobile */
+.driver-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .driver-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+    width: 100%;
+    gap: 8px;
+  }
+
+  .driver-actions .btn {
+    width: 100%;
+    padding-left: 8px;
+    padding-right: 8px;
+    font-size: 13px;
+  }
+
+  .driver-search {
+    width: 100% !important;
+  }
+
+  .section-head .driver-search {
+    flex: 1;
+  }
+
+  .section-head > div {
+    width: 100%;
+  }
+
+  .table td.driver-name-cell,
+  .table td.driver-model-name {
+    display: block;
+    text-align: left;
+    padding-bottom: 10px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .table td.driver-name-cell::before,
+  .table td.driver-model-name::before {
+    display: none;
+  }
+
+  .driver-name-cell strong,
+  .driver-model-name {
+    font-size: 15px;
+    font-weight: 600;
+  }
+}
+
+
+@media (max-width: 640px) {
+  .drivers-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 14px;
+    padding: 14px 16px;
+  }
+
+  .drivers-table .driver-name-cell {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0 9px;
+    margin-bottom: 7px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .drivers-table td[data-label] {
+    display: block;
+    padding: 4px 0;
+    border: 0;
+    text-align: left;
+  }
+
+  .drivers-table td[data-label]::before {
+    display: block;
+    margin: 0 0 2px;
+    font-size: 11px;
+  }
+
+  .drivers-table td[data-label="状态"] .status-badge {
+    width: fit-content;
+  }
+
+  .drivers-table td[data-label="操作"] {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+
+  .drivers-table td[data-label="操作"]::before {
+    display: inline-block;
+    margin: 0;
+  }
+
+  .models-table tr {
+    padding: 14px 16px;
+  }
+}
+
+/* Compact driver cards on mobile */
+.driver-mobile-list,
+.model-mobile-list {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .drivers-table,
+  .models-table {
+    display: none;
+  }
+
+  .driver-mobile-list,
+  .model-mobile-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .driver-mobile-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    padding: 14px 16px;
+  }
+
+  .driver-mobile-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .driver-mobile-head strong {
+    font-size: 15px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .driver-mobile-head .status-badge {
+    flex: 0 0 auto;
+  }
+
+  .driver-mobile-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    margin-top: 8px;
+    color: var(--text-3);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .driver-mobile-meta span + span::before {
+    content: '·';
+    margin-right: 10px;
+    color: var(--line-strong);
+  }
+
+  .driver-mobile-foot {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+
+  .model-mobile-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    padding: 12px 14px;
+  }
+
+  .model-mobile-card strong,
+  .model-mobile-card small,
+  .model-mobile-card span {
+    display: block;
+  }
+
+  .model-mobile-card strong {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .model-mobile-card small {
+    margin-top: 4px;
+    color: var(--text-2);
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+  }
+
+  .model-mobile-card span {
+    margin-top: 4px;
+    color: var(--text-3);
+    font-size: 11.5px;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-header > .btn.btn-refresh {
+    width: auto;
+    margin-left: auto;
+    align-self: flex-start;
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-header > .btn.btn-refresh {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    line-height: 1;
+    color: var(--text-2);
+  }
+
+  .admin-header > .btn.btn-refresh .refresh-label {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .admin-sidebar .admin-print-link {
+    display: none !important;
+  }
+}
+
+/* Keep print cards aligned; preview mode uses equal-height columns */
+.print-layout > .card + .card {
+  margin-top: 0;
+}
+
+.print-layout.has-preview {
+  align-items: stretch;
+}
+
+.print-layout.has-preview > .card {
+  height: 100%;
+}
+
+@media (max-width: 1100px) {
+  .print-layout > .card + .card {
+    margin-top: 0;
+  }
+}
+
+/* Printer management mobile cards */
+.printer-mobile-list {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .printers-table {
+    display: none;
+  }
+
+  .printer-mobile-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .printer-mobile-card {
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+  }
+
+  .printer-mobile-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .printer-mobile-title {
+    min-width: 0;
+  }
+
+  .printer-mobile-title strong {
+    display: block;
+    font-size: 16px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  .printer-mobile-title small {
+    display: block;
+    margin-top: 4px;
+    color: var(--text-3);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .printer-mobile-head .status-badge {
+    flex: 0 0 auto;
+  }
+
+  .printer-mobile-details {
+    display: grid;
+    gap: 10px;
+    margin: 14px 0;
+  }
+
+  .printer-detail {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+  }
+
+  .printer-detail dt {
+    color: var(--text-3);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .printer-detail dd {
+    margin: 0;
+    min-width: 0;
+    color: var(--text-2);
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  .printer-queue-line {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+    line-height: 1.6;
+  }
+
+  .printer-queue-line + .printer-queue-line {
+    margin-top: 4px;
+  }
+
+  .printer-mobile-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+}
+
+
+@media (max-width: 640px) {
+  .share-printer-summary {
+    align-items: flex-start;
+  }
+
+  .share-expand {
+    width: 32px;
+    height: 32px;
+    justify-content: center;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    font-size: 0;
+    background: var(--surface-2);
+  }
+
+  .share-expand::after {
+    content: '▾';
+    font-size: 12px;
+    margin: 0;
+  }
+}
+
+
+@media (max-width: 640px) {
+  .share-printer-summary {
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .share-printer-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .share-printer-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+  }
+
+  .share-printer-name {
+    flex: 0 0 100%;
+    font-size: 17px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  .share-printer-title .status-badge {
+    margin-top: 2px;
+  }
+
+  .share-printer-title .status-badge.is-neutral {
+    margin-left: 0;
+  }
+
+  .share-printer-model {
+    display: block;
+    margin-top: 9px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .share-expand {
+    margin-top: 2px;
+  }
+}
+
+/* Sharing printer identity */
+.share-printer-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.share-printer-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.share-printer-text {
+  min-width: 0;
+}
+
+.share-printer-text .share-printer-name,
+.share-printer-text .share-printer-model {
+  display: block;
+}
+
+.share-printer-text .share-printer-name {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.share-printer-text .share-printer-model {
+  margin-top: 3px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.share-printer-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+@media (max-width: 640px) {
+  .share-printer-summary {
+    align-items: flex-start;
+    padding: 16px;
+    gap: 10px;
+  }
+
+  .share-printer-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .share-printer-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    font-size: 15px;
+  }
+
+  .share-printer-text .share-printer-name {
+    font-size: 16px;
+  }
+
+  .share-printer-tags {
+    margin-top: 10px;
+  }
+
+  .share-expand {
+    margin-top: 3px;
+  }
+}
+
+
+@media (max-width: 640px) {
+  .share-printer-summary {
+    padding: 14px 16px;
+    gap: 8px;
+  }
+
+  .share-printer-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+
+  .share-printer-text .share-printer-name {
+    font-size: 15px;
+  }
+
+  .share-printer-text .share-printer-model {
+    margin-top: 2px;
+    font-size: 11.5px;
+  }
+
+  .share-printer-tags {
+    margin-top: 8px;
+    gap: 4px;
+  }
+
+  .share-printer-tags .status-badge {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  .share-expand {
+    width: 20px;
+    height: 20px;
+    border: 0;
+    background: transparent;
+    font-size: 0;
+    margin-top: 6px;
+  }
+
+  .share-expand::after {
+    font-size: 14px;
+    color: var(--text-3);
+  }
+}
+
+
+@media (max-width: 640px) {
+  .share-printer-main {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .share-printer-identity {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .share-printer-tags {
+    margin: 0 0 0 auto;
+    flex: 0 1 auto;
+  }
+
+  .share-printer-summary {
+    align-items: center;
+    padding: 11px 14px;
+  }
+
+  .share-expand {
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .share-printer-card {
+    margin-top: 0;
+  }
+
+  .share-printer-summary {
+    padding: 9px 12px;
+    gap: 8px;
+  }
+
+  .share-printer-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    font-size: 13px;
+  }
+
+  .share-printer-text .share-printer-name {
+    font-size: 15px;
+  }
+
+  .share-printer-text .share-printer-model {
+    margin-top: 2px;
+    font-size: 11px;
+  }
+
+  .share-printer-tags {
+    margin-top: 6px;
+    gap: 4px;
+  }
+
+  .share-printer-tags .status-badge {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  .share-printer-body {
+    padding: 12px 12px 14px;
+  }
+}
+
+@media (max-width: 900px) {
+  .share-printer-main {
+    display: block;
+  }
+
+  .share-printer-identity {
+    align-items: flex-start;
+  }
+
+  .share-printer-tags {
+    margin: 8px 0 0;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .share-printer-tags .status-badge {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+}
+
+/* Final sharing card proportions: match the approved card layout */
+@media (max-width: 900px) {
+  .share-printer-summary {
+    padding: 18px 20px;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .share-printer-main {
+    display: block;
+  }
+
+  .share-printer-identity {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .share-printer-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    font-size: 17px;
+  }
+
+  .share-printer-text .share-printer-name {
+    font-size: 16px;
+    line-height: 1.3;
+  }
+
+  .share-printer-text .share-printer-model {
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .share-printer-tags {
+    margin: 12px 0 0;
+    gap: 6px;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .share-printer-tags .status-badge {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
+  .share-expand {
+    width: 20px;
+    height: 20px;
+    margin-top: 4px;
+    border: 0;
+    background: transparent;
+    font-size: 0;
+  }
+
+  .share-expand::after {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 900px) {
+  .share-printer-summary {
+    padding: 13px 16px;
+    gap: 10px;
+  }
+
+  .share-printer-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .share-printer-tags {
+    margin-top: 8px;
+    gap: 4px;
+  }
+
+  .share-printer-tags .status-badge {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  .share-printer-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+
+  .share-printer-text .share-printer-name {
+    font-size: 15px;
+  }
+
+  .share-printer-text .share-printer-model {
+    font-size: 11px;
+    margin-top: 2px;
+  }
+}
+
+@media (max-width: 900px) {
+  .share-printer-main {
+    display: block;
+    width: 100%;
+  }
+
+  .share-printer-tags {
+    width: 100%;
+    margin: 8px 0 0;
+  }
+}
+
+/* Address field with inline copy action */
+.share-url-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 8px 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.share-url-field code {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow-wrap: anywhere;
+}
+
+.share-url-copy {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.share-url-copy:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Printer edit option cards */
+.edit-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.edit-options-grid .check-line {
+  margin: 0;
+  min-height: 42px;
+}
+
+@media (max-width: 640px) {
+  .edit-options-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .share-printer-main {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .share-printer-tags {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 4px;
+    scrollbar-width: none;
+  }
+
+  .share-printer-tags::-webkit-scrollbar {
+    display: none;
+  }
+
+  .share-printer-tags .status-badge {
+    flex: 0 0 auto;
+    padding: 3px 7px;
+    font-size: 11px;
+  }
+}
+
+/* Sharing switches: three compact options on one row */
+.share-switches {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  flex: 1;
+  max-width: 560px;
+}
+
+.share-switches .check-line {
+  margin: 0;
+  padding: 9px 10px;
+  gap: 7px;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .share-body-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .share-switches {
+    width: 100%;
+    max-width: none;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .share-switches .check-line {
+    padding: 8px 6px;
+    gap: 5px;
+    font-size: 12px;
+  }
+
+  .share-switches .check-line input {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+@media (max-width: 900px) {
+  .share-printer-main {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+  }
+
+  .share-printer-tags {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: 100%;
+    flex-wrap: wrap;
+    overflow: visible;
+    gap: 4px;
+  }
+}
+
+@media (max-width: 900px) {
+  .share-printer-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px;
+  }
+
+  .share-printer-main {
+    display: block;
+    width: auto;
+    min-width: 0;
+  }
+
+  .share-printer-tags {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .share-expand {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+/* The sharing summary is grid at every width, so the tag row always gets
+   the full content column instead of shrinking to the identity width. */
+.share-printer-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.share-printer-main {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.share-printer-tags {
+  width: 100%;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+/* Keep the status tags on one line when the card has room; scroll only
+   when the viewport is genuinely too narrow. */
+.share-printer-tags {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.share-printer-tags::-webkit-scrollbar {
+  display: none;
+}
+
+.share-printer-tags .status-badge {
+  flex: 0 0 auto;
 }

@@ -1,0 +1,1 @@
+ALTER TABLE printers ADD COLUMN airprint_enabled INTEGER NOT NULL DEFAULT 0;

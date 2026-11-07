@@ -84,7 +84,7 @@ onMounted(async () => {
       <h1 class="admin-title">CUPS 控制台</h1>
       <p class="admin-sub">版本、状态、常用参数与 cupsd.conf 高级编辑</p>
     </div>
-    <button class="btn btn-ghost btn-sm" @click="loadStatus">刷新</button>
+    <button class="btn btn-ghost btn-sm btn-refresh" @click="loadStatus">↻ <span class="refresh-label">刷新</span></button>
   </div>
 
   <div class="stat-grid" v-if="status">
@@ -106,9 +106,9 @@ onMounted(async () => {
     </div>
   </div>
 
-  <section class="card" style="margin-top: 20px">
+  <section class="card cups-settings-card" style="margin-top: 20px">
     <div class="section-head"><h2 class="card-title">常用参数</h2></div>
-    <div class="form-grid">
+    <div class="form-grid cups-settings-grid">
       <div v-for="(label, key) in settingLabels" :key="key" class="field">
         <label>{{ label }}</label>
         <select v-if="['true', 'false'].includes(settings[key])" v-model="settings[key]" class="select">
@@ -118,10 +118,10 @@ onMounted(async () => {
         <input v-else v-model="settings[key]" class="input" />
       </div>
     </div>
-    <button class="btn btn-primary" style="margin-top: 16px" :disabled="savingSettings" @click="saveSettings">保存参数</button>
+    <button class="btn btn-primary cups-save-btn" style="margin-top: 16px" :disabled="savingSettings" @click="saveSettings">保存参数</button>
   </section>
 
-  <section class="card" style="margin-top: 20px">
+  <section class="card cups-config-card" style="margin-top: 20px">
     <div class="section-head">
       <div>
         <h2 class="card-title">cupsd.conf 高级编辑</h2>

@@ -36,7 +36,7 @@ onMounted(load)
       <h1 class="admin-title">日志</h1>
       <p class="admin-sub">应用日志与 CUPS error_log</p>
     </div>
-    <button class="btn btn-ghost btn-sm" :disabled="loading" @click="load">刷新</button>
+    <button class="btn btn-ghost btn-sm btn-refresh" :disabled="loading" @click="load">↻ <span class="refresh-label">刷新</span></button>
   </div>
 
   <section class="card">

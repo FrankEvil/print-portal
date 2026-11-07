@@ -120,23 +120,25 @@ type Printer struct {
 	DeviceURI      string `json:"device_uri"`
 	PPDFile        string `json:"ppd_file"`
 	IsDefault      bool   `json:"is_default"`
-	IsShared       bool   `json:"is_shared"`       // allow LAN access
-	AllowDiscovery bool   `json:"allow_discovery"` // advertise via CUPS/DNS-SD
+	IsShared       bool   `json:"is_shared"`        // allow LAN access
+	AllowDiscovery bool   `json:"allow_discovery"`  // advertise via CUPS/DNS-SD
+	AirPrint       bool   `json:"airprint_enabled"` // advertise as AirPrint
 	CreatedAt      string `json:"created_at"`
 	UpdatedAt      string `json:"updated_at"`
 }
 
-const printerColumns = `id, name, model, ppd_queue, raw_queue, device_uri, ppd_file, is_default, is_shared, allow_discovery, created_at, updated_at`
+const printerColumns = `id, name, model, ppd_queue, raw_queue, device_uri, ppd_file, is_default, is_shared, allow_discovery, airprint_enabled, created_at, updated_at`
 
 func scanPrinter(scanner interface{ Scan(...any) error }) (*Printer, error) {
 	var p Printer
-	var isDefault, isShared, allowDiscovery int
-	if err := scanner.Scan(&p.ID, &p.Name, &p.Model, &p.PPDQueue, &p.RAWQueue, &p.DeviceURI, &p.PPDFile, &isDefault, &isShared, &allowDiscovery, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	var isDefault, isShared, allowDiscovery, airPrint int
+	if err := scanner.Scan(&p.ID, &p.Name, &p.Model, &p.PPDQueue, &p.RAWQueue, &p.DeviceURI, &p.PPDFile, &isDefault, &isShared, &allowDiscovery, &airPrint, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		return nil, err
 	}
 	p.IsDefault = isDefault == 1
 	p.IsShared = isShared == 1
 	p.AllowDiscovery = allowDiscovery == 1
+	p.AirPrint = airPrint == 1
 	return &p, nil
 }
 
@@ -186,9 +188,9 @@ func (s *Store) GetPrinterByQueue(queue string) (*Printer, error) {
 
 func (s *Store) CreatePrinter(p *Printer) error {
 	t := now()
-	res, err := s.db.Exec(`INSERT INTO printers(name, model, ppd_queue, raw_queue, device_uri, ppd_file, is_default, is_shared, allow_discovery, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.Name, p.Model, p.PPDQueue, p.RAWQueue, p.DeviceURI, p.PPDFile, boolInt(p.IsDefault), boolInt(p.IsShared), boolInt(p.AllowDiscovery), t, t)
+	res, err := s.db.Exec(`INSERT INTO printers(name, model, ppd_queue, raw_queue, device_uri, ppd_file, is_default, is_shared, allow_discovery, airprint_enabled, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.Name, p.Model, p.PPDQueue, p.RAWQueue, p.DeviceURI, p.PPDFile, boolInt(p.IsDefault), boolInt(p.IsShared), boolInt(p.AllowDiscovery), boolInt(p.AirPrint), t, t)
 	if err != nil {
 		return err
 	}
@@ -198,8 +200,8 @@ func (s *Store) CreatePrinter(p *Printer) error {
 }
 
 func (s *Store) UpdatePrinter(p *Printer) error {
-	_, err := s.db.Exec(`UPDATE printers SET name=?, model=?, ppd_queue=?, raw_queue=?, device_uri=?, ppd_file=?, is_default=?, is_shared=?, allow_discovery=?, updated_at=? WHERE id=?`,
-		p.Name, p.Model, p.PPDQueue, p.RAWQueue, p.DeviceURI, p.PPDFile, boolInt(p.IsDefault), boolInt(p.IsShared), boolInt(p.AllowDiscovery), now(), p.ID)
+	_, err := s.db.Exec(`UPDATE printers SET name=?, model=?, ppd_queue=?, raw_queue=?, device_uri=?, ppd_file=?, is_default=?, is_shared=?, allow_discovery=?, airprint_enabled=?, updated_at=? WHERE id=?`,
+		p.Name, p.Model, p.PPDQueue, p.RAWQueue, p.DeviceURI, p.PPDFile, boolInt(p.IsDefault), boolInt(p.IsShared), boolInt(p.AllowDiscovery), boolInt(p.AirPrint), now(), p.ID)
 	return err
 }
 

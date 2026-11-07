@@ -235,6 +235,23 @@ func (s *Server) handlePrinterAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, "test_failed", err.Error())
 			return
 		}
+		// Keep test pages visible in the same job history as normal prints.
+		job := &storage.Job{
+			PrinterID:   p.ID,
+			Source:      "test",
+			Filename:    "测试页",
+			Copies:      1,
+			PaperSize:   "A4",
+			Duplex:      "one-sided",
+			Orientation: "portrait",
+			ColorMode:   "monochrome",
+			Scaling:     "fit",
+			Status:      "submitted",
+			CupsJobID:   id,
+		}
+		if err := s.store.CreateJob(job); err != nil {
+			s.logger.Printf("record test page job %s: %v", id, err)
+		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "submitted", "cups_job_id": id})
 		return
 	default:

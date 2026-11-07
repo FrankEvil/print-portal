@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/liuzhaojun/print-portal/internal/airprint"
 	"github.com/liuzhaojun/print-portal/internal/api"
 	"github.com/liuzhaojun/print-portal/internal/config"
 	"github.com/liuzhaojun/print-portal/internal/convert"
@@ -69,6 +70,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	jobManager.Start(ctx)
+	airprintManager := airprint.New(store, cfg, logger)
+	go airprintManager.Start(ctx)
 
 	// Best-effort driver replay/refresh on startup.
 	go func() {

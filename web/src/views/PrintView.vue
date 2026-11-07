@@ -12,6 +12,7 @@ const selectedPrinter = ref<number | null>(null)
 const ppdOptions = ref<PPDOption[]>([])
 const file = ref<File | null>(null)
 const nasPath = ref('')
+const nasPicking = ref(false)
 const authMode = ref<'token' | 'fnos'>('token')
 const fileUrl = ref('')
 const dragging = ref(false)
@@ -33,7 +34,11 @@ const form = ref({
 let pollTimer: number | undefined
 
 const nasName = computed(() => nasPath.value.split(/[\\/]/).pop() || '')
+const nasPreviewUrl = computed(() => nasPath.value ? apiUrl(`/api/nas/preview?path=${encodeURIComponent(nasPath.value)}`) : '')
+const isNasPdf = computed(() => nasPath.value.toLowerCase().endsWith('.pdf'))
+const isNasImage = computed(() => ['.jpg', '.jpeg', '.png', '.webp'].some((ext) => nasPath.value.toLowerCase().endsWith(ext)))
 const isPdf = computed(() => file.value?.name.toLowerCase().endsWith('.pdf'))
+const showPageRange = computed(() => !isImage.value && !isNasImage.value)
 const isImage = computed(() => {
   const n = file.value?.name.toLowerCase() || ''
   return ['.jpg', '.jpeg', '.png', '.webp'].some((ext) => n.endsWith(ext))
@@ -107,6 +112,7 @@ async function setFile(f: File | null) {
   if (fileUrl.value) URL.revokeObjectURL(fileUrl.value)
   if (f) nasPath.value = ''
   file.value = f
+  if (f && isImage.value) form.value.page_range = ''
   fileUrl.value = f ? URL.createObjectURL(f) : ''
   pageCount.value = null
   const token = ++pageCountToken
@@ -134,12 +140,15 @@ function clearSource() {
 }
 
 async function pickNasFile() {
-  const sdk = new TrimApp()
-  if (sdk.isStandaloneWeb) {
-    toast.error('请从飞牛应用中心打开后选择 NAS 文件')
-    return
-  }
+  nasPicking.value = true
+  toast.info('正在打开 NAS 文件选择器…')
   try {
+    const sdk = new TrimApp()
+    console.log('[PrintPortal] TrimApp', { isWeb: sdk.isWeb, isStandaloneWeb: sdk.isStandaloneWeb })
+    if (sdk.isStandaloneWeb) {
+      toast.error('请从飞牛应用中心打开后选择 NAS 文件')
+      return
+    }
     const result = await sdk.pickUserFile({
       directory: false,
       multiple: false,
@@ -148,6 +157,7 @@ async function pickNasFile() {
       accept: ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.ps'],
       sidebarGroup: ['myFiles', 'otherShare', 'favorites'],
     })
+    console.log('[PrintPortal] pickUserFile result', result)
     const path = result?.data?.[0]
     if (path) {
       nasPath.value = path
@@ -156,9 +166,35 @@ async function pickNasFile() {
       fileUrl.value = ''
       pageCount.value = null
       toast.success('已从 NAS 选择文件')
+      if (isNasPdf.value) void loadNasPageCount()
+      else if (isNasImage.value) {
+        pageCount.value = 1
+        form.value.page_range = ''
+      }
+    } else {
+      toast.error(`未选择文件${result?.msg ? `：${result.msg}` : ''}`)
     }
   } catch (e) {
+    console.error('[PrintPortal] pickUserFile failed', e)
     toast.error((e as Error).message || '选择 NAS 文件失败')
+  } finally {
+    nasPicking.value = false
+  }
+}
+
+async function loadNasPageCount() {
+  pageCountLoading.value = true
+  const token = ++pageCountToken
+  try {
+    const res = await fetch(nasPreviewUrl.value)
+    if (!res.ok) return
+    const { PDFDocument } = await import('pdf-lib')
+    const doc = await PDFDocument.load(await res.arrayBuffer(), { ignoreEncryption: true })
+    if (token === pageCountToken) pageCount.value = doc.getPageCount()
+  } catch {
+    if (token === pageCountToken) pageCount.value = null
+  } finally {
+    if (token === pageCountToken) pageCountLoading.value = false
   }
 }
 
@@ -311,15 +347,15 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div v-else class="print-layout">
+    <div v-else class="print-layout" :class="{ 'has-preview': file || nasPath }">
       <section class="card">
         <div class="section-head">
           <div>
             <h2 class="card-title">{{ file || nasPath ? '文件预览' : '选择文件' }}</h2>
             <p class="card-desc">支持 PDF、图片、Word / Excel / PPT、PostScript，单次一个文件</p>
           </div>
-          <button v-if="authMode === 'fnos'" class="btn btn-ghost btn-sm" type="button" @click="pickNasFile">
-            从 NAS 选择
+          <button v-if="authMode === 'fnos'" class="btn btn-ghost btn-sm" type="button" :disabled="nasPicking" @click="pickNasFile">
+            {{ nasPicking ? '打开选择器…' : '从 NAS 选择' }}
           </button>
         </div>
 
@@ -341,9 +377,16 @@ onUnmounted(() => {
           <button class="preview-remove" title="移除文件" aria-label="移除文件" @click="clearSource">×</button>
           <div class="preview-head">
             <span class="file-name">{{ nasName }}</span>
-            <span class="file-sub">来自 NAS · 已授权</span>
+            <span class="file-sub">来自 NAS · 已授权<template v-if="pageCount"> · 共 {{ pageCount }} 页</template><template v-else-if="pageCountLoading"> · 读取页数…</template></span>
           </div>
-          <div class="file-card" style="width: 100%; margin-top: 14px">
+          <iframe
+            v-if="isNasPdf"
+            :src="nasPreviewUrl"
+            class="preview-frame"
+            title="PDF 预览"
+          ></iframe>
+          <img v-else-if="isNasImage" :src="nasPreviewUrl" alt="文件预览" class="preview-image" />
+          <div v-else class="file-card" style="width: 100%; margin-top: 14px">
             <div class="file-thumb"><span>NAS</span></div>
             <div class="file-meta">
               <div class="file-name">{{ nasName }}</div>
@@ -392,9 +435,13 @@ onUnmounted(() => {
               </option>
             </select>
           </div>
-          <div class="field">
+          <div v-if="showPageRange" class="field">
             <label>页码范围<span v-if="pageCount" class="field-hint"> 共 {{ pageCount }} 页</span></label>
             <input v-model="form.page_range" class="input" :placeholder="pageRangePlaceholder" />
+          </div>
+          <div v-else class="field full">
+            <label>页码范围</label>
+            <div class="field-hint">图片固定为 1 页，无需设置页码范围</div>
           </div>
           <div class="field">
             <label>份数</label>

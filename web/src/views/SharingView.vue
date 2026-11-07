@@ -65,7 +65,7 @@ async function copy(text: string) {
   }
 }
 
-async function saveSharing(p: SharingPrinter, access: boolean, discovery: boolean) {
+async function saveSharing(p: SharingPrinter, access: boolean, discovery: boolean, airprint = p.airprint_enabled) {
   await api.put(`/api/admin/printers/${encodeURIComponent(p.name)}`, {
     name: p.name,
     model: p.model,
@@ -75,6 +75,7 @@ async function saveSharing(p: SharingPrinter, access: boolean, discovery: boolea
     is_default: p.is_default,
     is_shared: access,
     allow_discovery: discovery && access,
+    airprint_enabled: airprint && access,
   })
   p.is_shared = access
   p.allow_discovery = discovery && access
@@ -103,6 +104,19 @@ async function toggleDiscovery(p: SharingPrinter, event: Event) {
   }
 }
 
+async function toggleAirprint(p: SharingPrinter, event: Event) {
+  if (!p.is_shared) return
+  const checked = (event.target as HTMLInputElement).checked
+  try {
+    await saveSharing(p, true, p.allow_discovery, checked)
+    p.airprint_enabled = checked
+    toast.success(checked ? 'AirPrint 已开启' : 'AirPrint 已关闭')
+  } catch (e) {
+    toast.error((e as Error).message)
+    ;(event.target as HTMLInputElement).checked = !checked
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -112,7 +126,7 @@ onMounted(load)
       <h1 class="admin-title">共享</h1>
       <p class="admin-sub">局域网客户端连接信息与访问地址配置</p>
     </div>
-    <button class="btn btn-ghost btn-sm" :disabled="loading" @click="load">刷新</button>
+    <button class="btn btn-ghost btn-sm btn-refresh" :disabled="loading" @click="load">↻ <span class="refresh-label">刷新</span></button>
   </div>
 
   <section v-if="authMode !== 'fnos'" class="card">
@@ -143,14 +157,20 @@ onMounted(load)
   <details v-for="p in info?.printers || []" :key="p.id" class="card share-printer-card">
     <summary class="share-printer-summary">
       <div class="share-printer-main">
-        <div class="share-printer-title">
-          <span class="share-printer-name">{{ p.name }}</span>
+        <div class="share-printer-identity">
+          <span class="share-printer-icon">P</span>
+          <div class="share-printer-text">
+            <span class="share-printer-name">{{ p.name }}</span>
+            <span class="share-printer-model">{{ prettyModel(p.model) }}</span>
+          </div>
+        </div>
+        <div class="share-printer-tags">
           <StatusBadge :status="p.state" />
           <span v-if="p.is_default" class="status-badge is-neutral">默认</span>
           <span v-if="p.is_shared" class="status-badge is-neutral">允许访问</span>
           <span v-if="p.allow_discovery" class="status-badge is-neutral">允许发现</span>
+          <span v-if="p.airprint_enabled" class="status-badge is-neutral">AirPrint</span>
         </div>
-        <span class="share-printer-model">{{ prettyModel(p.model) }}</span>
       </div>
       <span class="share-expand">展开</span>
     </summary>
@@ -167,6 +187,10 @@ onMounted(load)
             <input type="checkbox" :checked="p.allow_discovery" :disabled="!p.is_shared" @change="toggleDiscovery(p, $event)" />
             允许发现
           </label>
+          <label class="check-line" :style="{ margin: 0, opacity: p.is_shared ? 1 : 0.45 }">
+            <input type="checkbox" :checked="p.airprint_enabled" :disabled="!p.is_shared" @change="toggleAirprint(p, $event)" />
+            AirPrint
+          </label>
         </div>
       </div>
       <p class="share-hint">允许访问：局域网客户端可通过 IPP 网关连接；允许发现：通过 mDNS/Bonjour 广播。关闭访问时发现自动关闭。</p>
@@ -177,9 +201,11 @@ onMounted(load)
             <span class="queue-tag is-ppd">PPD</span>
             <strong>网页打印 / 本地 PPD</strong>
           </div>
-          <code>{{ p.ppd_uri }}</code>
+          <div class="share-url-field">
+            <code>{{ p.ppd_uri }}</code>
+            <button class="share-url-copy" type="button" title="复制地址" aria-label="复制地址" @click="copy(p.ppd_uri)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg></button>
+          </div>
           <div class="share-box-actions">
-            <button class="btn btn-ghost btn-sm" @click="copy(p.ppd_uri)">复制地址</button>
             <span>服务器 PPD 转换 · 支持页码/双面</span>
           </div>
         </div>
@@ -189,9 +215,11 @@ onMounted(load)
             <span class="queue-tag is-raw">RAW</span>
             <strong>本地 RAW 客户端</strong>
           </div>
-          <code>{{ p.raw_uri }}</code>
+          <div class="share-url-field">
+            <code>{{ p.raw_uri }}</code>
+            <button class="share-url-copy" type="button" title="复制地址" aria-label="复制地址" @click="copy(p.raw_uri)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg></button>
+          </div>
           <div class="share-box-actions">
-            <button class="btn btn-ghost btn-sm" @click="copy(p.raw_uri)">复制地址</button>
             <span>需本地驱动 · 原样透传</span>
           </div>
         </div>

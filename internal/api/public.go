@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -184,6 +185,45 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		"filename": filename,
 		"printer":  p.Name,
 	})
+}
+
+func (s *Server) handleNASPreview(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimSpace(r.URL.Query().Get("path"))
+	if raw == "" {
+		writeError(w, http.StatusBadRequest, "invalid_path", "path is required")
+		return
+	}
+	abs, err := filepath.Abs(filepath.Clean(raw))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_path", "invalid path")
+		return
+	}
+	real, err := filepath.EvalSymlinks(abs)
+	if err != nil || !s.allowedNASPath(real) {
+		writeError(w, http.StatusForbidden, "path_forbidden", "path is outside the configured NAS roots")
+		return
+	}
+	info, err := os.Stat(real)
+	if err != nil || !info.Mode().IsRegular() {
+		writeError(w, http.StatusNotFound, "not_found", "file not found")
+		return
+	}
+	ext := strings.ToLower(filepath.Ext(real))
+	if !allowedExt[ext] {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_file_type", "unsupported file type")
+		return
+	}
+	f, err := os.Open(real)
+	if err != nil {
+		writeError(w, http.StatusForbidden, "read_failed", "cannot read file")
+		return
+	}
+	defer f.Close()
+	if ct := mime.TypeByExtension(ext); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	w.Header().Set("Content-Disposition", "inline")
+	http.ServeContent(w, r, filepath.Base(real), info.ModTime(), f)
 }
 
 func (s *Server) handlePrintNAS(w http.ResponseWriter, r *http.Request) {

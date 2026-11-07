@@ -75,6 +75,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/printers/{id}/ppd-options", s.handlePublicPPDOptions)
 	s.mux.HandleFunc("POST /api/print", s.handlePrint)
 	s.mux.HandleFunc("POST /api/print/nas", s.handlePrintNAS)
+	s.mux.HandleFunc("GET /api/nas/preview", s.handleNASPreview)
 	s.mux.HandleFunc("GET /api/jobs", s.handleListJobs)
 	s.mux.HandleFunc("GET /api/jobs/{id}", s.handleGetJob)
 	s.mux.HandleFunc("GET /api/jobs/{id}/preview", s.handleJobPreview)
@@ -280,6 +281,8 @@ func (s *Server) serveStaticFile(w http.ResponseWriter, r *http.Request, path, p
 		body = bytes.ReplaceAll(body, []byte(`"/assets/`), []byte(`"`+prefix+`/assets/`))
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
 	_, _ = w.Write(body)
 }
 

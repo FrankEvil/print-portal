@@ -32,8 +32,9 @@ type CreateInput struct {
 	DeviceURI      string `json:"device_uri"`
 	PPDFile        string `json:"ppd_file"`
 	IsDefault      bool   `json:"is_default"`
-	IsShared       bool   `json:"is_shared"`       // allow LAN access
-	AllowDiscovery bool   `json:"allow_discovery"` // advertise via DNS-SD
+	IsShared       bool   `json:"is_shared"`        // allow LAN access
+	AllowDiscovery bool   `json:"allow_discovery"`  // advertise via DNS-SD
+	AirPrint       bool   `json:"airprint_enabled"` // advertise as AirPrint
 }
 
 func (in CreateInput) validate() error {
@@ -132,6 +133,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*storage.Printer,
 		IsDefault:      in.IsDefault,
 		IsShared:       in.IsShared,
 		AllowDiscovery: in.AllowDiscovery,
+		AirPrint:       in.AirPrint && in.IsShared,
 	}
 	if err := s.store.CreatePrinter(p); err != nil {
 		_ = s.cups.DeletePrinter(ctx, in.PPDQueue)
@@ -181,6 +183,7 @@ func (s *Service) Update(ctx context.Context, name string, in CreateInput) (*sto
 	discoveryChanged := p.AllowDiscovery != in.AllowDiscovery
 	p.IsShared = in.IsShared
 	p.AllowDiscovery = in.AllowDiscovery
+	p.AirPrint = in.AirPrint && in.IsShared
 	p.IsDefault = in.IsDefault
 	if err := s.store.UpdatePrinter(p); err != nil {
 		return nil, err

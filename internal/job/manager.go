@@ -365,6 +365,18 @@ func queueOfJob(cupsID string) string {
 	return cupsID
 }
 
+func recentCUPSJob(created string, maxAge time.Duration) bool {
+	created = strings.TrimSpace(created)
+	if created == "" {
+		return false
+	}
+	t, err := time.Parse("Mon Jan 2 15:04:05 2006", created)
+	if err != nil {
+		return false
+	}
+	return time.Since(t) <= maxAge
+}
+
 func (m *Manager) importLocalJobs(active, completed []cups.Job) {
 	printers, err := m.store.ListPrinters()
 	if err != nil {
@@ -375,7 +387,7 @@ func (m *Manager) importLocalJobs(active, completed []cups.Job) {
 		queueToPrinter[printers[i].PPDQueue] = &printers[i]
 		queueToPrinter[printers[i].RAWQueue] = &printers[i]
 	}
-	importOne := func(cj cups.Job, status string) {
+	importOne := func(cj cups.Job, status, fallbackName string) {
 		// Empty jobs are CUPS validation/retry artifacts, not real print jobs.
 		if cj.Size <= 0 {
 			return
@@ -392,6 +404,8 @@ func (m *Manager) importLocalJobs(active, completed []cups.Job) {
 			if existing.Source == "local" {
 				if storedName, err := m.store.GetLocalJobName(cj.ID); err == nil && storedName != "" && existing.Filename != storedName {
 					_ = m.store.UpdateJobFilename(existing.ID, storedName)
+				} else if fallbackName != "" && existing.Filename == existing.CupsJobID {
+					_ = m.store.UpdateJobFilename(existing.ID, fallbackName)
 				}
 				if existing.Status != status && status != "" {
 					_ = m.store.UpdateJobStatus(existing.ID, status, "")
@@ -404,6 +418,9 @@ func (m *Manager) importLocalJobs(active, completed []cups.Job) {
 			if storedName, err := m.store.GetLocalJobName(cj.ID); err == nil {
 				filename = storedName
 			}
+		}
+		if filename == "" {
+			filename = fallbackName
 		}
 		if filename == "" {
 			filename = cj.ID
@@ -422,7 +439,7 @@ func (m *Manager) importLocalJobs(active, completed []cups.Job) {
 		}
 	}
 	for _, cj := range active {
-		importOne(cj, "queued")
+		importOne(cj, "queued", "")
 	}
 	// Completed local jobs are historical CUPS records and must not be
 	// imported as new application tasks. Only refresh rows that were already
@@ -435,17 +452,22 @@ func (m *Manager) importLocalJobs(active, completed []cups.Job) {
 		if printer == nil {
 			continue
 		}
+		// Completed CUPS history is historical by definition. Import only
+		// recent completions so old retry/validation artifacts do not flood
+		// the task list, while AirPrint/ipptool jobs submitted just now still
+		// become visible.
+		if !recentCUPSJob(cj.Created, 10*time.Minute) {
+			continue
+		}
 		name, _ := m.store.GetLocalJobName(cj.ID)
 		if name == "" {
-			// Without a captured client document name, completed CUPS history
-			// cannot be distinguished from validation/retry artifacts.
-			continue
+			name = "AirPrint / IPP 打印"
 		}
 		recent, err := m.store.HasRecentLocalJob(printer.ID, cj.User, name, time.Now().Add(-10*time.Minute).Format(time.RFC3339))
 		if err != nil || recent {
 			continue
 		}
-		importOne(cj, "completed")
+		importOne(cj, "completed", name)
 	}
 }
 

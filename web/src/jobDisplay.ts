@@ -14,6 +14,11 @@ const scalingLabels: Record<string, string> = {
 }
 
 export function formatJobParams(job: Job): string {
+  if (job.source === 'test') {
+    const parts = ['测试页', `${job.copies || 1} 份`, job.paper_size || 'A4']
+    if (job.duplex) parts.push(duplexLabels[job.duplex] || job.duplex)
+    return parts.join(' · ')
+  }
   if (job.source !== 'web') {
     return job.cups_user ? `本地直连 · ${job.cups_user}` : '本地直连'
   }

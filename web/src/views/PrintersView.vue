@@ -31,14 +31,14 @@ const useEverywhere = ref(false)
 const uploading = ref(false)
 const driverInput = ref<HTMLInputElement | null>(null)
 const saving = ref(false)
-const wizardForm = ref({ name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true, allow_discovery: false })
+const wizardForm = ref({ name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true, allow_discovery: false, airprint_enabled: false })
 
 // Edit dialog: name, driver, default/share only
 const editingPrinter = ref<AdminPrinter | null>(null)
 const editSaving = ref(false)
 const editUploading = ref(false)
 const editDriverInput = ref<HTMLInputElement | null>(null)
-const editForm = ref({ name: '', model: '', is_default: false, is_shared: true, allow_discovery: false })
+const editForm = ref({ name: '', model: '', is_default: false, is_shared: true, allow_discovery: false, airprint_enabled: false })
 const editBrand = ref('')
 const rowMenu = ref<{ printer: AdminPrinter; top: number; left: number } | null>(null)
 const maintenancePrinter = ref<AdminPrinter | null>(null)
@@ -127,11 +127,17 @@ const editModelSelectOptions = computed(() => {
 })
 
 function onWizardAccessChange() {
-  if (!wizardForm.value.is_shared) wizardForm.value.allow_discovery = false
+  if (!wizardForm.value.is_shared) {
+    wizardForm.value.allow_discovery = false
+    wizardForm.value.airprint_enabled = false
+  }
 }
 
 function onEditAccessChange() {
-  if (!editForm.value.is_shared) editForm.value.allow_discovery = false
+  if (!editForm.value.is_shared) {
+    editForm.value.allow_discovery = false
+    editForm.value.airprint_enabled = false
+  }
 }
 
 function onWizardBrandChange() {
@@ -254,7 +260,7 @@ function openWizard() {
   selectedBrand.value = ''
   selectedModel.value = ''
   useEverywhere.value = false
-  wizardForm.value = { name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true, allow_discovery: false }
+  wizardForm.value = { name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true, allow_discovery: false, airprint_enabled: false }
   models.value = []
   modelTotal.value = 0
   // Local USB scan is fast; start LAN mDNS scan after it finishes.
@@ -392,6 +398,7 @@ async function savePrinter() {
       is_default: wizardForm.value.is_default,
       is_shared: wizardForm.value.is_shared,
       allow_discovery: wizardForm.value.allow_discovery,
+      airprint_enabled: wizardForm.value.airprint_enabled,
     })
     toast.success('打印机已创建')
     showWizard.value = false
@@ -412,7 +419,7 @@ function syncEditBrand() {
 
 function openEdit(p: AdminPrinter) {
   editingPrinter.value = p
-  editForm.value = { name: p.name, model: p.model, is_default: p.is_default, is_shared: p.is_shared, allow_discovery: p.allow_discovery }
+  editForm.value = { name: p.name, model: p.model, is_default: p.is_default, is_shared: p.is_shared, allow_discovery: p.allow_discovery, airprint_enabled: p.airprint_enabled }
   editBrand.value = ''
   if (!models.value.length) loadModels().then(syncEditBrand)
   else syncEditBrand()
@@ -434,6 +441,7 @@ async function saveEdit() {
       is_default: editForm.value.is_default,
       is_shared: editForm.value.is_shared,
       allow_discovery: editForm.value.allow_discovery,
+      airprint_enabled: editForm.value.airprint_enabled,
     })
     toast.success('打印机已更新')
     editingPrinter.value = null
@@ -674,7 +682,7 @@ onUnmounted(() => {
   <section class="card">
     <div v-if="!printers.length" class="empty">还没有打印机，点击右上角「添加打印机」开始</div>
     <div v-else class="table-wrap">
-      <table class="table">
+      <table class="table printers-table">
         <thead>
           <tr><th>名称</th><th>队列</th><th>设备</th><th>状态</th><th>操作</th></tr>
         </thead>
@@ -684,18 +692,18 @@ onUnmounted(() => {
               <strong>{{ p.name }}</strong>
               <div class="model-label">{{ prettyModel(p) }}<span v-if="p.is_default"> · 默认</span></div>
             </td>
-            <td class="queue-cell">
+            <td class="queue-cell" data-label="队列">
               <div class="queue-line"><span class="queue-tag is-ppd">PPD</span><span class="queue-name">{{ p.ppd_queue }}</span></div>
               <div class="queue-line"><span class="queue-tag is-raw">RAW</span><span class="queue-name">{{ p.raw_queue }}</span></div>
             </td>
-            <td><div class="device-summary" :title="p.device_uri">{{ prettyDevice(p.device_uri) }}</div></td>
-            <td>
+            <td data-label="设备"><div class="device-summary" :title="p.device_uri">{{ prettyDevice(p.device_uri) }}</div></td>
+            <td data-label="状态">
               <div class="status-cell">
                 <StatusBadge :status="p.state" />
                 <span class="queue-count">队列 {{ p.queue_length }}</span>
               </div>
             </td>
-            <td>
+            <td data-label="操作">
               <div class="row-actions">
                 <button class="btn btn-ghost btn-sm" @click="openEdit(p)">编辑</button>
                 <button class="btn btn-ghost btn-sm" @click="action(p, 'test')">测试页</button>
@@ -709,6 +717,46 @@ onUnmounted(() => {
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <div v-if="printers.length" class="printer-mobile-list">
+      <article v-for="p in printers" :key="p.id" class="printer-mobile-card">
+        <div class="printer-mobile-head">
+          <div class="printer-mobile-title">
+            <strong>{{ p.name }}</strong>
+            <small>{{ prettyModel(p) }}<span v-if="p.is_default"> · 默认</span></small>
+          </div>
+          <StatusBadge :status="p.state" />
+        </div>
+
+        <div class="printer-mobile-details">
+          <div class="printer-detail">
+            <dt>队列</dt>
+            <dd>
+              <div class="printer-queue-line"><span class="queue-tag is-ppd">PPD</span><span>{{ p.ppd_queue }}</span></div>
+              <div class="printer-queue-line"><span class="queue-tag is-raw">RAW</span><span>{{ p.raw_queue }}</span></div>
+            </dd>
+          </div>
+          <div class="printer-detail">
+            <dt>设备</dt>
+            <dd>{{ prettyDevice(p.device_uri) }}</dd>
+          </div>
+          <div class="printer-detail">
+            <dt>状态</dt>
+            <dd>队列 {{ p.queue_length }}</dd>
+          </div>
+        </div>
+
+        <div class="printer-mobile-actions">
+          <button class="btn btn-ghost btn-sm" @click="openEdit(p)">编辑</button>
+          <button class="btn btn-ghost btn-sm" @click="action(p, 'test')">测试页</button>
+          <button v-if="p.state === 'stopped'" class="btn btn-ghost btn-sm" @click="action(p, 'resume')">恢复</button>
+          <button v-else class="btn btn-ghost btn-sm" @click="action(p, 'pause')">暂停</button>
+          <button v-if="p.accepting" class="btn btn-ghost btn-sm" @click="action(p, 'reject')">拒绝任务</button>
+          <button v-else class="btn btn-ghost btn-sm" @click="action(p, 'accept')">接受任务</button>
+          <button class="row-menu-trigger" data-row-menu title="更多操作" @click.stop="toggleRowMenu(p, $event)">⋮</button>
+        </div>
+      </article>
     </div>
   </section>
 
@@ -859,6 +907,7 @@ onUnmounted(() => {
             <div class="field"><label><input v-model="wizardForm.is_default" type="checkbox" /> 设为默认打印机</label></div>
             <div class="field"><label><input v-model="wizardForm.is_shared" type="checkbox" @change="onWizardAccessChange" /> 允许局域网访问</label></div>
             <div class="field"><label :style="{ opacity: wizardForm.is_shared ? 1 : 0.45 }"><input v-model="wizardForm.allow_discovery" type="checkbox" :disabled="!wizardForm.is_shared" /> 允许被发现</label></div>
+            <div class="field"><label :style="{ opacity: wizardForm.is_shared ? 1 : 0.45 }"><input v-model="wizardForm.airprint_enabled" type="checkbox" :disabled="!wizardForm.is_shared" /> AirPrint 广播</label></div>
           </div>
         </div>
 
@@ -927,9 +976,12 @@ onUnmounted(() => {
 
         <section class="edit-section">
           <h3 class="wizard-title" style="margin-bottom: 10px">选项</h3>
-          <label class="check-line"><input v-model="editForm.is_default" type="checkbox" /> 设为默认打印机</label>
-          <label class="check-line"><input v-model="editForm.is_shared" type="checkbox" @change="onEditAccessChange" /> 允许局域网访问</label>
-          <label class="check-line" :style="{ opacity: editForm.is_shared ? 1 : 0.45 }"><input v-model="editForm.allow_discovery" type="checkbox" :disabled="!editForm.is_shared" /> 允许被发现</label>
+          <div class="edit-options-grid">
+            <label class="check-line"><input v-model="editForm.is_default" type="checkbox" /> 设为默认打印机</label>
+            <label class="check-line"><input v-model="editForm.is_shared" type="checkbox" @change="onEditAccessChange" /> 允许局域网访问</label>
+            <label class="check-line" :style="{ opacity: editForm.is_shared ? 1 : 0.45 }"><input v-model="editForm.allow_discovery" type="checkbox" :disabled="!editForm.is_shared" /> 允许被发现</label>
+            <label class="check-line" :style="{ opacity: editForm.is_shared ? 1 : 0.45 }"><input v-model="editForm.airprint_enabled" type="checkbox" :disabled="!editForm.is_shared" /> AirPrint 广播</label>
+          </div>
         </section>
 
         <div class="modal-foot">

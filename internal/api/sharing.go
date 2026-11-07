@@ -17,6 +17,7 @@ type sharingPrinter struct {
 	IsDefault      bool   `json:"is_default"`
 	IsShared       bool   `json:"is_shared"`
 	AllowDiscovery bool   `json:"allow_discovery"`
+	AirPrint       bool   `json:"airprint_enabled"`
 	DeviceURI      string `json:"device_uri"`
 	PPDQueue       string `json:"ppd_queue"`
 	RAWQueue       string `json:"raw_queue"`
@@ -69,7 +70,7 @@ func (s *Server) handleSharing(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, sharingPrinter{
 			ID: p.ID, Name: p.Name, Model: p.Model, State: state,
-			IsDefault: p.IsDefault, IsShared: p.IsShared, AllowDiscovery: p.AllowDiscovery, DeviceURI: p.DeviceURI,
+			IsDefault: p.IsDefault, IsShared: p.IsShared, AllowDiscovery: p.AllowDiscovery, AirPrint: p.AirPrint, DeviceURI: p.DeviceURI,
 			PPDQueue: p.PPDQueue, RAWQueue: p.RAWQueue,
 			PPDURI: ppdURI, RAWURI: rawURI,
 			WebURL: fmt.Sprintf("http://%s:%s/", host, webPort),
