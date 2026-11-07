@@ -355,6 +355,13 @@ func (s *Store) UpdateJobStatus(id int64, status, errMsg string) error {
 	return err
 }
 
+// UpdateJobStatusUnlessHeld updates an active job without overwriting a
+// concurrent explicit pause (held) written by the admin API.
+func (s *Store) UpdateJobStatusUnlessHeld(id int64, status, errMsg string) error {
+	_, err := s.db.Exec(`UPDATE jobs SET status=?, error_message=?, updated_at=? WHERE id=? AND status NOT IN ('held','paused')`, status, errMsg, now(), id)
+	return err
+}
+
 // ClearFinishedJobs removes completed/failed/cancelled job history while
 // keeping active jobs and their state intact.
 func (s *Store) ClearFinishedJobs() (int64, error) {

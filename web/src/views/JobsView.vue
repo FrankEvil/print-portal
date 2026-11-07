@@ -92,7 +92,7 @@ onUnmounted(() => {
         <option value="converting">转换中</option>
         <option value="submitted">已提交</option>
         <option value="queued">排队中</option>
-        <option value="held">已暂停</option>
+        <option value="paused">已暂停</option>
         <option value="printing">打印中</option>
         <option value="completed">已完成</option>
         <option value="failed">失败</option>
@@ -142,10 +142,10 @@ onUnmounted(() => {
             <td data-label="操作">
               <div style="display: flex; gap: 6px; flex-wrap: wrap">
                 <button v-if="j.source === 'web' && ['submitted','queued','printing','completed','failed'].includes(j.status)" class="btn btn-ghost btn-sm" @click="openJobFile(j.id)">查看文件</button>
-                <button v-if="['pending','converting','submitted','queued','printing','held'].includes(j.status)" class="btn btn-ghost btn-sm" @click="act(j, 'cancel')">取消</button>
+                <button v-if="['pending','converting','submitted','queued','printing','held','paused'].includes(j.status)" class="btn btn-ghost btn-sm" @click="act(j, 'cancel')">取消</button>
                 <button v-if="['failed','cancelled'].includes(j.status) && j.source === 'web'" class="btn btn-ghost btn-sm" @click="act(j, 'retry')">重试</button>
                 <button v-if="j.cups_job_id && ['queued','printing'].includes(j.status)" class="btn btn-ghost btn-sm" @click="act(j, 'hold')">暂停</button>
-                <button v-if="j.cups_job_id && j.status === 'held'" class="btn btn-ghost btn-sm" @click="act(j, 'release')">恢复</button>
+                <button v-if="j.cups_job_id && j.status === 'paused'" class="btn btn-ghost btn-sm" @click="act(j, 'release')">恢复</button>
                 <button v-if="j.cups_job_id && ['failed','completed'].includes(j.status)" class="btn btn-ghost btn-sm" @click="act(j, 'restart')">重新打印</button>
               </div>
             </td>

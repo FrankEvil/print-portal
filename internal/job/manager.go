@@ -338,17 +338,32 @@ func (m *Manager) syncStatuses(ctx context.Context) {
 			if j.CupsJobID == "" {
 				continue
 			}
+			// The sync snapshot can be older than a hold/release request.
+			// Never let a stale queued snapshot overwrite an explicit paused
+			// state written by the API in the meantime.
+			if fresh, err := m.store.GetJob(j.ID); err == nil && fresh != nil && fresh.Status == "held" && j.Status != "held" {
+				continue
+			}
 			switch j.Status {
-			case "submitted", "queued", "printing", "held":
+			case "submitted", "queued", "printing":
 				if _, ok := activeIDs[j.CupsJobID]; ok {
 					if printing[queueOfJob(j.CupsJobID)] == j.CupsJobID {
 						j.Status = "printing"
 					} else {
 						j.Status = "queued"
 					}
-					_ = m.store.UpdateJobStatus(j.ID, j.Status, "")
+					_ = m.store.UpdateJobStatusUnlessHeld(j.ID, j.Status, "")
 				} else if _, ok := completedIDs[j.CupsJobID]; ok {
 					_ = m.store.UpdateJobStatus(j.ID, "completed", "")
+				}
+			case "held":
+				// A held job remains held while CUPS still has it in the
+				// active queue; do not let the generic queued/printing sync
+				// overwrite the explicit paused state.
+				if _, ok := completedIDs[j.CupsJobID]; ok {
+					_ = m.store.UpdateJobStatus(j.ID, "completed", "")
+				} else if _, ok := activeIDs[j.CupsJobID]; !ok {
+					_ = m.store.UpdateJobStatus(j.ID, "cancelled", "")
 				}
 			}
 		}
@@ -407,8 +422,17 @@ func (m *Manager) importLocalJobs(active, completed []cups.Job) {
 				} else if fallbackName != "" && existing.Filename == existing.CupsJobID {
 					_ = m.store.UpdateJobFilename(existing.ID, fallbackName)
 				}
+				if (existing.Status == "held" || existing.Status == "paused") && status == "queued" {
+					// Keep an explicitly paused job paused while the CUPS
+					// queue still lists it as active.
+					return
+				}
 				if existing.Status != status && status != "" {
-					_ = m.store.UpdateJobStatus(existing.ID, status, "")
+					if status == "queued" || status == "printing" {
+						_ = m.store.UpdateJobStatusUnlessHeld(existing.ID, status, "")
+					} else {
+						_ = m.store.UpdateJobStatus(existing.ID, status, "")
+					}
 				}
 			}
 			return
