@@ -93,7 +93,7 @@ docker compose -f docker-compose.standalone.yml up -d
 首次启动会拉取：
 
 ```text
-ghcr.io/frankevil/print-portal:0.2.0
+ghcr.io/frankevil/print-portal:0.2.1
 ```
 
 更新：

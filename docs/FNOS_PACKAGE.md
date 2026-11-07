@@ -51,7 +51,7 @@ ghcr.io/frankevil/print-portal:${VERSION}
 docker buildx build \
   --platform linux/amd64 \
   -f deployments/Dockerfile \
-  -t ghcr.io/<你的 GitHub 用户名>/print-portal:0.2.0 \
+  -t ghcr.io/<你的 GitHub 用户名>/print-portal:0.2.1 \
   --push .
 ```
 
@@ -74,14 +74,14 @@ cp -a deployments/fnos-app/scripts/apps/print-portal /path/to/fnos-apps/scripts/
 ```bash
 cd /path/to/fnos-apps
 
-VERSION=0.2.0 bash scripts/apps/print-portal/build.sh
-bash scripts/build-fpk.sh apps/print-portal app.tgz 0.2.0 x86
+VERSION=0.2.1 bash scripts/apps/print-portal/build.sh
+bash scripts/build-fpk.sh apps/print-portal app.tgz 0.2.1 x86
 ```
 
 生成：
 
 ```text
-print-portal_0.2.0_x86.fpk
+print-portal_0.2.1_x86.fpk
 ```
 
 ## 5. fnOS 应用包注意事项
@@ -96,7 +96,7 @@ print-portal_0.2.0_x86.fpk
 
 ## 6. 当前本地测试包
 
-本仓库 `dist/print-portal_0.2.0_x86.fpk` 是当前测试包，镜像地址为 `ghcr.io/frankevil/print-portal:0.2.0`。
+本仓库 `dist/print-portal_0.2.1_x86.fpk` 是当前测试包，镜像地址为 `ghcr.io/frankevil/print-portal:0.2.1`。
 
 正式上架前请完成：
 
@@ -115,11 +115,11 @@ print-portal_0.2.0_x86.fpk
 .github/workflows/docker-publish.yml
 ```
 
-推送 `main` 或 tag `v0.2.0` 后，会在 GitHub Actions 中构建并推送：
+推送 `main` 或 tag `v0.2.1` 后，会在 GitHub Actions 中构建并推送：
 
 ```text
 ghcr.io/frankevil/print-portal:latest
-ghcr.io/frankevil/print-portal:0.2.0
+ghcr.io/frankevil/print-portal:0.2.1
 ghcr.io/frankevil/print-portal:sha-<commit>
 ```
 
