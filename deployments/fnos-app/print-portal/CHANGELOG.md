@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- 完善内置 mDNS：网卡/IP 变化、CUPS 状态联动、30 秒抖动缓冲
+
 ## 0.2.1
 
 - 移除容器内 Avahi/D-Bus，仅使用内置 Go mDNS

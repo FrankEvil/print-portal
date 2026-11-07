@@ -15,101 +15,156 @@ import (
 
 	"github.com/grandcat/zeroconf"
 	"github.com/liuzhaojun/print-portal/internal/config"
+	"github.com/liuzhaojun/print-portal/internal/cups"
 	"github.com/liuzhaojun/print-portal/internal/storage"
+)
+
+const (
+	syncInterval  = 5 * time.Second
+	unhealthyWait = 30 * time.Second
 )
 
 type Manager struct {
 	store  *storage.Store
 	cfg    config.Config
+	cups   *cups.Client
 	logger *log.Logger
 
-	mu       sync.Mutex
-	services map[int64][]*zeroconf.Server
+	mu             sync.Mutex
+	services       map[int64]*published
+	unhealthySince map[int64]time.Time
+	lanIP          string
+	host           string
 }
 
-func New(store *storage.Store, cfg config.Config, logger *log.Logger) *Manager {
-	return &Manager{store: store, cfg: cfg, logger: logger, services: map[int64][]*zeroconf.Server{}}
+type published struct {
+	servers     []*zeroconf.Server
+	fingerprint string
+	text        []string
+}
+
+func New(store *storage.Store, cfg config.Config, cupsClient *cups.Client, logger *log.Logger) *Manager {
+	host := strings.TrimSpace(os.Getenv("HOSTNAME"))
+	if got, err := os.Hostname(); err == nil && strings.TrimSpace(got) != "" {
+		host = strings.TrimSpace(got)
+	}
+	if host == "" {
+		host = "print-portal"
+	}
+	host = strings.TrimSuffix(strings.TrimSuffix(host, "."), ".local")
+	return &Manager{
+		store: store, cfg: cfg, cups: cupsClient, logger: logger,
+		services: map[int64]*published{}, unhealthySince: map[int64]time.Time{}, host: host,
+	}
 }
 
 func (m *Manager) Start(ctx context.Context) {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(syncInterval)
 	defer ticker.Stop()
-	m.sync()
+	m.sync(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			m.stopAll()
 			return
 		case <-ticker.C:
-			m.sync()
+			m.sync(ctx)
 		}
 	}
 }
 
-func (m *Manager) sync() {
+func (m *Manager) sync(ctx context.Context) {
+	ip := m.cfg.PublicHost
+	if strings.TrimSpace(ip) == "" {
+		ip = detectLANIP()
+	}
+	if ip == "" {
+		m.logger.Printf("airprint: cannot determine LAN IP")
+		return
+	}
+
+	// A network change invalidates every existing mDNS registration.
+	m.mu.Lock()
+	if m.lanIP != "" && m.lanIP != ip {
+		m.stopAllLocked()
+		m.logger.Printf("airprint: LAN IP changed %s -> %s; rebroadcasting", m.lanIP, ip)
+	}
+	m.lanIP = ip
+	m.mu.Unlock()
+
 	printers, err := m.store.ListPrinters()
 	if err != nil {
 		m.logger.Printf("airprint: list printers: %v", err)
 		return
 	}
-	desired := map[int64]storage.Printer{}
+	statuses, err := m.cups.ListPrinters(ctx)
+	if err != nil {
+		// Keep the last known services through a transient CUPS restart.
+		m.logger.Printf("airprint: CUPS status unavailable: %v", err)
+		return
+	}
+	byQueue := map[string]cups.PrinterStatus{}
+	for _, st := range statuses {
+		byQueue[st.Name] = st
+	}
+
+	now := time.Now()
+	wanted := map[int64]storage.Printer{}
 	for _, p := range printers {
-		if p.IsShared && p.AirPrint && strings.TrimSpace(p.PPDQueue) != "" {
-			desired[p.ID] = p
+		if !p.IsShared || !p.AirPrint || strings.TrimSpace(p.PPDQueue) == "" {
+			continue
+		}
+		st, ok := byQueue[p.PPDQueue]
+		healthy := ok && st.State != "stopped" && st.Accepting
+		if healthy {
+			delete(m.unhealthySince, p.ID)
+			wanted[p.ID] = p
+			continue
+		}
+		if _, exists := m.unhealthySince[p.ID]; !exists {
+			m.unhealthySince[p.ID] = now
+		}
+		if now.Sub(m.unhealthySince[p.ID]) < unhealthyWait {
+			// Keep advertising during short printer/CUPS hiccups.
+			wanted[p.ID] = p
 		}
 	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for id, servers := range m.services {
-		if _, ok := desired[id]; !ok {
-			stopServers(servers)
+	for id, svc := range m.services {
+		if _, ok := wanted[id]; !ok {
+			stopServers(svc.servers)
 			delete(m.services, id)
 			m.logger.Printf("airprint: stopped printer %d", id)
 		}
 	}
-	for id, p := range desired {
-		if _, ok := m.services[id]; ok {
-			continue
+	for id, p := range wanted {
+		st := byQueue[p.PPDQueue]
+		text := txtRecords(p, st)
+		fp := fingerprint(p, m.lanIP, m.host, ippPort(m.cfg.IPPAddr), text)
+		if svc, ok := m.services[id]; ok {
+			if svc.fingerprint == fp {
+				continue
+			}
+			stopServers(svc.servers)
+			delete(m.services, id)
+			m.logger.Printf("airprint: configuration changed for %s; re-registering", p.Name)
 		}
-		servers, err := m.publish(p)
+		servers, err := m.publish(p, m.lanIP, m.host, text)
 		if err != nil {
 			m.logger.Printf("airprint: publish %s: %v", p.Name, err)
 			continue
 		}
-		m.services[id] = servers
-		m.logger.Printf("airprint: published %s", p.Name)
+		m.services[id] = &published{servers: servers, fingerprint: fp, text: text}
+		m.logger.Printf("airprint: published %s (state=%s)", p.Name, st.State)
 	}
 }
 
-func (m *Manager) publish(p storage.Printer) ([]*zeroconf.Server, error) {
+func (m *Manager) publish(p storage.Printer, ip, host string, text []string) ([]*zeroconf.Server, error) {
 	port := ippPort(m.cfg.IPPAddr)
-	host := os.Getenv("HOSTNAME")
-	if host == "" {
-		host, _ = os.Hostname()
-	}
-	if host == "" {
-		host = "print-portal"
-	}
-	host = strings.TrimSuffix(strings.TrimSuffix(host, "."), ".local")
-	ip := m.cfg.PublicHost
-	if ip == "" {
-		ip = detectLANIP()
-	}
-	if ip == "" {
-		return nil, fmt.Errorf("cannot determine LAN IP")
-	}
 	ifaces := interfacesForIP(ip)
 	instance := fmt.Sprintf("AirPrint %s @ %s", p.Name, host)
-	text := []string{
-		"txtvers=1",
-		"qtotal=1",
-		"rp=printers/" + p.PPDQueue,
-		"pdl=application/pdf,image/urf,image/jpeg,image/png",
-		"URF=none",
-		"product=(Print Portal)",
-		"note=" + p.Name,
-		"printer-state=3",
-	}
 	var servers []*zeroconf.Server
 	for _, typ := range []string{"_ipp._tcp", "_universal._sub._ipp._tcp"} {
 		s, err := zeroconf.RegisterProxy(instance, typ, "local", port, host, []string{ip}, text, ifaces)
@@ -121,6 +176,27 @@ func (m *Manager) publish(p storage.Printer) ([]*zeroconf.Server, error) {
 		servers = append(servers, s)
 	}
 	return servers, nil
+}
+
+func txtRecords(p storage.Printer, st cups.PrinterStatus) []string {
+	state := "3"
+	if st.State == "stopped" {
+		state = "5"
+	}
+	return []string{
+		"txtvers=1",
+		"qtotal=1",
+		"rp=printers/" + p.PPDQueue,
+		"pdl=application/pdf,image/urf,image/jpeg,image/png",
+		"URF=none",
+		"product=(Print Portal)",
+		"note=" + p.Name,
+		"printer-state=" + state,
+	}
+}
+
+func fingerprint(p storage.Printer, ip, host string, port int, text []string) string {
+	return fmt.Sprintf("%d|%s|%s|%s|%d|%s", p.ID, p.Name, p.PPDQueue, ip, port, strings.Join(text, "\x1f"))
 }
 
 func ippPort(addr string) int {
@@ -194,11 +270,15 @@ func stopServers(servers []*zeroconf.Server) {
 	}
 }
 
+func (m *Manager) stopAllLocked() {
+	for id, svc := range m.services {
+		stopServers(svc.servers)
+		delete(m.services, id)
+	}
+}
+
 func (m *Manager) stopAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for id, servers := range m.services {
-		stopServers(servers)
-		delete(m.services, id)
-	}
+	m.stopAllLocked()
 }

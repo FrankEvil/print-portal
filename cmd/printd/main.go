@@ -70,7 +70,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	jobManager.Start(ctx)
-	airprintManager := airprint.New(store, cfg, logger)
+	airprintManager := airprint.New(store, cfg, cupsClient, logger)
 	go airprintManager.Start(ctx)
 
 	// Best-effort driver replay/refresh on startup.
