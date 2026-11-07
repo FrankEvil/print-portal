@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.8
+
+- 修复 fnOS 桌面图标不显示：appname 与安装目录名统一为 print-portal
+
 ## 0.2.7
 
 - 修复 fnOS 桌面图标不显示：图标改用 images/icon_{0}.png 约定
