@@ -6,6 +6,11 @@ set -eu
 # ---------------------------------------------------------------------------
 mkdir -p /app/data /etc/cups /var/spool/cups /var/log/cups /run/cups /opt/print-portal/web
 
+# App Center stores the cups-etc volume with restrictive modes; CUPS filters
+# run as the lp user and must be able to read the PPD files.
+chmod 755 /etc/cups /etc/cups/ppd 2>/dev/null || true
+chmod 644 /etc/cups/ppd/*.ppd /etc/cups/cups-files.conf 2>/dev/null || true
+
 # Keep an existing cupsd.conf compatible with the IPP gateway split.
 if [ -f /etc/cups/cupsd.conf ]; then
   sed -i 's/^Listen 0\.0\.0\.0:8631$/Listen 127.0.0.1:631/' /etc/cups/cupsd.conf

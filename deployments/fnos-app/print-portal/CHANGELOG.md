@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3
+
+- 修复 App Center 安装后 CUPS PPD 权限导致任务排队失败
+
 ## 0.2.2
 
 - 完善内置 mDNS：网卡/IP 变化、CUPS 状态联动、30 秒抖动缓冲
