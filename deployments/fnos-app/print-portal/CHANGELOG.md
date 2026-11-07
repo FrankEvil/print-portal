@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.6
+
+- 修复 fnOS 桌面图标不显示（manifest 格式与 appname 对齐）
+
 ## 0.2.5
 
 - 修复暂停任务被 CUPS 状态同步覆盖

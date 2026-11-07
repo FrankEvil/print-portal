@@ -17,15 +17,30 @@ import (
 	"github.com/liuzhaojun/print-portal/internal/storage"
 )
 
+type clientHostKey struct{}
+
 type Gateway struct {
-	addr   string
-	target string
-	store  *storage.Store
-	logger *log.Logger
+	addr       string
+	target     string
+	publicHost string
+	publicPort string
+	store      *storage.Store
+	logger     *log.Logger
 }
 
 func New(addr, cupsServer string, store *storage.Store, logger *log.Logger) *Gateway {
-	return &Gateway{addr: addr, target: cupsServer, store: store, logger: logger}
+	return &Gateway{addr: addr, target: cupsServer, store: store, logger: logger, publicPort: "8631"}
+}
+
+// SetPublicAddress sets the host/port clients use to reach the gateway. CUPS
+// reports loopback URIs in IPP responses; they are rewritten to this address
+// because iOS AirPrint rejects printers whose reported URI does not match the
+// discovered endpoint.
+func (g *Gateway) SetPublicAddress(host, port string) {
+	g.publicHost = strings.TrimSpace(host)
+	if strings.TrimSpace(port) != "" {
+		g.publicPort = strings.TrimSpace(port)
+	}
 }
 
 var printerPath = regexp.MustCompile(`^/printers/([^/]+)(?:/.*)?$`)
@@ -48,7 +63,12 @@ func (g *Gateway) Start(ctx context.Context) error {
 		// instead of the LAN address used by the client.
 		req.Host = targetURL.Host
 	}
-	proxy.ModifyResponse = g.captureJobResponse
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		if err := g.captureJobResponse(resp); err != nil {
+			return err
+		}
+		return g.rewriteResponse(resp)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if !isPrivateRemote(r.RemoteAddr) {
@@ -77,6 +97,9 @@ func (g *Gateway) Start(ctx context.Context) error {
 			}
 			r.Body = http.MaxBytesReader(w, r.Body, maxRawBody)
 		}
+		// Remember the address the client used before the reverse proxy
+		// rewrites Host to the CUPS loopback target.
+		r = r.WithContext(context.WithValue(r.Context(), clientHostKey{}, r.Host))
 		r = g.captureJobName(r, queue)
 		proxy.ServeHTTP(w, r)
 	})

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -99,6 +100,7 @@ func main() {
 	// is_shared=false are rejected there.
 	go func() {
 		gateway := ippgateway.New(cfg.IPPAddr, cfg.CUPSServer, store, logger)
+		gateway.SetPublicAddress(airprintHost(cfg), ippPortOf(cfg.IPPAddr))
 		if err := gateway.Start(ctx); err != nil {
 			logger.Printf("IPP gateway: %v", err)
 		}
@@ -144,4 +146,20 @@ func main() {
 	if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Fatalf("listen: %v", err)
 	}
+}
+
+// airprintHost returns the LAN host clients use to reach this instance.
+func airprintHost(cfg config.Config) string {
+	if v := strings.TrimSpace(cfg.PublicHost); v != "" {
+		return v
+	}
+	return ""
+}
+
+// ippPortOf extracts the port from an address such as "0.0.0.0:8631".
+func ippPortOf(addr string) string {
+	if i := strings.LastIndex(addr, ":"); i >= 0 {
+		return addr[i+1:]
+	}
+	return "8631"
 }
