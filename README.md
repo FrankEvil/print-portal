@@ -6,6 +6,29 @@ Print Portal 是一个面向 **家庭、小办公室、fnOS NAS** 的单用户�
 
 > 当前版本：`0.2.2` · 许可证：Apache-2.0
 
+## 界面预览
+
+### 网页打印
+
+![网页打印](docs/images/print-home.png)
+
+### 管理后台
+
+![管理后台](docs/images/admin-dashboard.png)
+
+![共享设置](docs/images/admin-sharing.png)
+
+![打印机管理](docs/images/admin-printers.png)
+
+<details>
+<summary>移动端界面</summary>
+
+![移动端共享设置](docs/images/admin-sharing-mobile.png)
+
+![移动端任务管理](docs/images/admin-jobs-mobile.png)
+
+</details>
+
 ## 为什么需要 Print Portal
 
 家庭和小办公室里的打印机通常有三个问题：
