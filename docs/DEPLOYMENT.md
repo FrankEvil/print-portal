@@ -93,7 +93,7 @@ docker compose -f docker-compose.standalone.yml up -d
 首次启动会拉取：
 
 ```text
-ghcr.io/frankevil/print-portal:0.1.8
+ghcr.io/frankevil/print-portal:0.2.0
 ```
 
 更新：
@@ -155,6 +155,12 @@ docker exec print-portal sh -c 'mkdir -p /opt/print-portal/web && tar -xzf /tmp/
 | 更新 | fpk 安装 | Docker 镜像更新 |
 
 两个版本共用同一套业务代码，通过 `PRINT_PORTAL_AUTH_MODE` 区分。
+
+## 4.4 AirPrint / Mopria
+
+AirPrint 需要 `network_mode: host`，并且局域网允许 UDP 5353 组播。详细实现和 Android/Mopria 连接方式见：
+
+- [AIRPRINT.md](AIRPRINT.md)
 
 ## 5. fnOS 部署
 
