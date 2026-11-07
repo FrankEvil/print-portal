@@ -1,8 +1,15 @@
 # Changelog
 
+## 0.2.9
+
+- 设备发现改用内置 Go mDNS browser，不再依赖 Avahi/D-Bus
+- 修复驱动库品牌大小写不一致导致的误报
+- CUPS 控制台统计改为「打印队列」，避免与物理打印机数量混淆
+
 ## 0.2.8
 
-- 修复 fnOS 桌面图标不显示：appname 与安装目录名统一为 print-portal
+- 修复 fnOS 安装目录、appname、桌面入口与网关前缀不一致
+- 修复 fnOS 桌面图标不显示
 
 ## 0.2.7
 

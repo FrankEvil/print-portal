@@ -237,8 +237,8 @@ CUPS 系统参数：
 
 ## 6. 设备发现
 
-- USB：`lpinfo -v`
-- IPP/AirPrint：`ippfind`、`avahi-browse`
+- USB / 手动网络：`lpinfo -v`（排除 `dnssd` / `driverless`）
+- IPP/AirPrint：内置 Go mDNS browser（`_ipp._tcp` / `_ipps._tcp`，PTR/SRV/TXT/A）
 - 扫描仪：`scanimage -L`、`airscan-discover`
 - 发现结果缓存到 `discovered_devices`
 - 添加时自动选择驱动：

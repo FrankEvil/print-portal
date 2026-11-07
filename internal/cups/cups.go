@@ -781,7 +781,10 @@ func parseDeviceLines(out string) []Device {
 }
 
 func (c *Client) ListDevices(ctx context.Context) ([]Device, error) {
-	out, stderr, err := c.command(ctx, "lpinfo", "-v")
+	// dnssd/driverless discovery shells out to ippfind, which requires the
+	// system Avahi stack. Print Portal browses mDNS itself, so keep CUPS to
+	// the local and manually-addressed backends here.
+	out, stderr, err := c.command(ctx, "lpinfo", "--exclude-schemes", "dnssd,driverless", "-v")
 	if err != nil {
 		return nil, fmt.Errorf("lpinfo -v failed: %s: %w", strings.TrimSpace(stderr), err)
 	}

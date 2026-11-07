@@ -88,7 +88,9 @@ const deviceBrand = computed(() => {
 })
 
 const brandMissing = computed(() => {
-  return !!deviceBrand.value && models.value.length > 0 && !brands.value.includes(deviceBrand.value)
+  if (!deviceBrand.value || models.value.length === 0) return false
+  const wanted = deviceBrand.value.toLowerCase()
+  return !brands.value.some((brand) => brand.toLowerCase() === wanted)
 })
 
 // Single warning area above the brand/model selectors.
@@ -274,7 +276,9 @@ function chooseDevice(d: Device) {
   selectedDevice.value = d
   manualMode.value = ''
   selectedModel.value = ''
-  if (d.brand) selectedBrand.value = d.brand
+  if (d.brand) {
+    selectedBrand.value = brands.value.find((brand) => brand.toLowerCase() === d.brand.toLowerCase()) || d.brand
+  }
   wizardForm.value.name = d.model || d.name || 'Printer'
   fillQueueNames()
   autoSelectDriver()

@@ -1,18 +1,16 @@
 package airprint
 
 import (
-	"context"
 	"errors"
 	"log"
 	"net"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/liuzhaojun/print-portal/internal/mdns"
 	"github.com/miekg/dns"
 	"golang.org/x/net/ipv4"
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -51,41 +49,7 @@ type serviceInstance struct {
 }
 
 func openMulticast(iface *net.Interface) (*ipv4.PacketConn, *net.UDPConn, error) {
-	lc := net.ListenConfig{Control: func(network, address string, c syscall.RawConn) error {
-		var setErr error
-		if err := c.Control(func(fd uintptr) {
-			if err := unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1); err != nil {
-				setErr = err
-				return
-			}
-			// Allow coexisting with a host mDNS daemon on the same port.
-			_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
-		}); err != nil {
-			return err
-		}
-		return setErr
-	}}
-	pc, err := lc.ListenPacket(context.Background(), "udp4", "0.0.0.0:5353")
-	if err != nil {
-		return nil, nil, err
-	}
-	udp, ok := pc.(*net.UDPConn)
-	if !ok {
-		pc.Close()
-		return nil, nil, errors.New("mDNS: unexpected packet connection type")
-	}
-	p := ipv4.NewPacketConn(udp)
-	group := &net.UDPAddr{IP: net.IPv4(224, 0, 0, 251)}
-	if iface != nil {
-		if err := p.JoinGroup(iface, group); err != nil {
-			udp.Close()
-			return nil, nil, err
-		}
-	}
-	_ = p.SetMulticastTTL(255)
-	_ = p.SetMulticastLoopback(true)
-	_ = p.SetControlMessage(ipv4.FlagInterface, true)
-	return p, udp, nil
+	return mdns.OpenMulticast(iface)
 }
 
 func newResponder(iface *net.Interface, logger *log.Logger) (*responder, error) {

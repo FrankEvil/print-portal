@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -35,13 +36,28 @@ func NewService(store *storage.Store, cupsClient *cups.Client) *Service {
 	return &Service{store: store, cups: cupsClient, scans: map[string]*ScanState{}}
 }
 
-// DiscoverPrinters scans USB/network print devices via CUPS.
+// DiscoverPrinters scans USB/network print devices. CUPS supplies USB and
+// manual network schemes; Bonjour printers are browsed by the in-house mDNS
+// browser so the appliance does not depend on Avahi/D-Bus.
 func (s *Service) DiscoverPrinters(ctx context.Context) ([]storage.Device, error) {
 	devices, err := s.cups.ListDevices(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := buildDevices(devices)
+	filtered := make([]cups.Device, 0, len(devices))
+	for _, d := range devices {
+		// dnssd:// URIs are resolved through the system DNS-SD stack. Print
+		// Portal browses them itself and stores direct ipp(s):// addresses.
+		if strings.HasPrefix(d.URI, "dnssd://") {
+			continue
+		}
+		filtered = append(filtered, d)
+	}
+	out := buildDevices(filtered)
+	out = mergeDeviceLists(out, discoverMDNSPrinters(ctx))
+	sort.SliceStable(out, func(i, j int) bool {
+		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
+	})
 	if err := s.store.ReplaceDevices("printer", out); err != nil {
 		return nil, err
 	}

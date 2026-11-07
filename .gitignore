@@ -32,3 +32,4 @@ data/
 
 # Local prebuilt binary for fast Docker build
 /printd-linux-arm64
+/printd-linux-amd64

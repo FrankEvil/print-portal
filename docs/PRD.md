@@ -141,7 +141,7 @@
 - 入口：管理 → 打印机 → 添加打印机（三步模态向导）
 - 自动发现：
   - USB：`lpinfo -v`，`usb://...`
-  - 网络 IPP/AirPrint：`ippfind`、mDNS `_ipp._tcp`、`_ipps._tcp`
+  - 网络 IPP/AirPrint：内置 Go mDNS browser（`_ipp._tcp`、`_ipps._tcp`），不依赖 ippfind/Avahi
   - 扫描仪：mDNS `_uscan._tcp`、`_uscans._tcp`、`_scanner._tcp`
 - 向导步骤：
   1. **选择设备**：打开页面默认先执行本地（USB）扫描，完成后自动执行局域网扫描；「局域网扫描」只扫描局域网 IPP/AirPrint；「扫描」扫描所有设备（局域网 + 本地/USB）；异步扫描，发现的设备动态加入列表；设备卡片展示名称、型号、URI、网络/USB 类型；支持 Standard TCP/IP (RAW/9100) 手动输入 IP + 端口；支持手动输入设备 URI（高级）

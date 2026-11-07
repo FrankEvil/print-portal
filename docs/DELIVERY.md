@@ -59,7 +59,7 @@ web/src/views/ScanView.vue      扫描（P1 收尾占位）
 | 8 | 修改 PPD 默认选项并生效 | ✅ 实现 | `GET/PUT /api/admin/printers/{name}/ppd-options` |
 | 9 | 暂停/恢复/取消/测试打印 | ✅ 实现 | 双队列操作 + 内置测试页 PDF |
 | 10 | 显示 CUPS 版本、状态、队列、任务 | ✅ 实现 | `/api/admin/cups/status`、任务列表 |
-| 11 | 设备发现并创建队列 | ✅ 实现 | `lpinfo -v` 发现 + 自动匹配驱动；mDNS 由 CUPS/avahi 后端支持 |
+| 11 | 设备发现并创建队列 | ✅ 实现 | `lpinfo -v`（USB/手动地址）+ 内置 Go mDNS browser（`_ipp._tcp` / `_ipps._tcp`）+ 自动匹配驱动 |
 | 12 | 扫描仪发现并扫描 PDF | ✅ 实现（驱动待验证） | 扫描页 + `/api/scan` + 预览/下载；USB 扫描依赖 brscan4，容器内打包验证待做 |
 | 13 | CUPS 配置修改校验/备份/回滚 | ✅ 实现 | `cupsd -t` 校验、时间戳备份、reload 失败自动恢复 |
 | 14 | 重启容器配置与任务历史不丢 | ✅ 配置就绪 | SQLite/PPD/drivers 均在持久卷；未在本机 Docker 实测 |

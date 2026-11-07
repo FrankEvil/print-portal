@@ -148,3 +148,15 @@
 - 网络打印机优先 IPP Everywhere，免驱动
 
 **理由**：避免镜像膨胀和许可证风险；避免 cups-web 式「UI 显示支持很多，实际可用要看状态表」的问题。参考 cups-web 的教训：驱动包、Foomatic 索引、状态表是三件事，不能混为一谈。
+
+## ADR-0011：mDNS 发布与浏览都由内置 Go 实现
+
+**状态**：已接受
+
+**决策**：
+
+- AirPrint 广播与局域网打印机发现共用内置 Go mDNS 的 socket 层，不安装、不启动 Avahi/D-Bus
+- 发现时浏览 `_ipp._tcp` / `_ipps._tcp`，解析 PTR / SRV / TXT / A，生成 `ipp(s)://IP:端口/printers/<队列>` 直连 URI
+- CUPS 的 `lpinfo` 只保留 USB / 手动地址后端，不调用 `dnssd` / `driverless`
+
+**理由**：避免依赖宿主 Avahi、避免与 fnOS 宿主的 mDNS daemon 争用 5353；同时让设备发现和 AirPrint 广播使用同一套自研实现，行为可控。

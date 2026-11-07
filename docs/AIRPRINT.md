@@ -6,6 +6,16 @@
 
 容器内也不启动 Avahi/D-Bus，只使用内置 Go mDNS responder；不依赖宿主 Avahi 或额外 cups-airprint 容器。
 
+## 设备发现（浏览端）
+
+同一套内置 mDNS 也负责浏览局域网打印机：
+
+- 查询 `_ipp._tcp.local` 和 `_ipps._tcp.local`
+- 解析 PTR / SRV / TXT / A 记录
+- 生成 `ipp://IP:端口/printers/<队列>` 形式的直连 URI，CUPS 不需要 Avahi 解析
+- 通过 TXT `product=(Print Portal)` 过滤自己发布的 AirPrint 服务
+- CUPS 的 `lpinfo` 只保留 USB / 手动地址后端，不再调用 `dnssd` / `driverless`
+
 ## 实现方式
 
 Print Portal 在 `printd` 内启动一个纯 Go 的 mDNS/DNS-SD responder，直接发布：

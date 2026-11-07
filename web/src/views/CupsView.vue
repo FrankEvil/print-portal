@@ -101,7 +101,7 @@ onMounted(async () => {
       <div class="stat-value small">{{ status.server_name }}</div>
     </div>
     <div class="stat">
-      <div class="stat-label">打印机</div>
+      <div class="stat-label">打印队列</div>
       <div class="stat-value">{{ status.printers?.length || 0 }}</div>
     </div>
   </div>
