@@ -4,11 +4,7 @@ set -eu
 # ---------------------------------------------------------------------------
 # Print Portal container entrypoint: CUPS (127.0.0.1:631) + IPP gateway (8631)
 # ---------------------------------------------------------------------------
-mkdir -p /app/data /etc/cups /var/spool/cups /var/log/cups /run/cups /run/dbus /run/avahi-daemon /opt/print-portal/web
-
-# Best-effort mDNS stack for the "allow discovery" switch.
-dbus-daemon --system --fork >/dev/null 2>&1 || true
-avahi-daemon --daemonize --no-drop-root >/dev/null 2>&1 || true
+mkdir -p /app/data /etc/cups /var/spool/cups /var/log/cups /run/cups /opt/print-portal/web
 
 # Keep an existing cupsd.conf compatible with the IPP gateway split.
 if [ -f /etc/cups/cupsd.conf ]; then

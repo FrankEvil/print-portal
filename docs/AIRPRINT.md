@@ -4,7 +4,7 @@
 
 让 iPhone、iPad、Mac 通过 AirPrint 自动发现 Print Portal 的共享打印机；Android 通过 Default Print Service / Mopria 发现同一个 IPP 服务。
 
-不依赖宿主 Avahi、D-Bus 或额外的 cups-airprint 容器。
+容器内也不启动 Avahi/D-Bus，只使用内置 Go mDNS responder；不依赖宿主 Avahi 或额外 cups-airprint 容器。
 
 ## 实现方式
 

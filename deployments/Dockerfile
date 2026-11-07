@@ -45,9 +45,7 @@ RUN sed -i "s|deb.debian.org|${APT_MIRROR}|g; s|security.debian.org|${APT_MIRROR
     libreoffice-impress-nogui \
     sane-utils \
     sane-airscan \
-    avahi-daemon \
     libnss-mdns \
-    dbus \
     inotify-tools \
     ca-certificates \
     tzdata \

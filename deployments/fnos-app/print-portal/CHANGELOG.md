@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- 移除容器内 Avahi/D-Bus，仅使用内置 Go mDNS
+
 ## 0.2.0
 
 - 内置 AirPrint / Mopria mDNS 广播（每台打印机独立开关）
