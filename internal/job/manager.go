@@ -175,6 +175,19 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 			m.logger.Printf("job %d chunking unavailable, fallback to single job: %v", j.ID, splitErr)
 		}
 	}
+	// The layout step is shared with the preview service: when the user already
+	// previewed this document the laid-out PDF is reused, so the printed output
+	// is byte-for-byte the same pagination the preview showed.
+	layoutPath := filepath.Join(jobDir, "layout.pdf")
+	if layoutOptsActive(opts.Layout) {
+		if err := layout.Apply(convertCtx, pdfPath, layoutPath, opts.Layout); err != nil {
+			m.fail(j, "layout failed: "+err.Error())
+			return
+		}
+		pdfPath = layoutPath
+		opts.PageRange = ""
+	}
+
 	renderedPath := pdfPath + ".raw"
 	useRaw := true
 	if err := m.cups.RenderToRaw(ctx, printer.PPDQueue, pdfPath, renderedPath, opts); err != nil {
@@ -204,6 +217,10 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 		m.logger.Printf("update job %d: %v", j.ID, err)
 	}
 	m.logger.Printf("job %d submitted as CUPS job %s", j.ID, cupsID)
+}
+
+func layoutOptsActive(opts layout.Options) bool {
+	return opts.PagesPerSheet > 1 || opts.Border || opts.Reverse || opts.FlipHorizontal
 }
 
 func decodeLayoutOptions(raw string) layout.Options {

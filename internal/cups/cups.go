@@ -431,16 +431,6 @@ func printOptionArgs(opts PrintOptions) []string {
 // before submitting to a raw CUPS queue so filters run in the app process
 // (outside CUPS' restricted filter user).
 func (c *Client) RenderToRaw(ctx context.Context, ppdQueue, src, dst string, opts PrintOptions) error {
-	if opts.Layout.PagesPerSheet > 1 || opts.Layout.Border || opts.Layout.Reverse || opts.Layout.FlipHorizontal {
-		layoutOpts := opts.Layout
-		layoutOpts.PageRange = opts.PageRange
-		layoutPath := filepath.Join(filepath.Dir(dst), "layout.pdf")
-		if err := layout.Apply(ctx, src, layoutPath, layoutOpts); err != nil {
-			return fmt.Errorf("layout failed: %w", err)
-		}
-		src = layoutPath
-		opts.PageRange = ""
-	}
 	ppdPath := filepath.Join("/etc/cups/ppd", ppdQueue+".ppd")
 	ppd, err := os.ReadFile(ppdPath)
 	if err != nil {

@@ -36,6 +36,29 @@ func (o Options) active() bool {
 	return o.PagesPerSheet > 1 || o.Border || o.Reverse || o.FlipHorizontal
 }
 
+// PaperSizePoints returns the paper size in PostScript points. When landscape
+// is true the width and height are swapped.
+func PaperSizePoints(name string, landscape bool) (float64, float64, bool) {
+	dim, ok := paperDimensions[strings.ToUpper(strings.TrimSpace(name))]
+	if !ok {
+		dim, ok = paperDimensions["A4"]
+	}
+	if landscape {
+		return dim.Height, dim.Width, ok
+	}
+	return dim.Width, dim.Height, ok
+}
+
+// Grid returns the rows x cols grid that wastes the least paper for the given
+// page count, paper size and source page aspect ratio.
+func Grid(pages int, paperWidth, paperHeight, pageAspect float64, landscape bool) (cols, rows int) {
+	orientation := "portrait"
+	if landscape {
+		orientation = "landscape"
+	}
+	return chooseGrid(pages, paperWidth, paperHeight, pageAspect, orientation)
+}
+
 var paperDimensions = map[string]types.Dim{
 	"A4":     {Width: 595.28, Height: 841.89},
 	"A5":     {Width: 419.53, Height: 595.28},
