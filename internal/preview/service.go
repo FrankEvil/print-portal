@@ -10,7 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"image"
-	"image/png"
+	"image/jpeg"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,20 +71,29 @@ type entry struct {
 	lastUse time.Time
 }
 
+// maxPreviewWidth caps the pixel width of a sheet image. Previews are only
+// shown as thumbnails, so anything wider is wasted bandwidth.
+const maxPreviewWidth = 900
+
 // Service caches laid-out PDFs and rendered sheet images on disk.
 type Service struct {
 	root string
 	mu   sync.Mutex
 	byID map[string]*entry
 	ttl  time.Duration
+	// render bounds how many Ghostscript processes run at once. Browsers ask
+	// for many sheets in parallel and each render is CPU bound, so without a
+	// limit every request slows down and none finishes quickly.
+	render chan struct{}
 }
 
 // New creates a preview service rooted at <dataDir>/preview-cache.
 func New(dataDir string) *Service {
 	return &Service{
-		root: filepath.Join(dataDir, "preview-cache"),
-		byID: map[string]*entry{},
-		ttl:  time.Hour,
+		root:   filepath.Join(dataDir, "preview-cache"),
+		byID:   map[string]*entry{},
+		ttl:    time.Hour,
+		render: make(chan struct{}, 2),
 	}
 }
 
@@ -196,15 +205,31 @@ func (s *Service) SheetImage(ctx context.Context, id string, index int, area *Ar
 	if dpi <= 0 {
 		dpi = 96
 	}
-	out := filepath.Join(item.dir, fmt.Sprintf("sheet-%d-%d.png", index, dpi))
+	out := filepath.Join(item.dir, fmt.Sprintf("sheet-%d-%d.jpg", index, dpi))
 	if info, err := os.Stat(out); err == nil && info.Size() > 0 {
 		return out, nil
 	}
-	raw := filepath.Join(item.dir, fmt.Sprintf("raw-%d-%d.png", index, dpi))
+	raw := filepath.Join(item.dir, fmt.Sprintf("raw-%d-%d.jpg", index, dpi))
+	select {
+	case s.render <- struct{}{}:
+		defer func() { <-s.render }()
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
 	if err := renderPage(ctx, item.result.LayoutPDF, index, dpi, raw); err != nil {
 		return "", err
 	}
 	defer os.Remove(raw)
+	// Without a printable area and within the width cap the render can be
+	// served as-is, which skips a full decode/encode round trip.
+	if area == nil {
+		if width, err := jpegWidth(raw); err == nil && width <= maxPreviewWidth {
+			if err := os.Rename(raw, out); err != nil {
+				return "", err
+			}
+			return out, nil
+		}
+	}
 	if err := compose(raw, out, area); err != nil {
 		return "", err
 	}
@@ -215,7 +240,10 @@ func renderPage(ctx context.Context, pdf string, index, dpi int, dst string) err
 	page := index + 1
 	args := []string{
 		"-q", "-dNOPAUSE", "-dBATCH", "-dSAFER",
-		"-sDEVICE=png16m",
+		// Let Ghostscript emit JPEG directly: decoding its PNG and re-encoding
+		// in Go cost about three times as much as the render itself.
+		"-sDEVICE=jpeg",
+		"-dJPEGQ=82",
 		"-r" + strconv.Itoa(dpi),
 		"-dFirstPage=" + strconv.Itoa(page),
 		"-dLastPage=" + strconv.Itoa(page),
@@ -240,7 +268,7 @@ func compose(src, dst string, area *Area) error {
 	if err != nil {
 		return err
 	}
-	page, err := png.Decode(in)
+	page, err := jpeg.Decode(in)
 	in.Close()
 	if err != nil {
 		return err
@@ -269,15 +297,40 @@ func compose(src, dst string, area *Area) error {
 		int(left), int(top),
 		int(left+targetW), int(top+targetH),
 	)
-	draw.CatmullRom.Scale(canvas, rect, page, bounds, draw.Over, nil)
+	// Bilinear is several times faster than CatmullRom and the difference is
+	// invisible at thumbnail size.
+	draw.ApproxBiLinear.Scale(canvas, rect, page, bounds, draw.Over, nil)
 
 	out, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
 	defer out.Close()
-	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
-	return encoder.Encode(out, canvas)
+	// Preview images travel over the LAN to the browser, so JPEG at a capped
+	// width keeps a sheet around 100 kB instead of the multi-megabyte PNG that
+	// Ghostscript's lossless output produced.
+	final := canvas
+	if canvas.Bounds().Dx() > maxPreviewWidth {
+		ratio := float64(maxPreviewWidth) / float64(canvas.Bounds().Dx())
+		height := int(float64(canvas.Bounds().Dy()) * ratio)
+		scaled := image.NewRGBA(image.Rect(0, 0, maxPreviewWidth, height))
+		draw.ApproxBiLinear.Scale(scaled, scaled.Bounds(), canvas, canvas.Bounds(), draw.Src, nil)
+		final = scaled
+	}
+	return jpeg.Encode(out, final, &jpeg.Options{Quality: 82})
+}
+
+func jpegWidth(path string) (int, error) {
+	in, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer in.Close()
+	cfg, err := jpeg.DecodeConfig(in)
+	if err != nil {
+		return 0, err
+	}
+	return cfg.Width, nil
 }
 
 func pageCount(ctx context.Context, pdf string) (int, error) {

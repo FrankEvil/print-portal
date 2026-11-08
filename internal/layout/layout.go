@@ -116,6 +116,9 @@ func Apply(ctx context.Context, src, dst string, opts Options) error {
 		pageAspect := averagePageAspect(current)
 		if cols, rows := chooseGrid(opts.PagesPerSheet, paperWidth, paperHeight, pageAspect, opts.Orientation); cols > 0 {
 			nup.Grid = &types.Dim{Width: float64(cols), Height: float64(rows)}
+			// Enforce lets pdfcpu rotate a source page when turning it 90° fills
+			// its cell better. chooseGrid already scored both orientations, so
+			// this keeps the grid the algorithm picked without extra whitespace.
 			nup.Enforce = true
 		}
 		nup.Border = opts.Border

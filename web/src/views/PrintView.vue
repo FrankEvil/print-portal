@@ -398,7 +398,7 @@ function setupPreviewObserver() {
       previewSheetUrls.value = { ...previewSheetUrls.value, [index]: previewSheetUrl(index) }
       previewObserver.value?.unobserve(item.target)
     }
-  }, { rootMargin: '400px 0px' })
+  }, { rootMargin: '200px 0px' })
 }
 
 // The server owns the layout: it lays the document out once and renders each
@@ -448,6 +448,11 @@ async function buildServerPreview(): Promise<void> {
     pageCount.value = result.page_count
     selectedPages.value = result.sheets.flatMap((sheet) => sheet.pages)
     setupPreviewObserver()
+    // Show the first sheets immediately; the observer handles the rest so the
+    // server is not asked to render the whole document at once.
+    const eager: Record<number, string> = {}
+    for (const sheet of result.sheets.slice(0, 2)) eager[sheet.index] = previewSheetUrl(sheet.index)
+    previewSheetUrls.value = eager
   } catch (e) {
     if (token !== previewBuildToken) return
     previewError.value = (e as Error).message || '版面预览生成失败'
