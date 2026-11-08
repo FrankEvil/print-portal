@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/liuzhaojun/print-portal/internal/config"
 	"github.com/liuzhaojun/print-portal/internal/cups"
@@ -37,6 +39,14 @@ type Server struct {
 	scans     *scan.Service
 	logger    *log.Logger
 	mux       *http.ServeMux
+
+	previewMu       sync.Mutex
+	previewSessions map[string]*previewSession
+}
+
+type previewSession struct {
+	path     string
+	lastUsed time.Time
 }
 
 func New(
@@ -51,16 +61,17 @@ func New(
 	logger *log.Logger,
 ) *Server {
 	s := &Server{
-		cfg:       cfg,
-		store:     store,
-		cups:      cupsClient,
-		jobs:      jobs,
-		printers:  printers,
-		drivers:   drivers,
-		discovery: discoverySvc,
-		scans:     scanSvc,
-		logger:    logger,
-		mux:       http.NewServeMux(),
+		cfg:             cfg,
+		store:           store,
+		cups:            cupsClient,
+		jobs:            jobs,
+		printers:        printers,
+		drivers:         drivers,
+		discovery:       discoverySvc,
+		scans:           scanSvc,
+		logger:          logger,
+		mux:             http.NewServeMux(),
+		previewSessions: map[string]*previewSession{},
 	}
 	s.routes()
 	return s
@@ -73,8 +84,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/auth/login", s.handleAuthLogin)
 	s.mux.HandleFunc("GET /api/printers", s.handleListPrinters)
 	s.mux.HandleFunc("GET /api/printers/{id}/ppd-options", s.handlePublicPPDOptions)
+	s.mux.HandleFunc("GET /api/printers/{id}/paper-areas", s.handlePublicPaperAreas)
 	s.mux.HandleFunc("POST /api/print", s.handlePrint)
 	s.mux.HandleFunc("POST /api/print/nas", s.handlePrintNAS)
+	s.mux.HandleFunc("POST /api/preview", s.handlePreview)
+	s.mux.HandleFunc("POST /api/preview/session", s.handlePreviewSession)
 	s.mux.HandleFunc("GET /api/nas/preview", s.handleNASPreview)
 	s.mux.HandleFunc("GET /api/jobs", s.handleListJobs)
 	s.mux.HandleFunc("GET /api/jobs/{id}", s.handleGetJob)

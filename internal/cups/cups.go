@@ -9,8 +9,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/liuzhaojun/print-portal/internal/layout"
 )
 
 // Runner abstracts external command execution, so the CUPS layer is testable.
@@ -320,13 +323,15 @@ func parseRequestID(out string) string {
 
 // PrintOptions are the webpage printing parameters.
 type PrintOptions struct {
-	PageRange   string
-	Duplex      string
-	Copies      int
-	PaperSize   string
-	Orientation string
-	ColorMode   string
-	Scaling     string
+	PageRange    string
+	Duplex       string
+	Copies       int
+	PaperSize    string
+	Orientation  string
+	ColorMode    string
+	Scaling      string
+	ExtraOptions map[string]string
+	Layout       layout.Options
 }
 
 // Submit sends a file to a CUPS queue and returns the CUPS job id.
@@ -408,6 +413,16 @@ func printOptionArgs(opts PrintOptions) []string {
 	case "fill":
 		out = append(out, "fill")
 	}
+	keys := make([]string, 0, len(opts.ExtraOptions))
+	for key := range opts.ExtraOptions {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if value := strings.TrimSpace(opts.ExtraOptions[key]); value != "" {
+			out = append(out, key+"="+value)
+		}
+	}
 	return out
 }
 
@@ -416,6 +431,16 @@ func printOptionArgs(opts PrintOptions) []string {
 // before submitting to a raw CUPS queue so filters run in the app process
 // (outside CUPS' restricted filter user).
 func (c *Client) RenderToRaw(ctx context.Context, ppdQueue, src, dst string, opts PrintOptions) error {
+	if opts.Layout.PagesPerSheet > 1 || opts.Layout.Border || opts.Layout.Reverse || opts.Layout.FlipHorizontal {
+		layoutOpts := opts.Layout
+		layoutOpts.PageRange = opts.PageRange
+		layoutPath := filepath.Join(filepath.Dir(dst), "layout.pdf")
+		if err := layout.Apply(ctx, src, layoutPath, layoutOpts); err != nil {
+			return fmt.Errorf("layout failed: %w", err)
+		}
+		src = layoutPath
+		opts.PageRange = ""
+	}
 	ppdPath := filepath.Join("/etc/cups/ppd", ppdQueue+".ppd")
 	ppd, err := os.ReadFile(ppdPath)
 	if err != nil {
@@ -437,6 +462,9 @@ func (c *Client) RenderToRaw(ctx context.Context, ppdQueue, src, dst string, opt
 		filter = filepath.Join("/usr/lib/cups/filter", filter)
 	}
 	optionList := printOptionArgs(opts)
+	if colorArgs := c.colorOptionArgs(ctx, ppdQueue, opts.ColorMode); len(colorArgs) > 0 {
+		optionList = append(optionList, colorArgs...)
+	}
 	cupsArgs := []string{"-p", ppdPath, "-m", "application/vnd.cups-raster"}
 	for _, opt := range optionList {
 		cupsArgs = append(cupsArgs, "-o", opt)
@@ -596,6 +624,76 @@ type PPDOption struct {
 	ChoiceTexts []string `json:"choice_texts"`
 }
 
+// PaperArea is the printable region declared by the PPD for one PageSize.
+// Values are in PostScript points and describe the paper and its margins.
+type PaperArea struct {
+	PageSize string  `json:"page_size"`
+	Width    float64 `json:"width"`
+	Height   float64 `json:"height"`
+	Left     float64 `json:"left"`
+	Bottom   float64 `json:"bottom"`
+	Right    float64 `json:"right"`
+	Top      float64 `json:"top"`
+}
+
+var (
+	ppdPageSizeRE  = regexp.MustCompile(`^\*PageSize\s+([^/:\s]+)(?:/[^:]*)?:\s*"<</PageSize\[([0-9.]+)\s+([0-9.]+)\]`)
+	ppdImageableRE = regexp.MustCompile(`^\*ImageableArea\s+([^/:\s]+)(?:/[^:]*)?:\s*"([0-9.\s]+)"`)
+)
+
+func parsePPDPaperAreas(data string) []PaperArea {
+	type dims struct{ width, height float64 }
+	pageDims := map[string]dims{}
+	for _, line := range strings.Split(data, "\n") {
+		m := ppdPageSizeRE.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		width, errW := strconv.ParseFloat(m[2], 64)
+		height, errH := strconv.ParseFloat(m[3], 64)
+		if errW == nil && errH == nil && width > 0 && height > 0 {
+			pageDims[m[1]] = dims{width: width, height: height}
+		}
+	}
+	out := make([]PaperArea, 0, len(pageDims))
+	for _, line := range strings.Split(data, "\n") {
+		m := ppdImageableRE.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		dim, ok := pageDims[m[1]]
+		if !ok {
+			continue
+		}
+		fields := strings.Fields(m[2])
+		if len(fields) != 4 {
+			continue
+		}
+		llx, e1 := strconv.ParseFloat(fields[0], 64)
+		lly, e2 := strconv.ParseFloat(fields[1], 64)
+		urx, e3 := strconv.ParseFloat(fields[2], 64)
+		ury, e4 := strconv.ParseFloat(fields[3], 64)
+		if e1 != nil || e2 != nil || e3 != nil || e4 != nil {
+			continue
+		}
+		out = append(out, PaperArea{
+			PageSize: m[1], Width: dim.width, Height: dim.height,
+			Left: llx, Bottom: lly, Right: dim.width - urx, Top: dim.height - ury,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].PageSize < out[j].PageSize })
+	return out
+}
+
+func (c *Client) PaperAreas(ctx context.Context, queue string) ([]PaperArea, error) {
+	ppdPath := filepath.Join("/etc/cups/ppd", queue+".ppd")
+	data, err := os.ReadFile(ppdPath)
+	if err != nil {
+		return nil, fmt.Errorf("read ppd %s: %w", ppdPath, err)
+	}
+	return parsePPDPaperAreas(string(data)), nil
+}
+
 var optionLineRE = regexp.MustCompile(`^([^/]+)/([^:]+):\s*(.*)$`)
 
 // parsePPDOptions parses `lpoptions -l` output.
@@ -628,6 +726,46 @@ func (c *Client) PPDOptions(ctx context.Context, queue string) ([]PPDOption, err
 		return nil, fmt.Errorf("lpoptions failed: %s: %w", strings.TrimSpace(stderr), err)
 	}
 	return parsePPDOptions(out), nil
+}
+
+// colorOptionArgs maps the generic color mode (color/monochrome) to the
+// concrete PPD option used by the queue. Most PPDs call it ColorModel or
+// ColorMode; EPSON ESC/P-R uses "Ink/Grayscale: COLOR MONO".
+func (c *Client) colorOptionArgs(ctx context.Context, queue, colorMode string) []string {
+	if colorMode != "color" && colorMode != "monochrome" {
+		return nil
+	}
+	options, err := c.PPDOptions(ctx, queue)
+	if err != nil {
+		return nil
+	}
+	for _, opt := range options {
+		keyword := strings.ToLower(opt.Keyword)
+		text := strings.ToLower(opt.Text)
+		relevant := strings.Contains(keyword, "color") || strings.Contains(keyword, "colour") ||
+			keyword == "ink" || strings.Contains(text, "color") || strings.Contains(text, "colour") ||
+			strings.Contains(text, "grayscale") || strings.Contains(text, "grey")
+		if !relevant {
+			continue
+		}
+		if choice := colorChoice(opt.Choices, colorMode); choice != "" {
+			return []string{opt.Keyword + "=" + choice}
+		}
+	}
+	return nil
+}
+
+func colorChoice(choices []string, colorMode string) string {
+	for _, choice := range choices {
+		lower := strings.ToLower(choice)
+		if colorMode == "color" && (strings.Contains(lower, "color") || strings.Contains(lower, "colour") || lower == "rgb" || lower == "cmyk") {
+			return choice
+		}
+		if colorMode == "monochrome" && (strings.Contains(lower, "mono") || strings.Contains(lower, "gray") || strings.Contains(lower, "grey") || strings.Contains(lower, "black")) {
+			return choice
+		}
+	}
+	return ""
 }
 
 // Model is one PPD entry from `lpinfo -m`.

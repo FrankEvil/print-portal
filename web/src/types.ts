@@ -93,6 +93,16 @@ export interface PPDOption {
   choices: string[]
 }
 
+export interface PaperArea {
+  page_size: string
+  width: number
+  height: number
+  left: number
+  bottom: number
+  right: number
+  top: number
+}
+
 export interface Overview {
   cups: {
     version: string

@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/liuzhaojun/print-portal/internal/convert"
 	"github.com/liuzhaojun/print-portal/internal/cups"
+	"github.com/liuzhaojun/print-portal/internal/layout"
 	"github.com/liuzhaojun/print-portal/internal/storage"
 )
 
@@ -145,14 +147,19 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 		return
 	}
 	opts := cups.PrintOptions{
-		PageRange:   j.PageRange,
-		Duplex:      j.Duplex,
-		Copies:      j.Copies,
-		PaperSize:   j.PaperSize,
-		Orientation: j.Orientation,
-		ColorMode:   j.ColorMode,
-		Scaling:     j.Scaling,
+		PageRange:    j.PageRange,
+		Duplex:       j.Duplex,
+		Copies:       j.Copies,
+		PaperSize:    j.PaperSize,
+		Orientation:  j.Orientation,
+		ColorMode:    j.ColorMode,
+		Scaling:      j.Scaling,
+		ExtraOptions: decodePPDOptions(j.PPDOptions),
+		Layout:       decodeLayoutOptions(j.LayoutOptions),
 	}
+	opts.Layout.PaperSize = j.PaperSize
+	opts.Layout.Orientation = j.Orientation
+	opts.Layout.PageRange = j.PageRange
 	// Large multi-page jobs are split into small CUPS jobs and submitted
 	// one at a time. This keeps the USB/printer buffer from being flooded.
 	chunkPages := settingInt(m.store, "chunk_pages", 4)
@@ -197,6 +204,26 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 		m.logger.Printf("update job %d: %v", j.ID, err)
 	}
 	m.logger.Printf("job %d submitted as CUPS job %s", j.ID, cupsID)
+}
+
+func decodeLayoutOptions(raw string) layout.Options {
+	var out layout.Options
+	if strings.TrimSpace(raw) == "" {
+		return out
+	}
+	_ = json.Unmarshal([]byte(raw), &out)
+	return out
+}
+
+func decodePPDOptions(raw string) map[string]string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var out map[string]string
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	return out
 }
 
 func validatePageRange(value string, total int) error {
@@ -532,20 +559,22 @@ func (m *Manager) Retry(id int64) (*storage.Job, error) {
 		return nil, fmt.Errorf("job in state %s cannot be retried", old.Status)
 	}
 	clone := &storage.Job{
-		PrinterID:   old.PrinterID,
-		Source:      "web",
-		Filename:    old.Filename,
-		SourceIP:    old.SourceIP,
-		Pages:       old.Pages,
-		PageRange:   old.PageRange,
-		Duplex:      old.Duplex,
-		Copies:      old.Copies,
-		PaperSize:   old.PaperSize,
-		Orientation: old.Orientation,
-		ColorMode:   old.ColorMode,
-		Scaling:     old.Scaling,
-		Status:      "pending",
-		StoredPath:  old.StoredPath,
+		PrinterID:     old.PrinterID,
+		Source:        "web",
+		Filename:      old.Filename,
+		SourceIP:      old.SourceIP,
+		Pages:         old.Pages,
+		PageRange:     old.PageRange,
+		Duplex:        old.Duplex,
+		Copies:        old.Copies,
+		PaperSize:     old.PaperSize,
+		Orientation:   old.Orientation,
+		ColorMode:     old.ColorMode,
+		Scaling:       old.Scaling,
+		PPDOptions:    old.PPDOptions,
+		LayoutOptions: old.LayoutOptions,
+		Status:        "pending",
+		StoredPath:    old.StoredPath,
 	}
 	if err := m.store.CreateJob(clone); err != nil {
 		return nil, err

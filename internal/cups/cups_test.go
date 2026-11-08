@@ -187,3 +187,26 @@ func TestParseScannerLines(t *testing.T) {
 		t.Errorf("unexpected scanners: %+v", scanners)
 	}
 }
+
+func TestColorOptionArgsForEpsonInk(t *testing.T) {
+	f := &fakeRunner{stdout: map[string]string{
+		"lpoptions": "Ink/Grayscale: *COLOR MONO\nPageSize/Media Size: A4 B5\n",
+	}}
+	c := NewClient(f, "")
+	if got := c.colorOptionArgs(context.Background(), "epson", "color"); len(got) != 1 || got[0] != "Ink=COLOR" {
+		t.Fatalf("color args = %v, want [Ink=COLOR]", got)
+	}
+	if got := c.colorOptionArgs(context.Background(), "epson", "monochrome"); len(got) != 1 || got[0] != "Ink=MONO" {
+		t.Fatalf("mono args = %v, want [Ink=MONO]", got)
+	}
+}
+
+func TestColorOptionArgsIgnoresMonoPrinter(t *testing.T) {
+	f := &fakeRunner{stdout: map[string]string{
+		"lpoptions": "PageSize/Media Size: A4 Letter\nResolution/Resolution: 600dpi 1200dpi\n",
+	}}
+	c := NewClient(f, "")
+	if got := c.colorOptionArgs(context.Background(), "brother", "color"); len(got) != 0 {
+		t.Fatalf("color args = %v, want none", got)
+	}
+}

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/liuzhaojun/print-portal/internal/convert"
+	"github.com/liuzhaojun/print-portal/internal/layout"
 	"github.com/liuzhaojun/print-portal/internal/scan"
 	"github.com/liuzhaojun/print-portal/internal/storage"
 )
@@ -71,6 +74,27 @@ func (s *Server) handleListPrinters(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"printers": out})
+}
+
+func (s *Server) handlePublicPaperAreas(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_id", err.Error())
+		return
+	}
+	p, err := s.store.GetPrinter(id)
+	if err != nil || p == nil {
+		writeError(w, http.StatusNotFound, "not_found", "printer not found")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	areas, err := s.cups.PaperAreas(ctx, p.PPDQueue)
+	if err != nil {
+		writeError(w, http.StatusConflict, "paper_areas_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"areas": areas})
 }
 
 func (s *Server) handlePublicPPDOptions(w http.ResponseWriter, r *http.Request) {
@@ -160,19 +184,21 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		copies = 99
 	}
 	j := &storage.Job{
-		PrinterID:   printerID,
-		Source:      "web",
-		Filename:    filename,
-		SourceIP:    clientIP(r),
-		PageRange:   strings.TrimSpace(r.FormValue("page_range")),
-		Duplex:      defaultStr(r.FormValue("duplex"), "one-sided"),
-		Copies:      copies,
-		PaperSize:   defaultStr(r.FormValue("paper_size"), "A4"),
-		Orientation: defaultStr(r.FormValue("orientation"), "portrait"),
-		ColorMode:   defaultStr(r.FormValue("color_mode"), "monochrome"),
-		Scaling:     defaultStr(r.FormValue("scaling"), "auto"),
-		Status:      "pending",
-		StoredPath:  dst,
+		PrinterID:     printerID,
+		Source:        "web",
+		Filename:      filename,
+		SourceIP:      clientIP(r),
+		PageRange:     strings.TrimSpace(r.FormValue("page_range")),
+		Duplex:        defaultStr(r.FormValue("duplex"), "one-sided"),
+		Copies:        copies,
+		PaperSize:     defaultStr(r.FormValue("paper_size"), "A4"),
+		Orientation:   defaultStr(r.FormValue("orientation"), "portrait"),
+		ColorMode:     defaultStr(r.FormValue("color_mode"), "monochrome"),
+		Scaling:       defaultStr(r.FormValue("scaling"), "auto"),
+		PPDOptions:    normalizePPDOptions(r.FormValue("ppd_options")),
+		LayoutOptions: normalizeLayoutOptions(r.FormValue("layout_options")),
+		Status:        "pending",
+		StoredPath:    dst,
 	}
 	if err := s.store.CreateJob(j); err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
@@ -185,6 +211,189 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		"filename": filename,
 		"printer":  p.Name,
 	})
+}
+
+// handlePreviewSession stores one uploaded document for repeated preview
+// renders. Uploading and converting a PDF/Office file once makes parameter
+// changes much faster than re-uploading it for every preview request.
+func (s *Server) handlePreviewSession(w http.ResponseWriter, r *http.Request) {
+	maxMB := s.cfg.MaxUploadMB
+	if v, ok, _ := s.store.GetSetting("max_upload_mb"); ok {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxMB = n
+		}
+	}
+	maxBytes := int64(maxMB) << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes+10<<20)
+	if err := r.ParseMultipartForm(maxBytes); err != nil {
+		writeError(w, http.StatusRequestEntityTooLarge, "upload_too_large", "file exceeds the upload limit")
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_file", "file is required")
+		return
+	}
+	defer file.Close()
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if !allowedExt[ext] {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_file_type", "仅支持 PDF、JPEG、PNG、WebP、Office 文档、PostScript")
+		return
+	}
+	dir := filepath.Join(s.cfg.DataDir, "previews")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
+	id := fmt.Sprintf("%d", time.Now().UnixNano())
+	rawPath := filepath.Join(dir, id+ext)
+	tmp, err := os.Create(rawPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
+	if _, err := io.Copy(tmp, file); err != nil {
+		tmp.Close()
+		os.Remove(rawPath)
+		writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(rawPath)
+		writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
+	previewPath := rawPath
+	if ext != ".pdf" {
+		previewPath = filepath.Join(dir, id+".pdf")
+		conv := convert.New(dir)
+		ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
+		defer cancel()
+		if err := conv.ToPDF(ctx, rawPath, previewPath); err != nil {
+			os.Remove(rawPath)
+			writeError(w, http.StatusUnprocessableEntity, "preview_failed", err.Error())
+			return
+		}
+		_ = os.Remove(rawPath)
+	}
+	s.previewMu.Lock()
+	s.previewSessions[id] = &previewSession{path: previewPath, lastUsed: time.Now()}
+	s.previewMu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]string{"preview_id": id})
+}
+
+// handlePreview renders a single-page print-layout preview. It accepts a
+// preview session id, an uploaded file (multipart "file") or an authorized NAS
+// path ("nas_path"), then applies paper size, orientation and color mode.
+func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
+	maxMB := s.cfg.MaxUploadMB
+	if v, ok, _ := s.store.GetSetting("max_upload_mb"); ok {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxMB = n
+		}
+	}
+	maxBytes := int64(maxMB) << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes+10<<20)
+	if err := r.ParseMultipartForm(maxBytes); err != nil {
+		writeError(w, http.StatusRequestEntityTooLarge, "upload_too_large", "file exceeds the upload limit")
+		return
+	}
+	var src string
+	var cleanup func()
+	if previewID := strings.TrimSpace(r.FormValue("preview_id")); previewID != "" {
+		s.previewMu.Lock()
+		session, ok := s.previewSessions[previewID]
+		if ok {
+			session.lastUsed = time.Now()
+			src = session.path
+		}
+		s.previewMu.Unlock()
+		if !ok {
+			writeError(w, http.StatusNotFound, "preview_not_found", "preview session not found or expired")
+			return
+		}
+	} else if file, header, err := r.FormFile("file"); err == nil {
+		defer file.Close()
+		ext := strings.ToLower(filepath.Ext(header.Filename))
+		if !allowedExt[ext] {
+			writeError(w, http.StatusUnprocessableEntity, "invalid_file_type", "仅支持 PDF、JPEG、PNG、WebP、Office 文档、PostScript")
+			return
+		}
+		dir := filepath.Join(s.cfg.DataDir, "previews")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+			return
+		}
+		tmp, err := os.CreateTemp(dir, "src-*"+ext)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+			return
+		}
+		if _, err := io.Copy(tmp, file); err != nil {
+			tmp.Close()
+			os.Remove(tmp.Name())
+			writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+			return
+		}
+		if err := tmp.Close(); err != nil {
+			os.Remove(tmp.Name())
+			writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+			return
+		}
+		src = tmp.Name()
+		cleanup = func() { _ = os.Remove(src) }
+	} else if raw := strings.TrimSpace(r.FormValue("nas_path")); raw != "" {
+		abs, err := filepath.Abs(filepath.Clean(raw))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_path", "invalid path")
+			return
+		}
+		real, err := filepath.EvalSymlinks(abs)
+		if err != nil || !s.allowedNASPath(real) {
+			writeError(w, http.StatusForbidden, "path_forbidden", "path is outside the configured NAS roots")
+			return
+		}
+		info, err := os.Stat(real)
+		if err != nil || !info.Mode().IsRegular() {
+			writeError(w, http.StatusNotFound, "not_found", "file not found")
+			return
+		}
+		if !allowedExt[strings.ToLower(filepath.Ext(real))] {
+			writeError(w, http.StatusUnprocessableEntity, "invalid_file_type", "unsupported file type")
+			return
+		}
+		src = real
+	} else {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_file", "file or nas_path is required")
+		return
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+	opts := convert.PreviewOptions{
+		PaperSize:   defaultStr(r.FormValue("paper_size"), "A4"),
+		Orientation: defaultStr(r.FormValue("orientation"), "portrait"),
+		ColorMode:   defaultStr(r.FormValue("color_mode"), "monochrome"),
+		Scaling:     defaultStr(r.FormValue("scaling"), "auto"),
+		Page:        atoiDefault(r.FormValue("page"), 1),
+	}
+	outDir := filepath.Join(s.cfg.DataDir, "previews")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
+	out := filepath.Join(outDir, fmt.Sprintf("preview-%d.png", time.Now().UnixNano()))
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+	conv := convert.New(outDir)
+	if err := conv.PreviewPNG(ctx, src, out, opts); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "preview_failed", err.Error())
+		return
+	}
+	defer os.Remove(out)
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeFile(w, r, out)
 }
 
 func (s *Server) handleNASPreview(w http.ResponseWriter, r *http.Request) {
@@ -228,15 +437,17 @@ func (s *Server) handleNASPreview(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePrintNAS(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		PrinterID   int64  `json:"printer_id"`
-		Path        string `json:"path"`
-		PageRange   string `json:"page_range"`
-		Duplex      string `json:"duplex"`
-		Copies      int    `json:"copies"`
-		PaperSize   string `json:"paper_size"`
-		Orientation string `json:"orientation"`
-		ColorMode   string `json:"color_mode"`
-		Scaling     string `json:"scaling"`
+		PrinterID     int64  `json:"printer_id"`
+		Path          string `json:"path"`
+		PageRange     string `json:"page_range"`
+		Duplex        string `json:"duplex"`
+		Copies        int    `json:"copies"`
+		PaperSize     string `json:"paper_size"`
+		Orientation   string `json:"orientation"`
+		ColorMode     string `json:"color_mode"`
+		Scaling       string `json:"scaling"`
+		PPDOptions    string `json:"ppd_options"`
+		LayoutOptions string `json:"layout_options"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
@@ -313,7 +524,8 @@ func (s *Server) handlePrintNAS(w http.ResponseWriter, r *http.Request) {
 		PageRange: strings.TrimSpace(body.PageRange), Duplex: defaultStr(body.Duplex, "one-sided"),
 		Copies: copies, PaperSize: defaultStr(body.PaperSize, "A4"),
 		Orientation: defaultStr(body.Orientation, "portrait"), ColorMode: defaultStr(body.ColorMode, "monochrome"),
-		Scaling: defaultStr(body.Scaling, "auto"), Status: "pending", StoredPath: dst,
+		Scaling: defaultStr(body.Scaling, "auto"), PPDOptions: normalizePPDOptions(body.PPDOptions),
+		LayoutOptions: normalizeLayoutOptions(body.LayoutOptions), Status: "pending", StoredPath: dst,
 	}
 	if err := s.store.CreateJob(j); err != nil {
 		_ = os.Remove(dst)
@@ -322,6 +534,44 @@ func (s *Server) handlePrintNAS(w http.ResponseWriter, r *http.Request) {
 	}
 	s.jobs.Wake()
 	writeJSON(w, http.StatusAccepted, map[string]any{"job_id": j.ID, "status": "pending", "filename": filename, "printer": p.Name})
+}
+
+func normalizeLayoutOptions(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return "{}"
+	}
+	var values layout.Options
+	if err := json.Unmarshal([]byte(raw), &values); err != nil {
+		return "{}"
+	}
+	data, err := json.Marshal(values)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
+
+func normalizePPDOptions(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return "{}"
+	}
+	var values map[string]string
+	if err := json.Unmarshal([]byte(raw), &values); err != nil {
+		return "{}"
+	}
+	clean := make(map[string]string, len(values))
+	for key, value := range values {
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key != "" && value != "" {
+			clean[key] = value
+		}
+	}
+	data, err := json.Marshal(clean)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
 }
 
 func (s *Server) allowedNASPath(path string) bool {

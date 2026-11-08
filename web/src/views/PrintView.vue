@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { TrimApp } from '@trimjs/web-app'
-import { api, apiUrl } from '../api'
+import { adminToken, api, apiBase, apiUrl } from '../api'
 import { toast } from '../toast'
-import type { Job, PPDOption, Printer } from '../types'
+import type { Job, PaperArea, PPDOption, Printer } from '../types'
 import { formatJobParams } from '../jobDisplay'
 import StatusBadge from '../components/StatusBadge.vue'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `${apiBase}${pdfjsWorker}`
 
 const printers = ref<Printer[]>([])
 const selectedPrinter = ref<number | null>(null)
 const ppdOptions = ref<PPDOption[]>([])
+const paperAreas = ref<PaperArea[]>([])
 const file = ref<File | null>(null)
 const nasPath = ref('')
 const nasPicking = ref(false)
@@ -20,6 +25,19 @@ const submitting = ref(false)
 const jobs = ref<Job[]>([])
 const pageCount = ref<number | null>(null)
 const pageCountLoading = ref(false)
+const previewUrl = ref('')
+const previewLoading = ref(false)
+const previewError = ref('')
+const previewProgress = ref({ done: 0, total: 0, stage: '' })
+const pdfPages = ref<Array<{ page: number; url: string }>>([])
+const pdfPageAspect = ref(1)
+const pdfSheetPreviews = ref<Array<{ url: string }>>([])
+let sheetPreviewToken = 0
+const selectedPages = ref<number[]>([])
+const extraPPDOptions = ref<Record<string, string>>({})
+let previewSessionId = ''
+let previewSessionPromise: Promise<string> | null = null
+let pdfPreviewToken = 0
 
 const form = ref({
   page_range: '',
@@ -29,6 +47,14 @@ const form = ref({
   orientation: 'portrait',
   color_mode: 'monochrome',
   scaling: 'auto',
+})
+
+const layout = ref({
+  pages_per_sheet: 1,
+  direction: 'lrtb',
+  border: false,
+  reverse: false,
+  flip_horizontal: false,
 })
 
 let pollTimer: number | undefined
@@ -51,7 +77,346 @@ const paperChoices = computed(() => {
   return ['A4', 'A5', 'Letter']
 })
 
-const supportsColor = computed(() => ppdOptions.value.some((o) => /color/i.test(o.keyword) || /color/i.test(o.text)))
+const paperSizeMm: Record<string, [number, number]> = {
+  A4: [210, 297],
+  A5: [148, 210],
+  A6: [105, 148],
+  B5: [176, 250],
+  B6: [125, 176],
+  L: [89, 127],
+  Postcard: [100, 148],
+  TPostcard: [148, 100],
+  ENV10: [105, 241],
+  EnvDL: [110, 220],
+  ENVC6: [114, 162],
+  Letter: [216, 279],
+  Legal: [216, 356],
+}
+
+function chooseSheetGrid(n: number, paperWidth: number, paperHeight: number, pageAspect: number) {
+  if (n <= 1) return { cols: 1, rows: 1 }
+  if (!Number.isFinite(pageAspect) || pageAspect <= 0) pageAspect = 0.7071
+  const portrait = form.value.orientation !== 'landscape'
+  let bestScore = Number.POSITIVE_INFINITY
+  let best = { cols: 1, rows: n }
+  for (let rows = 1; rows <= n; rows++) {
+    const cols = Math.ceil(n / rows)
+    const cellAspect = (paperWidth / cols) / (paperHeight / rows)
+    const fill = Math.max(
+      Math.min(pageAspect, cellAspect) / Math.max(pageAspect, cellAspect),
+      Math.min(1 / pageAspect, cellAspect) / Math.max(1 / pageAspect, cellAspect),
+    )
+    const score = (1 - fill) * n + (cols * rows - n) * 0.75
+    if (score < bestScore - 1e-9) {
+      bestScore = score
+      best = { cols, rows }
+    } else if (Math.abs(score - bestScore) < 1e-9) {
+      if ((portrait && rows > best.rows) || (!portrait && cols > best.cols)) best = { cols, rows }
+    }
+  }
+  return best
+}
+
+const pdfSheetGrid = computed(() => {
+  const n = Math.max(1, layout.value.pages_per_sheet)
+  const [paperWidth, paperHeight] = printablePaperSize.value
+  return chooseSheetGrid(n, paperWidth, paperHeight, pdfPageAspect.value)
+})
+
+const currentPaperArea = computed<PaperArea | null>(() => {
+  const area = paperAreas.value.find((item) => item.page_size === form.value.paper_size)
+  if (!area) return null
+  if (form.value.orientation === 'landscape') {
+    return {
+      ...area,
+      width: area.height,
+      height: area.width,
+      left: area.bottom,
+      right: area.top,
+      bottom: area.right,
+      top: area.left,
+    }
+  }
+  return area
+})
+
+const printablePaperSize = computed<[number, number]>(() => {
+  const area = currentPaperArea.value
+  if (!area) return paperSizeMm[form.value.paper_size] || paperSizeMm.A4
+  return [
+    Math.max(1, area.width - area.left - area.right),
+    Math.max(1, area.height - area.bottom - area.top),
+  ]
+})
+
+const previewAspect = computed(() => {
+  let [width, height] = paperSizeMm[form.value.paper_size] || paperSizeMm.A4
+  if (form.value.orientation === 'landscape') [width, height] = [height, width]
+  return `${width} / ${height}`
+})
+
+const previewSheetAspect = computed(() => previewAspect.value)
+
+const previewFilter = computed(() => form.value.color_mode === 'monochrome' ? 'grayscale(1)' : 'none')
+
+const previewObjectFit = computed(() => {
+  switch (form.value.scaling) {
+    case 'fill': return 'cover'
+    case 'none': return 'none'
+    default: return 'contain'
+  }
+})
+
+const previewLabel = computed(() => {
+  const orientation = form.value.orientation === 'landscape' ? '横向' : '纵向'
+  const color = form.value.color_mode === 'color' ? '彩色' : '黑白'
+  const duplex = form.value.duplex === 'one-sided' ? '单面' : '双面'
+  const scaling = { auto: '自动', fit: '适应页面', fill: '填满页面', none: '原始大小' }[form.value.scaling] || form.value.scaling
+  return `${form.value.paper_size} · ${orientation} · ${color} · ${duplex} · ${scaling}`
+})
+
+const previewPage = computed(() => {
+  const match = form.value.page_range.match(/\d+/)
+  return match ? Number(match[0]) : 1
+})
+
+const hasSelectedPages = computed(() => {
+  if (!isPdf.value && !isNasPdf.value) return true
+  return selectedPages.value.length > 0
+})
+
+const pdfSheets = computed(() => {
+  const size = Math.max(1, layout.value.pages_per_sheet)
+  const selected = new Set(selectedPages.value)
+  const pages = pdfPages.value.filter((item) => selected.has(item.page))
+  const sheets: Array<Array<{ page: number; url: string }>> = []
+  for (let i = 0; i < pages.length; i += size) {
+    sheets.push(pages.slice(i, i + size))
+  }
+  return sheets
+})
+
+const pdfSheetColumns = computed(() => pdfSheetGrid.value.cols)
+
+const previewAutoRotate = computed(() => {
+  if (layout.value.pages_per_sheet <= 1) return 0
+  const [width, height] = printablePaperSize.value
+  const cols = pdfSheetGrid.value.cols
+  const rows = pdfSheetGrid.value.rows
+  const cellAspect = (width / cols) / (height / rows)
+  const pageAspect = pdfPageAspect.value || 1
+  if (cellAspect > 1.2 && pageAspect < 0.9) return 90
+  if (cellAspect < 0.9 && pageAspect > 1.2) return 90
+  return 0
+})
+
+const previewPageTransform = computed(() => {
+  const transforms: string[] = []
+  if (previewAutoRotate.value) transforms.push(`rotate(${previewAutoRotate.value}deg)`)
+  if (layout.value.reverse) transforms.push('rotate(180deg)')
+  if (layout.value.flip_horizontal) transforms.push('scaleX(-1)')
+  return transforms.join(' ') || undefined
+})
+
+const layoutOptionsPayload = computed(() => ({
+  ...layout.value,
+  orientation: form.value.orientation,
+}))
+
+function clearPdfPages() {
+  for (const item of pdfPages.value) {
+    if (item.url) URL.revokeObjectURL(item.url)
+  }
+  pdfPages.value = []
+  selectedPages.value = []
+  for (const preview of pdfSheetPreviews.value) {
+    if (preview.url.startsWith('blob:')) URL.revokeObjectURL(preview.url)
+  }
+  pdfSheetPreviews.value = []
+}
+
+function compactPages(pages: number[]): string {
+  const sorted = [...new Set(pages)].sort((a, b) => a - b)
+  const parts: string[] = []
+  let start = sorted[0]
+  let prev = sorted[0]
+  for (let i = 1; i <= sorted.length; i++) {
+    const current = sorted[i]
+    if (current !== undefined && current === prev + 1) {
+      prev = current
+      continue
+    }
+    if (start !== undefined) {
+      parts.push(prev === start ? `${start}` : `${start}-${prev}`)
+    }
+    start = current
+    prev = current
+  }
+  return parts.join(',')
+}
+
+function syncPageRangeFromSelection() {
+  const total = pageCount.value || pdfPages.value.length
+  if (!selectedPages.value.length) {
+    form.value.page_range = ''
+    return
+  }
+  form.value.page_range = selectedPages.value.length >= total ? '' : compactPages(selectedPages.value)
+}
+
+function isPageSelected(page: number): boolean {
+  return selectedPages.value.includes(page)
+}
+
+function togglePage(page: number) {
+  const next = new Set(selectedPages.value)
+  if (next.has(page)) next.delete(page)
+  else next.add(page)
+  selectedPages.value = Array.from(next).sort((a, b) => a - b)
+  syncPageRangeFromSelection()
+  if (isPdf.value || isNasPdf.value) void renderSheetPreviews()
+}
+
+function onPageCardClick(page: number) {
+  if (layout.value.pages_per_sheet === 1) togglePage(page)
+}
+
+function onSheetClick(sheet: Array<{ page: number; url: string }>) {
+  if (layout.value.pages_per_sheet === 1 && sheet[0]) togglePage(sheet[0].page)
+}
+
+function parsePageSelection(value: string, total: number): number[] | null {
+  const text = value.trim()
+  if (!text) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages = new Set<number>()
+  for (const token of text.split(/[\s,]+/).filter(Boolean)) {
+    const match = token.match(/^(\d+)(?:-(\d+))?$/)
+    if (!match) return null
+    const start = Number(match[1])
+    const end = match[2] ? Number(match[2]) : start
+    if (start < 1 || end < start || end > total) return null
+    for (let page = start; page <= end; page++) pages.add(page)
+  }
+  return Array.from(pages).sort((a, b) => a - b)
+}
+
+function onPageRangeInput() {
+  if (!isPdf.value && !isNasPdf.value) return
+  const total = pageCount.value || pdfPages.value.length
+  if (!total) return
+  const parsed = parsePageSelection(form.value.page_range, total)
+  if (parsed) {
+    selectedPages.value = parsed
+    if (isPdf.value || isNasPdf.value) void renderSheetPreviews()
+  }
+}
+
+const colorOption = computed(() => ppdOptions.value.find((o) => {
+  const keyword = o.keyword.toLowerCase()
+  const text = o.text.toLowerCase()
+  const hasColorChoice = o.choices.some((c) => /color|colour|rgb|cmyk/i.test(c))
+  const hasMonoChoice = o.choices.some((c) => /mono|gray|grey|black/i.test(c))
+  return keyword.includes('color') || keyword.includes('colour') || keyword === 'ink' ||
+    text.includes('color') || text.includes('colour') || text.includes('grayscale') ||
+    (hasColorChoice && hasMonoChoice)
+}))
+
+const supportsColor = computed(() => !!colorOption.value)
+
+const duplexOption = computed(() => ppdOptions.value.find((o) => {
+  const keyword = o.keyword.toLowerCase()
+  const text = o.text.toLowerCase()
+  return keyword.includes('duplex') || text.includes('duplex') || text.includes('2-sided') || text.includes('双面')
+}))
+
+const supportsDuplex = computed(() => !!duplexOption.value && duplexOption.value.choices.length > 1)
+
+const duplexChoices = computed(() => {
+  const choices = duplexOption.value?.choices.map((c) => c.toLowerCase()) || []
+  const items = [{ value: 'one-sided', label: '单面' }]
+  if (choices.some((c) => c.includes('duplex') && !c.includes('duplextumble'))) {
+    items.push({ value: 'two-sided-long-edge', label: '双面（长边翻页）' })
+  }
+  if (choices.some((c) => c.includes('duplextumble'))) {
+    items.push({ value: 'two-sided-short-edge', label: '双面（短边翻页）' })
+  }
+  if (items.length === 1 && supportsDuplex.value) items.push({ value: 'two-sided-long-edge', label: '双面（长边翻页）' })
+  return items
+})
+
+const corePPDKeywords = computed(() => {
+  const keys = new Set<string>()
+  const pageSize = ppdOptions.value.find((o) => o.keyword === 'PageSize' || /page size/i.test(o.text))
+  if (pageSize) keys.add(pageSize.keyword.toLowerCase())
+  if (duplexOption.value) keys.add(duplexOption.value.keyword.toLowerCase())
+  if (colorOption.value) keys.add(colorOption.value.keyword.toLowerCase())
+  return keys
+})
+
+const extraPPDOptionList = computed(() =>
+  ppdOptions.value.filter((o) => !corePPDKeywords.value.has(o.keyword.toLowerCase())),
+)
+
+function resetExtraPPDOptions() {
+  const values: Record<string, string> = {}
+  for (const option of extraPPDOptionList.value) {
+    values[option.keyword] = option.default || option.choices[0] || ''
+  }
+  extraPPDOptions.value = values
+}
+
+const ppdOptionLabels: Record<string, string> = {
+  resolution: '分辨率',
+  inputslot: '纸张来源',
+  mediatype: '介质类型',
+  brlasereconomode: '省墨模式',
+  brightness: '亮度',
+  contrast: '对比度',
+  saturation: '饱和度',
+  color: '色彩',
+  colour: '色彩',
+  colormodel: '色彩模式',
+  colormode: '色彩模式',
+  orientation: '方向',
+  outputbin: '输出纸盒',
+  finisher: '装订器',
+  staple: '装订',
+  punch: '打孔',
+  copies: '份数',
+}
+
+const ppdChoiceLabels: Record<string, Record<string, string>> = {
+  resolution: { '600dpi': '600 dpi', '1200dpi': '1200 dpi' },
+  inputslot: { auto: '自动', tray1: '纸盒 1', tray2: '纸盒 2', tray3: '纸盒 3', mptray: '手动进纸', manual: '手动', 'multi-purpose': '多用途纸盒' },
+  mediatype: {
+    plain: '普通纸',
+    thin: '薄纸',
+    thick: '厚纸',
+    thicker: '更厚纸',
+    bond: '证券纸',
+    trans: '透明胶片',
+    env: '信封',
+    'env-thick': '厚信封',
+    'env-thin': '薄信封',
+    plain_normal: '普通纸（标准）',
+    env_normal: '信封（标准）',
+  },
+  brlasereconomode: { false: '关闭', true: '开启' },
+  outputbin: { auto: '自动', default: '默认' },
+}
+
+function ppdOptionLabel(option: PPDOption): string {
+  return ppdOptionLabels[option.keyword.toLowerCase()] || option.text || option.keyword
+}
+
+function ppdChoiceLabel(keyword: string, choice: string): string {
+  return ppdChoiceLabels[keyword.toLowerCase()]?.[choice.toLowerCase()] || choice
+}
+
+function defaultColorMode(): 'color' | 'monochrome' {
+  const def = colorOption.value?.default?.toLowerCase() || ''
+  return /mono|gray|grey|black/.test(def) ? 'monochrome' : 'color'
+}
 
 const pageRangePlaceholder = computed(() => {
   if (pageCount.value) return `全部（共 ${pageCount.value} 页），如 1-${Math.min(pageCount.value, 2)}`
@@ -61,16 +426,328 @@ const pageRangePlaceholder = computed(() => {
 async function loadPPDOptions() {
   if (!selectedPrinter.value) return
   try {
-    const res = await api.get<{ options: PPDOption[] }>(`/api/printers/${selectedPrinter.value}/ppd-options`)
+    const [res, areaRes] = await Promise.all([
+      api.get<{ options: PPDOption[] }>(`/api/printers/${selectedPrinter.value}/ppd-options`),
+      api.get<{ areas: PaperArea[] }>(`/api/printers/${selectedPrinter.value}/paper-areas`).catch(() => ({ areas: [] })),
+    ])
     ppdOptions.value = res.options
-    if (!supportsColor.value) form.value.color_mode = 'monochrome'
+    paperAreas.value = areaRes.areas || []
+    form.value.color_mode = colorOption.value ? defaultColorMode() : 'monochrome'
+    if (!supportsDuplex.value) form.value.duplex = 'one-sided'
     if (!paperChoices.value.includes(form.value.paper_size)) form.value.paper_size = paperChoices.value[0] || 'A4'
+    resetExtraPPDOptions()
   } catch {
     ppdOptions.value = []
+    paperAreas.value = []
+    extraPPDOptions.value = {}
   }
 }
 
+let previewAbort: AbortController | null = null
+let previewTimer: number | undefined
+
+function clearPreview() {
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  previewUrl.value = ''
+  clearPdfPages()
+  previewError.value = ''
+  previewProgress.value = { done: 0, total: 0, stage: '' }
+}
+
+async function renderPdfPreview(): Promise<void> {
+  const token = ++pdfPreviewToken
+  let data: ArrayBuffer
+  if (file.value) {
+    data = await file.value.arrayBuffer()
+  } else if (nasPath.value) {
+    const res = await fetch(nasPreviewUrl.value)
+    if (!res.ok) throw new Error('PDF 预览读取失败')
+    data = await res.arrayBuffer()
+  } else {
+    throw new Error('请先选择文件')
+  }
+  const doc = await pdfjsLib.getDocument({ data }).promise
+  if (token !== pdfPreviewToken) return
+  clearPdfPages()
+  pageCount.value = doc.numPages
+  pdfPages.value = Array.from({ length: doc.numPages }, (_, index) => ({ page: index + 1, url: '' }))
+  selectedPages.value = Array.from({ length: doc.numPages }, (_, index) => index + 1)
+  form.value.page_range = ''
+  previewProgress.value = { done: 0, total: doc.numPages, stage: '正在渲染页面' }
+  let active = 0
+  const waiters: Array<() => void> = []
+  const acquire = async () => {
+    if (active < 4) {
+      active++
+      return
+    }
+    await new Promise<void>((resolve) => waiters.push(resolve))
+    active++
+  }
+  const release = () => {
+    active--
+    const next = waiters.shift()
+    if (next) next()
+  }
+  const renderPageAt = async (index: number) => {
+    await acquire()
+    try {
+      if (token !== pdfPreviewToken) return
+      const page = await doc.getPage(index + 1)
+      const viewport = page.getViewport({ scale: 0.8 })
+      if (page.pageNumber === 1) pdfPageAspect.value = viewport.width / viewport.height
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.floor(viewport.width)
+      canvas.height = Math.floor(viewport.height)
+      const context = canvas.getContext('2d')
+      if (!context) throw new Error('浏览器不支持 Canvas')
+      await page.render({ canvasContext: context, viewport }).promise
+      if (token !== pdfPreviewToken) return
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+      if (blob) {
+        const item = pdfPages.value[index]
+        if (item) item.url = URL.createObjectURL(blob)
+      }
+      previewProgress.value = {
+        ...previewProgress.value,
+        done: Math.min(previewProgress.value.total, previewProgress.value.done + 1),
+      }
+      void renderReadySheets(token)
+    } finally {
+      release()
+    }
+  }
+  const pageTasks = Array.from({ length: doc.numPages }, (_, index) => renderPageAt(index))
+  await Promise.all(pageTasks)
+  if (token !== pdfPreviewToken) return
+  await renderSheetPreviews()
+}
+
+async function renderReadySheets(fileToken: number): Promise<void> {
+  const version = sheetPreviewToken
+  for (let index = 0; index < pdfSheets.value.length; index++) {
+    if (fileToken !== pdfPreviewToken || version !== sheetPreviewToken) return
+    if (pdfSheetPreviews.value[index]) continue
+    await renderSingleSheet(index, fileToken, version)
+  }
+}
+
+async function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('页面图片加载失败'))
+    image.src = url
+  })
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82))
+}
+
+async function renderSingleSheet(sheetIndex: number, fileToken: number, version = sheetPreviewToken): Promise<void> {
+  if (fileToken !== pdfPreviewToken || version !== sheetPreviewToken) return
+  const group = pdfSheets.value[sheetIndex]
+  if (!group || !group.length || group.some((item) => !item.url)) return
+  const grid = pdfSheetGrid.value
+  const area = currentPaperArea.value
+  let [paperWidth, paperHeight] = paperSizeMm[form.value.paper_size] || paperSizeMm.A4
+  if (form.value.orientation === 'landscape') [paperWidth, paperHeight] = [paperHeight, paperWidth]
+  if (area) {
+    paperWidth = area.width
+    paperHeight = area.height
+  }
+  const canvasWidth = 800
+  const canvasHeight = Math.round(canvasWidth * paperHeight / paperWidth)
+  const canvas = document.createElement('canvas')
+  canvas.width = canvasWidth
+  canvas.height = canvasHeight
+  const context = canvas.getContext('2d')
+  if (!context) return
+  context.fillStyle = '#fff'
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  const printLeft = area ? canvas.width * (area.left / area.width) : 0
+  const printTop = area ? canvas.height * (area.top / area.height) : 0
+  const printWidth = area ? canvas.width * ((area.width - area.left - area.right) / area.width) : canvas.width
+  const printHeight = area ? canvas.height * ((area.height - area.bottom - area.top) / area.height) : canvas.height
+  const cellWidth = printWidth / grid.cols
+  const cellHeight = printHeight / grid.rows
+  const images = await Promise.all(group.map((item) => loadImage(item.url).catch(() => null)))
+  if (fileToken !== pdfPreviewToken || version !== sheetPreviewToken) return
+  for (let index = 0; index < group.length; index++) {
+    const image = images[index]
+    if (!image) continue
+    const pageAspect = image.naturalWidth / image.naturalHeight
+    const cellAspect = cellWidth / cellHeight
+    let angle = 0
+    if (cellAspect > 1.2 && pageAspect < 0.9) angle = 90
+    if (cellAspect < 0.9 && pageAspect > 1.2) angle = 90
+    if (layout.value.reverse) angle += 180
+    const rotated = angle % 180 !== 0
+    const fitWidth = rotated ? image.naturalHeight : image.naturalWidth
+    const fitHeight = rotated ? image.naturalWidth : image.naturalHeight
+    const scale = Math.min((cellWidth - 4) / fitWidth, (cellHeight - 4) / fitHeight)
+    const col = index % grid.cols
+    const row = Math.floor(index / grid.cols)
+    const centerX = printLeft + col * cellWidth + cellWidth / 2
+    const centerY = printTop + row * cellHeight + cellHeight / 2
+    context.save()
+    context.translate(centerX, centerY)
+    if (layout.value.flip_horizontal) context.scale(-1, 1)
+    context.rotate(angle * Math.PI / 180)
+    context.drawImage(
+      image,
+      -image.naturalWidth * scale / 2,
+      -image.naturalHeight * scale / 2,
+      image.naturalWidth * scale,
+      image.naturalHeight * scale,
+    )
+    context.restore()
+    if (layout.value.border) {
+      context.strokeStyle = '#111827'
+      context.lineWidth = 2
+      context.strokeRect(printLeft + col * cellWidth + 1, printTop + row * cellHeight + 1, cellWidth - 2, cellHeight - 2)
+    }
+  }
+  const blob = await canvasToBlob(canvas)
+  if (!blob || fileToken !== pdfPreviewToken || version !== sheetPreviewToken) return
+  const next = [...pdfSheetPreviews.value]
+  const previous = next[sheetIndex]
+  if (previous?.url.startsWith('blob:')) URL.revokeObjectURL(previous.url)
+  next[sheetIndex] = { url: URL.createObjectURL(blob) }
+  pdfSheetPreviews.value = next
+}
+
+async function renderSheetPreviews(): Promise<void> {
+  const token = ++sheetPreviewToken
+  for (let index = 0; index < pdfSheets.value.length; index++) {
+    if (token !== sheetPreviewToken) return
+    await renderSingleSheet(index, pdfPreviewToken, token)
+  }
+}
+
+async function ensurePreviewSession(): Promise<string> {
+  if (previewSessionId) return previewSessionId
+  if (!file.value) throw new Error('请先选择文件')
+  if (!previewSessionPromise) {
+    const fd = new FormData()
+    fd.append('file', file.value)
+    previewSessionPromise = api.upload<{ preview_id: string }>('/api/preview/session', fd)
+      .then((res) => {
+        previewSessionId = res.preview_id
+        return res.preview_id
+      })
+      .finally(() => {
+        previewSessionPromise = null
+      })
+  }
+  return previewSessionPromise
+}
+
+async function refreshPreviewNow() {
+  previewAbort?.abort()
+  previewAbort = null
+  if (!file.value && !nasPath.value) {
+    clearPreview()
+    return
+  }
+  // Images are rendered directly by the browser; converting them to PDF and
+  // running Ghostscript for every parameter change makes the preview sluggish.
+  if (isImage.value || isNasImage.value) {
+    previewLoading.value = false
+    clearPreview()
+    return
+  }
+  if (isPdf.value || isNasPdf.value) {
+    previewLoading.value = true
+    previewError.value = ''
+    try {
+      await renderPdfPreview()
+    } catch (e) {
+      previewError.value = (e as Error).message || 'PDF 预览生成失败'
+    } finally {
+      previewLoading.value = false
+    }
+    return
+  }
+  const controller = new AbortController()
+  previewAbort = controller
+  previewLoading.value = true
+  previewError.value = ''
+  try {
+    const fd = new FormData()
+    if (file.value) {
+      const sessionId = await ensurePreviewSession()
+      if (previewAbort !== controller) return
+      fd.append('preview_id', sessionId)
+    } else {
+      fd.append('nas_path', nasPath.value)
+    }
+    fd.append('paper_size', form.value.paper_size)
+    fd.append('orientation', form.value.orientation)
+    fd.append('color_mode', form.value.color_mode)
+    fd.append('scaling', form.value.scaling)
+    fd.append('page', String(previewPage.value))
+    const headers: Record<string, string> = {}
+    if (adminToken.value) headers['X-Admin-Token'] = adminToken.value
+    const res = await fetch(apiUrl('/api/preview'), { method: 'POST', body: fd, signal: controller.signal, headers })
+    if (!res.ok) {
+      let message = '预览生成失败'
+      try {
+        const body = await res.json()
+        message = body?.error?.message || message
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message)
+    }
+    const blob = await res.blob()
+    if (previewAbort !== controller) return
+    if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+    previewUrl.value = URL.createObjectURL(blob)
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') return
+    previewError.value = (e as Error).message || '预览生成失败'
+  } finally {
+    if (previewAbort === controller) previewLoading.value = false
+  }
+}
+
+function refreshPreview() {
+  if (previewTimer) clearTimeout(previewTimer)
+  previewTimer = window.setTimeout(() => { void refreshPreviewNow() }, 200)
+}
+
+watch([file, nasPath, selectedPrinter], () => refreshPreview())
+
+watch([() => form.value.paper_size, () => form.value.orientation], () => {
+  if (isPdf.value || isNasPdf.value) {
+    void renderSheetPreviews()
+    return
+  }
+  refreshPreview()
+})
+
+watch(paperAreas, () => {
+  if (isPdf.value || isNasPdf.value) void renderSheetPreviews()
+})
+
+watch([() => form.value.color_mode, () => form.value.scaling], () => {
+  // PDF pages are already rendered; color/scaling only affects the preview layer.
+  if (isPdf.value || isNasPdf.value) return
+  refreshPreview()
+})
+
+watch(() => form.value.page_range, () => {
+  if (!isPdf.value && !isNasPdf.value) refreshPreview()
+})
+
 watch(selectedPrinter, loadPPDOptions)
+watch(
+  [() => layout.value.pages_per_sheet, () => layout.value.reverse, () => layout.value.flip_horizontal,
+    () => layout.value.border, () => form.value.orientation, () => form.value.paper_size],
+  () => { void renderSheetPreviews() },
+)
 
 async function loadPrinters() {
   try {
@@ -109,9 +786,12 @@ function syncPolling() {
 let pageCountToken = 0
 
 async function setFile(f: File | null) {
+  previewSessionId = ''
+  previewSessionPromise = null
   if (fileUrl.value) URL.revokeObjectURL(fileUrl.value)
   if (f) nasPath.value = ''
   file.value = f
+  if (f) form.value.page_range = ''
   if (f && isImage.value) form.value.page_range = ''
   fileUrl.value = f ? URL.createObjectURL(f) : ''
   pageCount.value = null
@@ -160,6 +840,8 @@ async function pickNasFile() {
     console.log('[PrintPortal] pickUserFile result', result)
     const path = result?.data?.[0]
     if (path) {
+      previewSessionId = ''
+      previewSessionPromise = null
       nasPath.value = path
       file.value = null
       if (fileUrl.value) URL.revokeObjectURL(fileUrl.value)
@@ -238,6 +920,7 @@ function validatePageRange(range: string, total: number): string {
 async function submit() {
   if (!file.value && !nasPath.value) return toast.error('请先选择文件')
   if (!selectedPrinter.value) return toast.error('请先选择打印机')
+  if (!hasSelectedPages.value) return toast.error('请至少选择一页')
   if (pageCount.value) {
     const rangeError = validatePageRange(form.value.page_range, pageCount.value)
     if (rangeError) return toast.error(rangeError)
@@ -250,12 +933,16 @@ async function submit() {
         printer_id: selectedPrinter.value,
         path: nasPath.value,
         ...form.value,
+        ppd_options: JSON.stringify(extraPPDOptions.value),
+        layout_options: JSON.stringify(layoutOptionsPayload.value),
       })
     } else {
       const fd = new FormData()
       fd.append('file', file.value!)
       fd.append('printer_id', String(selectedPrinter.value))
       for (const [k, v] of Object.entries(form.value)) fd.append(k, String(v))
+      fd.append('ppd_options', JSON.stringify(extraPPDOptions.value))
+      fd.append('layout_options', JSON.stringify(layoutOptionsPayload.value))
       res = await api.upload<{ job_id: number; printer: string }>('/api/print', fd)
     }
     toast.success(`已提交打印任务 #${res.job_id}（${res.printer}）`)
@@ -317,7 +1004,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
+  if (previewTimer) clearTimeout(previewTimer)
+  previewAbort?.abort()
   if (fileUrl.value) URL.revokeObjectURL(fileUrl.value)
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
 })
 </script>
 
@@ -377,44 +1067,68 @@ onUnmounted(() => {
           <button class="preview-remove" title="移除文件" aria-label="移除文件" @click="clearSource">×</button>
           <div class="preview-head">
             <span class="file-name">{{ nasName }}</span>
-            <span class="file-sub">来自 NAS · 已授权<template v-if="pageCount"> · 共 {{ pageCount }} 页</template><template v-else-if="pageCountLoading"> · 读取页数…</template></span>
+            <span class="file-sub">来自 NAS · 已授权<template v-if="pageCount"> · 原文档 {{ pageCount }} 页</template><template v-else-if="pageCountLoading"> · 读取页数…</template><template v-if="isNasPdf"> · 已选 {{ selectedPages.length }} 页<template v-if="layout.pages_per_sheet > 1"> · 每张 {{ layout.pages_per_sheet }} 页 → 预计 {{ pdfSheets.length }} 张纸</template></template></span>
           </div>
-          <iframe
-            v-if="isNasPdf"
-            :src="nasPreviewUrl"
-            class="preview-frame"
-            title="PDF 预览"
-          ></iframe>
-          <img v-else-if="isNasImage" :src="nasPreviewUrl" alt="文件预览" class="preview-image" />
-          <div v-else class="file-card" style="width: 100%; margin-top: 14px">
-            <div class="file-thumb"><span>NAS</span></div>
-            <div class="file-meta">
-              <div class="file-name">{{ nasName }}</div>
-              <div class="file-sub">{{ nasPath }}</div>
+          <div v-if="isNasPdf" class="pdf-page-grid">
+            <div v-for="(sheet, sheetIndex) in pdfSheets" :key="sheetIndex" class="pdf-sheet-card" :class="{ 'single-page': layout.pages_per_sheet === 1 }" :style="{ aspectRatio: previewSheetAspect }">
+              <img v-if="pdfSheetPreviews[sheetIndex]" :src="pdfSheetPreviews[sheetIndex].url" alt="打印版面预览" class="pdf-sheet-image" :style="{ filter: previewFilter }" @click="onSheetClick(sheet)" />
+              <div v-else class="pdf-page-loading">正在生成版面预览…</div>
+              <label v-if="layout.pages_per_sheet === 1 && sheet[0]" class="pdf-page-select" @click.stop>
+                <input type="checkbox" :checked="isPageSelected(sheet[0].page)" @change="togglePage(sheet[0].page)" />
+                第 {{ sheet[0].page }} 页
+              </label>
+              <div v-if="layout.pages_per_sheet > 1" class="pdf-sheet-label">第 {{ sheetIndex + 1 }} 张（共 {{ pdfSheets.length }} 张）</div>
             </div>
+            <div v-if="previewLoading && !pdfPages.length" class="preview-loading">{{ previewProgress.stage || '正在加载 PDF…' }}<template v-if="previewProgress.total"> · {{ previewProgress.done }}/{{ previewProgress.total }} 页</template></div>
           </div>
+          <div v-else class="print-paper" :style="{ aspectRatio: previewAspect }">
+            <img v-if="previewUrl" :src="previewUrl" alt="打印效果预览" class="preview-image print-preview-image" :style="{ filter: previewFilter }" />
+            <img v-else-if="isNasImage" :src="nasPreviewUrl" alt="文件预览" class="preview-image" :style="{ filter: previewFilter, objectFit: previewObjectFit }" />
+            <div v-else class="file-card" style="width: 100%; margin-top: 14px">
+              <div class="file-thumb"><span>NAS</span></div>
+              <div class="file-meta">
+                <div class="file-name">{{ nasName }}</div>
+                <div class="file-sub">{{ nasPath }}</div>
+              </div>
+            </div>
+            <div v-if="previewLoading" class="preview-loading">正在生成打印预览…</div>
+          </div>
+          <div class="print-preview-meta">{{ previewLabel }}</div>
+          <p v-if="previewError" class="preview-error">{{ previewError }}</p>
         </div>
 
         <div v-else-if="file" class="preview-shell">
           <button class="preview-remove" title="移除文件" aria-label="移除文件" @click="setFile(null)">×</button>
           <div class="preview-head">
             <span class="file-name">{{ file.name }}</span>
-            <span class="file-sub">{{ formatSize(file.size) }}<template v-if="pageCount"> · 共 {{ pageCount }} 页</template><template v-else-if="pageCountLoading"> · 读取页数…</template></span>
+            <span class="file-sub">{{ formatSize(file.size) }}<template v-if="pageCount"> · 原文档 {{ pageCount }} 页</template><template v-else-if="pageCountLoading"> · 读取页数…</template><template v-if="isPdf"> · 已选 {{ selectedPages.length }} 页<template v-if="layout.pages_per_sheet > 1"> · 每张 {{ layout.pages_per_sheet }} 页 → 预计 {{ pdfSheets.length }} 张纸</template></template></span>
           </div>
-          <iframe
-            v-if="isPdf"
-            :src="fileUrl"
-            class="preview-frame"
-            title="PDF 预览"
-          ></iframe>
-          <img v-else-if="isImage" :src="fileUrl" alt="文件预览" class="preview-image" />
-          <div v-else class="file-card" style="width: 100%; margin-top: 14px">
-            <div class="file-thumb"><span>{{ isPdf ? 'PDF' : 'DOC' }}</span></div>
-            <div class="file-meta">
-              <div class="file-name">{{ file.name }}</div>
-              <div class="file-sub">{{ formatSize(file.size) }}</div>
+          <div v-if="isPdf" class="pdf-page-grid">
+            <div v-for="(sheet, sheetIndex) in pdfSheets" :key="sheetIndex" class="pdf-sheet-card" :class="{ 'single-page': layout.pages_per_sheet === 1 }" :style="{ aspectRatio: previewSheetAspect }">
+              <img v-if="pdfSheetPreviews[sheetIndex]" :src="pdfSheetPreviews[sheetIndex].url" alt="打印版面预览" class="pdf-sheet-image" :style="{ filter: previewFilter }" @click="onSheetClick(sheet)" />
+              <div v-else class="pdf-page-loading">正在生成版面预览…</div>
+              <label v-if="layout.pages_per_sheet === 1 && sheet[0]" class="pdf-page-select" @click.stop>
+                <input type="checkbox" :checked="isPageSelected(sheet[0].page)" @change="togglePage(sheet[0].page)" />
+                第 {{ sheet[0].page }} 页
+              </label>
+              <div v-if="layout.pages_per_sheet > 1" class="pdf-sheet-label">第 {{ sheetIndex + 1 }} 张（共 {{ pdfSheets.length }} 张）</div>
             </div>
+            <div v-if="previewLoading && !pdfPages.length" class="preview-loading">{{ previewProgress.stage || '正在加载 PDF…' }}<template v-if="previewProgress.total"> · {{ previewProgress.done }}/{{ previewProgress.total }} 页</template></div>
           </div>
+          <div v-else class="print-paper" :style="{ aspectRatio: previewAspect }">
+            <img v-if="previewUrl" :src="previewUrl" alt="打印效果预览" class="preview-image print-preview-image" :style="{ filter: previewFilter }" />
+            <img v-else-if="isImage" :src="fileUrl" alt="文件预览" class="preview-image" :style="{ filter: previewFilter, objectFit: previewObjectFit }" />
+            <div v-else class="file-card" style="width: 100%; margin-top: 14px">
+              <div class="file-thumb"><span>{{ isPdf ? 'PDF' : 'DOC' }}</span></div>
+              <div class="file-meta">
+                <div class="file-name">{{ file.name }}</div>
+                <div class="file-sub">{{ formatSize(file.size) }}</div>
+              </div>
+            </div>
+            <div v-if="previewLoading" class="preview-loading">正在生成打印预览…</div>
+          </div>
+          <div class="print-preview-meta">{{ previewLabel }}</div>
+          <p v-if="previewError" class="preview-error">{{ previewError }}</p>
         </div>
       </section>
 
@@ -437,7 +1151,7 @@ onUnmounted(() => {
           </div>
           <div v-if="showPageRange" class="field">
             <label>页码范围<span v-if="pageCount" class="field-hint"> 共 {{ pageCount }} 页</span></label>
-            <input v-model="form.page_range" class="input" :placeholder="pageRangePlaceholder" />
+            <input v-model="form.page_range" class="input" :placeholder="pageRangePlaceholder" @input="onPageRangeInput" />
           </div>
           <div v-else class="field full">
             <label>页码范围</label>
@@ -449,11 +1163,10 @@ onUnmounted(() => {
           </div>
           <div class="field">
             <label>双面</label>
-            <select v-model="form.duplex" class="select">
-              <option value="one-sided">单面</option>
-              <option value="two-sided-long-edge">双面（长边翻页）</option>
-              <option value="two-sided-short-edge">双面（短边翻页）</option>
+            <select v-model="form.duplex" class="select" :disabled="!supportsDuplex">
+              <option v-for="choice in duplexChoices" :key="choice.value" :value="choice.value">{{ choice.label }}</option>
             </select>
+            <div v-if="!supportsDuplex" class="field-hint">当前打印机不支持双面</div>
           </div>
           <div class="field">
             <label>纸张</label>
@@ -475,7 +1188,7 @@ onUnmounted(() => {
               <option value="color">彩色</option>
             </select>
           </div>
-          <div class="field full">
+          <div class="field">
             <label>缩放</label>
             <select v-model="form.scaling" class="select">
               <option value="auto">自动</option>
@@ -484,9 +1197,67 @@ onUnmounted(() => {
               <option value="none">原始大小</option>
             </select>
           </div>
+          <details class="layout-section">
+            <summary>布局</summary>
+            <div class="layout-grid">
+              <div class="field">
+                <label>每张页数</label>
+                <select v-model.number="layout.pages_per_sheet" class="select">
+                  <option :value="1">1</option>
+                  <option :value="2">2</option>
+                  <option :value="4">4</option>
+                  <option :value="6">6</option>
+                  <option :value="9">9</option>
+                  <option :value="16">16</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>布局方向</label>
+                <select v-model="layout.direction" class="select">
+                  <option value="lrtb">从左到右，从上到下</option>
+                  <option value="rltb">从右到左，从上到下</option>
+                  <option value="tblr">从上到下，从左到右</option>
+                  <option value="btlr">从下到上，从左到右</option>
+                </select>
+                <div v-if="layout.pages_per_sheet === 1" class="field-hint">仅每张页数大于 1 时生效</div>
+              </div>
+              <div class="field">
+                <label>边框</label>
+                <select v-model="layout.border" class="select">
+                  <option :value="false">无</option>
+                  <option :value="true">细线</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>颠倒页面方向</label>
+                <select v-model="layout.reverse" class="select">
+                  <option :value="false">关闭</option>
+                  <option :value="true">开启</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>水平翻转</label>
+                <select v-model="layout.flip_horizontal" class="select">
+                  <option :value="false">关闭</option>
+                  <option :value="true">开启</option>
+                </select>
+              </div>
+            </div>
+          </details>
+          <details v-if="extraPPDOptionList.length" class="extra-ppd-section">
+            <summary>更多打印机选项（{{ extraPPDOptionList.length }} 项）</summary>
+            <div class="extra-ppd-grid">
+              <div v-for="option in extraPPDOptionList" :key="option.keyword" class="field">
+                <label>{{ ppdOptionLabel(option) }}</label>
+                <select v-model="extraPPDOptions[option.keyword]" class="select">
+                  <option v-for="choice in option.choices" :key="choice" :value="choice">{{ ppdChoiceLabel(option.keyword, choice) }}</option>
+                </select>
+              </div>
+            </div>
+          </details>
         </div>
 
-        <button class="btn btn-primary" style="width: 100%; margin-top: 18px" :disabled="submitting || (!file && !nasPath)" @click="submit">
+        <button class="btn btn-primary" style="width: 100%; margin-top: 18px" :disabled="submitting || (!file && !nasPath) || !hasSelectedPages" @click="submit">
           {{ submitting ? '提交中…' : '打印' }}
         </button>
         <p class="card-desc" style="text-align: center; margin-top: 10px">提交后即可离开，任务在后台排队处理</p>

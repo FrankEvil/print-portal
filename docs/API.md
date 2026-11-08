@@ -71,6 +71,8 @@
 | `orientation` | string | `portrait` / `landscape` |
 | `color_mode` | string | `monochrome` / `color` |
 | `scaling` | string | `auto` / `fit` / `fill` / `none` |
+| `ppd_options` | string | 可选，PPD 额外选项 JSON，如 `{"Resolution":"600dpi","InputSlot":"Auto"}` |
+| `layout_options` | string | 可选，布局选项 JSON，如 `{"pages_per_sheet":2,"direction":"lrtb","border":true,"reverse":false,"flip_horizontal":false}` |
 
 响应：`202 Accepted`
 
@@ -84,6 +86,22 @@
 ```
 
 前端通过 `GET /api/jobs/{id}` 轮询任务状态，不阻塞等待打印完成。
+
+### POST `/api/preview`
+
+生成打印版面预览（第一页）。`multipart/form-data` 字段与 `POST /api/print` 类似，另支持：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `file` | file | 上传文件；与 `nas_path` 二选一 |
+| `nas_path` | string | NAS 授权路径；与 `file` 二选一 |
+| `paper_size` | string | 纸张大小 |
+| `orientation` | string | `portrait` / `landscape` |
+| `color_mode` | string | `monochrome` / `color` |
+| `scaling` | string | `auto` / `fit` / `fill` / `none` |
+| `page` | int | 预览页码，默认 1 |
+
+返回 `image/png`。
 
 ### GET `/api/jobs`
 

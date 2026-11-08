@@ -70,6 +70,9 @@ CREATE TABLE jobs (
   paper_size      TEXT NOT NULL DEFAULT 'A4',
   orientation     TEXT NOT NULL DEFAULT 'portrait',
   color_mode      TEXT NOT NULL DEFAULT 'monochrome',
+  scaling         TEXT NOT NULL DEFAULT 'auto',
+  ppd_options     TEXT NOT NULL DEFAULT '{}',  -- PPD 额外选项，JSON
+  layout_options  TEXT NOT NULL DEFAULT '{}',  -- 布局选项，JSON
   status          TEXT NOT NULL DEFAULT 'pending',
   cups_job_id     TEXT NOT NULL DEFAULT '',
   error_message   TEXT NOT NULL DEFAULT '',
