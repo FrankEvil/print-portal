@@ -42,6 +42,13 @@ fnOS 的 Docker 应用包**不包含应用镜像本身**，只包含 `docker-com
 ghcr.io/frankevil/print-portal:${VERSION}
 ```
 
+默认镜像地址走南京大学镜像源（`ghcr.nju.edu.cn`），因为国内 NAS 主机经常连不上
+`ghcr.io`。如需改回官方源或换成其他仓库，设置 `PRINT_PORTAL_IMAGE`：
+
+```bash
+PRINT_PORTAL_IMAGE=ghcr.io/frankevil/print-portal:0.3.0
+```
+
 因此上架前必须：
 
 1. 构建并推送镜像
