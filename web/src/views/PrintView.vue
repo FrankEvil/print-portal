@@ -24,7 +24,6 @@ const dragging = ref(false)
 const submitting = ref(false)
 const jobs = ref<Job[]>([])
 const pageCount = ref<number | null>(null)
-const pageCountLoading = ref(false)
 const previewUrl = ref('')
 const previewLoading = ref(false)
 const previewError = ref('')
@@ -161,13 +160,20 @@ const layoutOptionsPayload = computed(() => ({
   orientation: form.value.orientation,
 }))
 
-function clearPdfPages() {
-  void closePreviewDoc()
-  previewGeometry.value = null
+// clearSheets drops the drawn sheets but keeps the open document, so a print
+// parameter change can redraw without re-fetching anything.
+function clearSheets() {
   for (const url of Object.values(previewSheetUrls.value)) {
     if (url.startsWith('blob:')) URL.revokeObjectURL(url)
   }
   previewSheetUrls.value = {}
+  previewGeometry.value = null
+}
+
+// clearPdfPages drops the document too. Only a file change needs this.
+function clearPdfPages() {
+  void closePreviewDoc()
+  clearSheets()
   selectedPages.value = []
 }
 
@@ -378,30 +384,45 @@ function clearPreview() {
   previewProgress.value = { done: 0, total: 0, stage: '' }
 }
 
-// Holds the document the browser renders from. Local files use the bytes the
-// user picked; NAS files are downloaded once into the same slot.
+// Holds the document the browser renders from. It is keyed by the file, not by
+// the print parameters: switching printer, paper or layout must reuse it so a
+// NAS file is never fetched a second time.
 let previewDoc: pdfjsLib.PDFDocumentProxy | null = null
+let previewDocKey = ''
+
+function currentDocKey(): string {
+  if (file.value && isPdf.value) {
+    return `file:${file.value.name}:${file.value.size}:${file.value.lastModified}`
+  }
+  if (nasPath.value && isNasPdf.value) return `nas:${nasPath.value}`
+  return ''
+}
 
 async function closePreviewDoc() {
   const doc = previewDoc
   previewDoc = null
+  previewDocKey = ''
   if (doc) await doc.destroy()
 }
 
 // loadPreviewDocument gives the renderer something to draw. A picked file never
-// leaves the browser, which is why the preview appears without any upload.
+// leaves the browser; a NAS file is opened by URL so PDF.js can stream it and
+// render pages as their bytes arrive.
 async function loadPreviewDocument(): Promise<pdfjsLib.PDFDocumentProxy | null> {
-  if (previewDoc) return previewDoc
+  const key = currentDocKey()
+  if (previewDoc && previewDocKey === key) return previewDoc
+  await closePreviewDoc()
+  if (!key) return null
   if (file.value && isPdf.value) {
     const data = await file.value.arrayBuffer()
     previewDoc = await pdfjsLib.getDocument({ data }).promise
-    return previewDoc
+  } else {
+    previewDoc = await pdfjsLib.getDocument({
+      url: apiUrl(`/api/nas/preview?path=${encodeURIComponent(nasPath.value)}`),
+    }).promise
   }
-  if (nasPath.value && isNasPdf.value) {
-    previewDoc = await pdfjsLib.getDocument({ url: apiUrl(`/api/nas/preview?path=${encodeURIComponent(nasPath.value)}`) }).promise
-    return previewDoc
-  }
-  return null
+  previewDocKey = key
+  return previewDoc
 }
 
 // measurePreviewDocument reports the page count and the average page aspect,
@@ -515,7 +536,8 @@ async function buildPreview(): Promise<void> {
   previewError.value = ''
   previewProgress.value = { done: 0, total: 0, stage: '正在读取文件' }
   try {
-    await closePreviewDoc()
+    // loadPreviewDocument reuses the open document when the file is unchanged,
+    // so changing printer or paper never downloads the file again.
     const doc = await loadPreviewDocument()
     if (token !== previewBuildToken) return
     if (!doc) return
@@ -528,11 +550,8 @@ async function buildPreview(): Promise<void> {
     previewProgress.value = { done: 0, total: 0, stage: '正在计算版面' }
     const geometry = await fetchGeometry(count, aspect)
     if (token !== previewBuildToken) return
+    clearSheets()
     previewGeometry.value = geometry
-    for (const url of Object.values(previewSheetUrls.value)) {
-      if (url.startsWith('blob:')) URL.revokeObjectURL(url)
-    }
-    previewSheetUrls.value = {}
     previewProgress.value = { done: 0, total: geometry.sheets.length, stage: '正在渲染版面预览' }
     for (let index = 0; index < geometry.sheets.length; index++) {
       if (token !== previewBuildToken) return
@@ -693,8 +712,6 @@ function syncPolling() {
   }
 }
 
-let pageCountToken = 0
-
 async function setFile(f: File | null) {
   previewSessionId = ''
   previewSessionPromise = null
@@ -705,23 +722,10 @@ async function setFile(f: File | null) {
   if (f && isImage.value) form.value.page_range = ''
   fileUrl.value = f ? URL.createObjectURL(f) : ''
   pageCount.value = null
-  const token = ++pageCountToken
   if (!f) return
-  if (isImage.value) {
-    pageCount.value = 1
-    return
-  }
-  if (!f.name.toLowerCase().endsWith('.pdf')) return
-  pageCountLoading.value = true
-  try {
-    const { PDFDocument } = await import('pdf-lib')
-    const doc = await PDFDocument.load(await f.arrayBuffer(), { ignoreEncryption: true })
-    if (token === pageCountToken) pageCount.value = doc.getPageCount()
-  } catch {
-    if (token === pageCountToken) pageCount.value = null
-  } finally {
-    if (token === pageCountToken) pageCountLoading.value = false
-  }
+  if (isImage.value) pageCount.value = 1
+  // A PDF's page count is reported by the preview pipeline, which already opens
+  // the document; parsing it again here would be wasted work.
 }
 
 function clearSource() {
@@ -758,8 +762,10 @@ async function pickNasFile() {
       fileUrl.value = ''
       pageCount.value = null
       toast.success('已从 NAS 选择文件')
-      if (isNasPdf.value) void loadNasPageCount()
-      else if (isNasImage.value) {
+      // The preview pipeline opens the PDF through PDF.js and reads numPages
+      // from the file header. Downloading the whole file just to count pages
+      // cost a full transfer before the first sheet could appear.
+      if (isNasImage.value) {
         pageCount.value = 1
         form.value.page_range = ''
       }
@@ -771,22 +777,6 @@ async function pickNasFile() {
     toast.error((e as Error).message || '选择 NAS 文件失败')
   } finally {
     nasPicking.value = false
-  }
-}
-
-async function loadNasPageCount() {
-  pageCountLoading.value = true
-  const token = ++pageCountToken
-  try {
-    const res = await fetch(nasPreviewUrl.value)
-    if (!res.ok) return
-    const { PDFDocument } = await import('pdf-lib')
-    const doc = await PDFDocument.load(await res.arrayBuffer(), { ignoreEncryption: true })
-    if (token === pageCountToken) pageCount.value = doc.getPageCount()
-  } catch {
-    if (token === pageCountToken) pageCount.value = null
-  } finally {
-    if (token === pageCountToken) pageCountLoading.value = false
   }
 }
 
@@ -980,7 +970,7 @@ onUnmounted(() => {
           <button class="preview-remove" title="移除文件" aria-label="移除文件" @click="clearSource">×</button>
           <div class="preview-head">
             <span class="file-name">{{ nasName }}</span>
-            <span class="file-sub">来自 NAS · 已授权<template v-if="pageCount"> · 原文档 {{ pageCount }} 页</template><template v-else-if="pageCountLoading"> · 读取页数…</template><template v-if="isNasPdf"> · 已选 {{ selectedPages.length }} 页<template v-if="layout.pages_per_sheet > 1"> · 每张 {{ layout.pages_per_sheet }} 页 → 预计 {{ previewSheets.length }} 张纸</template></template></span>
+            <span class="file-sub">来自 NAS · 已授权<template v-if="pageCount"> · 原文档 {{ pageCount }} 页</template><template v-if="isNasPdf"> · 已选 {{ selectedPages.length }} 页<template v-if="layout.pages_per_sheet > 1"> · 每张 {{ layout.pages_per_sheet }} 页 → 预计 {{ previewSheets.length }} 张纸</template></template></span>
           </div>
           <div v-if="isNasPdf" class="pdf-page-grid">
             <div
@@ -1026,7 +1016,7 @@ onUnmounted(() => {
           <button class="preview-remove" title="移除文件" aria-label="移除文件" @click="setFile(null)">×</button>
           <div class="preview-head">
             <span class="file-name">{{ file.name }}</span>
-            <span class="file-sub">{{ formatSize(file.size) }}<template v-if="pageCount"> · 原文档 {{ pageCount }} 页</template><template v-else-if="pageCountLoading"> · 读取页数…</template><template v-if="isPdf"> · 已选 {{ selectedPages.length }} 页<template v-if="layout.pages_per_sheet > 1"> · 每张 {{ layout.pages_per_sheet }} 页 → 预计 {{ previewSheets.length }} 张纸</template></template></span>
+            <span class="file-sub">{{ formatSize(file.size) }}<template v-if="pageCount"> · 原文档 {{ pageCount }} 页</template><template v-if="isPdf"> · 已选 {{ selectedPages.length }} 页<template v-if="layout.pages_per_sheet > 1"> · 每张 {{ layout.pages_per_sheet }} 页 → 预计 {{ previewSheets.length }} 张纸</template></template></span>
           </div>
           <div v-if="isPdf" class="pdf-page-grid">
             <div
