@@ -62,26 +62,24 @@ docker buildx build \
 
 ## 4. 构建 fpk
 
-把应用定义和构建合约复制到 `fnos-apps`：
+仓库自带打包脚本，不需要 fnOS 工具链：
 
 ```bash
-cp -a deployments/fnos-app/print-portal /path/to/fnos-apps/apps/print-portal
-cp -a deployments/fnos-app/scripts/apps/print-portal /path/to/fnos-apps/scripts/apps/print-portal
+bash scripts/build-fpk.sh
 ```
 
-然后：
-
-```bash
-cd /path/to/fnos-apps
-
-VERSION=0.3.0 bash scripts/apps/print-portal/build.sh
-bash scripts/build-fpk.sh apps/print-portal app.tgz 0.3.0 x86
-```
-
-生成：
+脚本会从 `deployments/fnos-app/print-portal/fnos/manifest` 读取版本号，把
+`docker-compose.yaml` 里的 `${VERSION}` 替换成实际版本，计算 `app.tgz` 的 MD5
+写回 manifest 的 `checksum` 字段，然后生成：
 
 ```text
-print-portal_0.3.0_x86.fpk
+dist/print-portal_<version>_<platform>.fpk
+```
+
+指定版本或平台：
+
+```bash
+VERSION=0.3.0 PLATFORM=x86 bash scripts/build-fpk.sh
 ```
 
 ## 5. fnOS 应用包注意事项
