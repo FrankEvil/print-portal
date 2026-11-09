@@ -87,7 +87,54 @@
 
 前端通过 `GET /api/jobs/{id}` 轮询任务状态，不阻塞等待打印完成。
 
+### POST `/api/preview/geometry`
+
+计算版面几何，返回每张纸上有哪些页、每页在第几行第几列、是否需要旋转。
+
+响应只有几百字节，前端拿它渲染浏览器本地的文件，因此预览不需要上传或下载文档。
+打印时后端调用同一个 `layout.ComputeGeometry`，两边共用一套规则。
+
+请求体（JSON）：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `page_count` | int | 源文档页数，必填 |
+| `page_aspect` | number | 源页面平均宽高比，用于挑选网格 |
+| `printer_id` | int | 用于读取 PPD 可打印区域 |
+| `paper_size` | string | 纸张大小 |
+| `orientation` | string | `portrait` / `landscape` |
+| `page_range` | string | 页码范围，空表示全部 |
+| `layout_options` | object | 与打印相同的布局参数 |
+
+响应示例：
+
+```json
+{
+  "cols": 1,
+  "rows": 2,
+  "paper_width": 595.28,
+  "paper_height": 841.89,
+  "margin_left": 8,
+  "margin_top": 16,
+  "margin_right": 8,
+  "margin_bottom": 8,
+  "pages_per_sheet": 2,
+  "border": false,
+  "reverse": false,
+  "flip_horizontal": false,
+  "sheets": [
+    { "index": 0, "slots": [
+      { "page": 1, "col": 0, "row": 0, "rotate": 90 },
+      { "page": 2, "col": 0, "row": 1, "rotate": 90 }
+    ]}
+  ]
+}
+```
+
 ### POST `/api/preview`
+
+生成非 PDF 文件（Office 等）的单页预览图。浏览器无法直接渲染这些格式，所以仍由服务端
+转换后返回图片。PDF 文件不走这个接口。
 
 生成打印版面预览（第一页）。`multipart/form-data` 字段与 `POST /api/print` 类似，另支持：
 

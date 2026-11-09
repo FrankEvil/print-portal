@@ -93,22 +93,34 @@ export interface PPDOption {
   choices: string[]
 }
 
-export interface PreviewSheet {
-  index: number
-  pages: number[]
+export interface LayoutSlot {
+  page: number
+  col: number
+  row: number
+  rotate: number
 }
 
-export interface ServerPreview {
-  id: string
-  sheets: PreviewSheet[]
-  sheet_count: number
-  page_count: number
-  selected_pages: number
-  pages_per_sheet: number
+export interface LayoutSheet {
+  index: number
+  slots: LayoutSlot[]
+}
+
+export interface LayoutGeometry {
+  cols: number
+  rows: number
   paper_width: number
   paper_height: number
-  printable: boolean
-  pdf_url: string
+  margin_left: number
+  margin_top: number
+  margin_right: number
+  margin_bottom: number
+  page_width: number
+  page_height: number
+  pages_per_sheet: number
+  border: boolean
+  reverse: boolean
+  flip_horizontal: boolean
+  sheets: LayoutSheet[]
 }
 
 export interface PaperArea {

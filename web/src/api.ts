@@ -72,4 +72,33 @@ export const api = {
   upload<T>(path: string, form: FormData): Promise<T> {
     return request<T>(path, { method: 'POST', body: form })
   },
+  // Upload with progress: fetch() cannot report upload bytes, so a large file
+  // otherwise looks frozen until the server replies.
+  uploadWithProgress<T>(path: string, form: FormData, onProgress: (ratio: number) => void): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', apiUrl(path))
+      if (adminToken.value) xhr.setRequestHeader('X-Admin-Token', adminToken.value)
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) onProgress(event.loaded / event.total)
+      }
+      xhr.onload = () => {
+        let payload: any = null
+        try {
+          payload = JSON.parse(xhr.responseText)
+        } catch {
+          /* ignore */
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(payload as T)
+          return
+        }
+        const message = payload?.error?.message || `HTTP ${xhr.status}`
+        reject(new ApiRequestError(xhr.status, payload?.error?.code || 'request_failed', message))
+      }
+      xhr.onerror = () => reject(new ApiRequestError(0, 'network_error', '上传失败，请检查网络'))
+      xhr.onabort = () => reject(new ApiRequestError(0, 'aborted', '已取消'))
+      xhr.send(form)
+    })
+  },
 }

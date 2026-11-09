@@ -1875,11 +1875,18 @@ table.table {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
+  gap: 6px;
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.78);
   color: var(--text-2);
   font-size: 13px;
+}
+
+.preview-loading-hint {
+  color: var(--text-3);
+  font-size: 12px;
 }
 
 .preview-error {

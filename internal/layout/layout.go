@@ -30,6 +30,10 @@ type Options struct {
 	PaperSize      string `json:"paper_size"`
 	Orientation    string `json:"orientation"`
 	PageRange      string `json:"-"`
+	// Margins is the PPD printable border. It is not part of the JSON contract
+	// because the client never sends it; the server fills it in so the grid is
+	// scored against the same box the preview uses.
+	Margins Margins `json:"-"`
 }
 
 func (o Options) active() bool {
@@ -112,23 +116,29 @@ func Apply(ctx context.Context, src, dst string, opts Options) error {
 			}
 			nup.PageDim = &dim
 		}
-		paperWidth, paperHeight := paperDimensionsFor(pageSize)
+		// Build the placement with the same function the preview uses, then let
+		// pdfcpu only perform the mechanics. Enforce stays off because the
+		// rotation was already decided by ComputeGeometry.
+		selected := selectedPageNumbers(current, opts.PageRange)
 		pageAspect := averagePageAspect(current)
-		if cols, rows := chooseGrid(opts.PagesPerSheet, paperWidth, paperHeight, pageAspect, opts.Orientation); cols > 0 {
-			nup.Grid = &types.Dim{Width: float64(cols), Height: float64(rows)}
-			// Enforce lets pdfcpu rotate a source page when turning it 90° fills
-			// its cell better. chooseGrid already scored both orientations, so
-			// this keeps the grid the algorithm picked without extra whitespace.
-			nup.Enforce = true
-		}
+		geometry := ComputeGeometry(selected, opts, opts.Margins, pageAspect)
+		nup.Grid = &types.Dim{Width: float64(geometry.Cols), Height: float64(geometry.Rows)}
+		nup.Enforce = false
 		nup.Border = opts.Border
 		applyOrientation(nup, opts.Direction)
-		next := filepath.Join(tmpDir, "nup.pdf")
-		var selected []string
-		if strings.TrimSpace(opts.PageRange) != "" {
-			selected = []string{strings.TrimSpace(opts.PageRange)}
+		if geometry.Rotate() == 90 {
+			rotated := filepath.Join(tmpDir, "rotated-90.pdf")
+			if err := api.RotateFile(current, rotated, 90, nil, conf); err != nil {
+				return fmt.Errorf("page rotation failed: %w", err)
+			}
+			current = rotated
 		}
-		if err := api.NUpFile([]string{current}, next, selected, nup, conf); err != nil {
+		next := filepath.Join(tmpDir, "nup.pdf")
+		var rangeArg []string
+		if strings.TrimSpace(opts.PageRange) != "" {
+			rangeArg = []string{strings.TrimSpace(opts.PageRange)}
+		}
+		if err := api.NUpFile([]string{current}, next, rangeArg, nup, conf); err != nil {
 			return fmt.Errorf("N-up layout failed: %w", err)
 		}
 		current = next
@@ -170,6 +180,54 @@ func paperDimensionsFor(pageSize string) (float64, float64) {
 		return dim.Height, dim.Width
 	}
 	return dim.Width, dim.Height
+}
+
+// selectedPageNumbers expands a page range like "1-3,5" into page numbers.
+// An empty range means every page.
+func selectedPageNumbers(pdf, pageRange string) []int {
+	total := pageCountOf(pdf)
+	text := strings.TrimSpace(pageRange)
+	if text == "" {
+		pages := make([]int, 0, total)
+		for page := 1; page <= total; page++ {
+			pages = append(pages, page)
+		}
+		return pages
+	}
+	seen := map[int]bool{}
+	for _, token := range strings.FieldsFunc(text, func(r rune) bool { return r == ' ' || r == ',' }) {
+		parts := strings.SplitN(token, "-", 2)
+		start, err := strconv.Atoi(parts[0])
+		if err != nil || start < 1 {
+			continue
+		}
+		end := start
+		if len(parts) == 2 {
+			if value, convErr := strconv.Atoi(parts[1]); convErr == nil && value >= start {
+				end = value
+			}
+		}
+		if total > 0 && end > total {
+			end = total
+		}
+		for page := start; page <= end; page++ {
+			seen[page] = true
+		}
+	}
+	pages := make([]int, 0, len(seen))
+	for page := range seen {
+		pages = append(pages, page)
+	}
+	sort.Ints(pages)
+	return pages
+}
+
+func pageCountOf(pdf string) int {
+	dims, err := api.PageDimsFile(pdf)
+	if err != nil {
+		return 0
+	}
+	return len(dims)
 }
 
 func averagePageAspect(path string) float64 {
