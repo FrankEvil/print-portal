@@ -93,6 +93,24 @@ export interface PPDOption {
   choices: string[]
 }
 
+export interface PreviewSheet {
+  index: number
+  pages: number[]
+}
+
+export interface ServerPreview {
+  id: string
+  sheets: PreviewSheet[]
+  sheet_count: number
+  page_count: number
+  selected_pages: number
+  pages_per_sheet: number
+  paper_width: number
+  paper_height: number
+  printable: boolean
+  pdf_url: string
+}
+
 export interface PaperArea {
   page_size: string
   width: number

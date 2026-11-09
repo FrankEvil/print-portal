@@ -5,7 +5,7 @@ import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { TrimApp } from '@trimjs/web-app'
 import { adminToken, api, apiBase, apiUrl } from '../api'
 import { toast } from '../toast'
-import type { Job, PaperArea, PPDOption, Printer } from '../types'
+import type { Job, PaperArea, PPDOption, Printer, ServerPreview } from '../types'
 import { formatJobParams } from '../jobDisplay'
 import StatusBadge from '../components/StatusBadge.vue'
 
@@ -29,15 +29,14 @@ const previewUrl = ref('')
 const previewLoading = ref(false)
 const previewError = ref('')
 const previewProgress = ref({ done: 0, total: 0, stage: '' })
-const pdfPages = ref<Array<{ page: number; url: string }>>([])
-const pdfPageAspect = ref(1)
-const pdfSheetPreviews = ref<Array<{ url: string }>>([])
-let sheetPreviewToken = 0
+const previewResult = ref<ServerPreview | null>(null)
+const previewSheetUrls = ref<Record<number, string>>({})
+let sheetRenderToken = 0
+let previewBuildToken = 0
 const selectedPages = ref<number[]>([])
 const extraPPDOptions = ref<Record<string, string>>({})
 let previewSessionId = ''
 let previewSessionPromise: Promise<string> | null = null
-let pdfPreviewToken = 0
 
 const form = ref({
   page_range: '',
@@ -92,36 +91,6 @@ const paperSizeMm: Record<string, [number, number]> = {
   Letter: [216, 279],
   Legal: [216, 356],
 }
-
-function chooseSheetGrid(n: number, paperWidth: number, paperHeight: number, pageAspect: number) {
-  if (n <= 1) return { cols: 1, rows: 1 }
-  if (!Number.isFinite(pageAspect) || pageAspect <= 0) pageAspect = 0.7071
-  const portrait = form.value.orientation !== 'landscape'
-  let bestScore = Number.POSITIVE_INFINITY
-  let best = { cols: 1, rows: n }
-  for (let rows = 1; rows <= n; rows++) {
-    const cols = Math.ceil(n / rows)
-    const cellAspect = (paperWidth / cols) / (paperHeight / rows)
-    const fill = Math.max(
-      Math.min(pageAspect, cellAspect) / Math.max(pageAspect, cellAspect),
-      Math.min(1 / pageAspect, cellAspect) / Math.max(1 / pageAspect, cellAspect),
-    )
-    const score = (1 - fill) * n + (cols * rows - n) * 0.75
-    if (score < bestScore - 1e-9) {
-      bestScore = score
-      best = { cols, rows }
-    } else if (Math.abs(score - bestScore) < 1e-9) {
-      if ((portrait && rows > best.rows) || (!portrait && cols > best.cols)) best = { cols, rows }
-    }
-  }
-  return best
-}
-
-const pdfSheetGrid = computed(() => {
-  const n = Math.max(1, layout.value.pages_per_sheet)
-  const [paperWidth, paperHeight] = printablePaperSize.value
-  return chooseSheetGrid(n, paperWidth, paperHeight, pdfPageAspect.value)
-})
 
 const currentPaperArea = computed<PaperArea | null>(() => {
   const area = paperAreas.value.find((item) => item.page_size === form.value.paper_size)
@@ -180,42 +149,11 @@ const previewPage = computed(() => {
   return match ? Number(match[0]) : 1
 })
 
+const previewSheets = computed(() => previewResult.value?.sheets || [])
+
 const hasSelectedPages = computed(() => {
   if (!isPdf.value && !isNasPdf.value) return true
   return selectedPages.value.length > 0
-})
-
-const pdfSheets = computed(() => {
-  const size = Math.max(1, layout.value.pages_per_sheet)
-  const selected = new Set(selectedPages.value)
-  const pages = pdfPages.value.filter((item) => selected.has(item.page))
-  const sheets: Array<Array<{ page: number; url: string }>> = []
-  for (let i = 0; i < pages.length; i += size) {
-    sheets.push(pages.slice(i, i + size))
-  }
-  return sheets
-})
-
-const pdfSheetColumns = computed(() => pdfSheetGrid.value.cols)
-
-const previewAutoRotate = computed(() => {
-  if (layout.value.pages_per_sheet <= 1) return 0
-  const [width, height] = printablePaperSize.value
-  const cols = pdfSheetGrid.value.cols
-  const rows = pdfSheetGrid.value.rows
-  const cellAspect = (width / cols) / (height / rows)
-  const pageAspect = pdfPageAspect.value || 1
-  if (cellAspect > 1.2 && pageAspect < 0.9) return 90
-  if (cellAspect < 0.9 && pageAspect > 1.2) return 90
-  return 0
-})
-
-const previewPageTransform = computed(() => {
-  const transforms: string[] = []
-  if (previewAutoRotate.value) transforms.push(`rotate(${previewAutoRotate.value}deg)`)
-  if (layout.value.reverse) transforms.push('rotate(180deg)')
-  if (layout.value.flip_horizontal) transforms.push('scaleX(-1)')
-  return transforms.join(' ') || undefined
 })
 
 const layoutOptionsPayload = computed(() => ({
@@ -224,15 +162,13 @@ const layoutOptionsPayload = computed(() => ({
 }))
 
 function clearPdfPages() {
-  for (const item of pdfPages.value) {
-    if (item.url) URL.revokeObjectURL(item.url)
+  sheetRenderToken++
+  previewResult.value = null
+  for (const url of Object.values(previewSheetUrls.value)) {
+    if (url.startsWith('blob:')) URL.revokeObjectURL(url)
   }
-  pdfPages.value = []
+  previewSheetUrls.value = {}
   selectedPages.value = []
-  for (const preview of pdfSheetPreviews.value) {
-    if (preview.url.startsWith('blob:')) URL.revokeObjectURL(preview.url)
-  }
-  pdfSheetPreviews.value = []
 }
 
 function compactPages(pages: number[]): string {
@@ -256,7 +192,7 @@ function compactPages(pages: number[]): string {
 }
 
 function syncPageRangeFromSelection() {
-  const total = pageCount.value || pdfPages.value.length
+  const total = pageCount.value || 0
   if (!selectedPages.value.length) {
     form.value.page_range = ''
     return
@@ -274,15 +210,6 @@ function togglePage(page: number) {
   else next.add(page)
   selectedPages.value = Array.from(next).sort((a, b) => a - b)
   syncPageRangeFromSelection()
-  if (isPdf.value || isNasPdf.value) void renderSheetPreviews()
-}
-
-function onPageCardClick(page: number) {
-  if (layout.value.pages_per_sheet === 1) togglePage(page)
-}
-
-function onSheetClick(sheet: Array<{ page: number; url: string }>) {
-  if (layout.value.pages_per_sheet === 1 && sheet[0]) togglePage(sheet[0].page)
 }
 
 function parsePageSelection(value: string, total: number): number[] | null {
@@ -302,13 +229,10 @@ function parsePageSelection(value: string, total: number): number[] | null {
 
 function onPageRangeInput() {
   if (!isPdf.value && !isNasPdf.value) return
-  const total = pageCount.value || pdfPages.value.length
+  const total = pageCount.value || 0
   if (!total) return
   const parsed = parsePageSelection(form.value.page_range, total)
-  if (parsed) {
-    selectedPages.value = parsed
-    if (isPdf.value || isNasPdf.value) void renderSheetPreviews()
-  }
+  if (parsed) selectedPages.value = parsed
 }
 
 const colorOption = computed(() => ppdOptions.value.find((o) => {
@@ -454,175 +378,108 @@ function clearPreview() {
   previewProgress.value = { done: 0, total: 0, stage: '' }
 }
 
-async function renderPdfPreview(): Promise<void> {
-  const token = ++pdfPreviewToken
-  let data: ArrayBuffer
-  if (file.value) {
-    data = await file.value.arrayBuffer()
-  } else if (nasPath.value) {
-    const res = await fetch(nasPreviewUrl.value)
-    if (!res.ok) throw new Error('PDF 预览读取失败')
-    data = await res.arrayBuffer()
-  } else {
-    throw new Error('请先选择文件')
+async function renderSheetImages(pdfUrl: string): Promise<void> {
+  const token = ++sheetRenderToken
+  const doc = await pdfjsLib.getDocument({ url: pdfUrl }).promise
+  if (token !== sheetRenderToken) {
+    void doc.destroy()
+    return
   }
-  const doc = await pdfjsLib.getDocument({ data }).promise
-  if (token !== pdfPreviewToken) return
-  clearPdfPages()
-  pageCount.value = doc.numPages
-  pdfPages.value = Array.from({ length: doc.numPages }, (_, index) => ({ page: index + 1, url: '' }))
-  selectedPages.value = Array.from({ length: doc.numPages }, (_, index) => index + 1)
-  form.value.page_range = ''
-  previewProgress.value = { done: 0, total: doc.numPages, stage: '正在渲染页面' }
-  let active = 0
-  const waiters: Array<() => void> = []
-  const acquire = async () => {
-    if (active < 4) {
-      active++
+  const sheets = previewResult.value?.sheets || []
+  previewProgress.value = { done: 0, total: doc.numPages, stage: '正在渲染版面预览' }
+  // Render sequentially so the first sheets appear immediately instead of all
+  // competing for the same main thread.
+  for (let index = 0; index < doc.numPages; index++) {
+    if (token !== sheetRenderToken) {
+      void doc.destroy()
       return
     }
-    await new Promise<void>((resolve) => waiters.push(resolve))
-    active++
-  }
-  const release = () => {
-    active--
-    const next = waiters.shift()
-    if (next) next()
-  }
-  const renderPageAt = async (index: number) => {
-    await acquire()
-    try {
-      if (token !== pdfPreviewToken) return
-      const page = await doc.getPage(index + 1)
-      const viewport = page.getViewport({ scale: 0.8 })
-      if (page.pageNumber === 1) pdfPageAspect.value = viewport.width / viewport.height
-      const canvas = document.createElement('canvas')
-      canvas.width = Math.floor(viewport.width)
-      canvas.height = Math.floor(viewport.height)
-      const context = canvas.getContext('2d')
-      if (!context) throw new Error('浏览器不支持 Canvas')
-      await page.render({ canvasContext: context, viewport }).promise
-      if (token !== pdfPreviewToken) return
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-      if (blob) {
-        const item = pdfPages.value[index]
-        if (item) item.url = URL.createObjectURL(blob)
-      }
-      previewProgress.value = {
-        ...previewProgress.value,
-        done: Math.min(previewProgress.value.total, previewProgress.value.done + 1),
-      }
-      void renderReadySheets(token)
-    } finally {
-      release()
+    const page = await doc.getPage(index + 1)
+    const viewport = page.getViewport({ scale: 1.4 })
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.floor(viewport.width)
+    canvas.height = Math.floor(viewport.height)
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('浏览器不支持 Canvas')
+    await page.render({ canvasContext: context, viewport }).promise
+    if (token !== sheetRenderToken) {
+      void doc.destroy()
+      return
+    }
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+    if (blob) {
+      const previous = previewSheetUrls.value[index]
+      if (previous?.startsWith('blob:')) URL.revokeObjectURL(previous)
+      previewSheetUrls.value = { ...previewSheetUrls.value, [index]: URL.createObjectURL(blob) }
+    }
+    previewProgress.value = {
+      done: index + 1,
+      total: doc.numPages,
+      stage: '正在渲染版面预览',
     }
   }
-  const pageTasks = Array.from({ length: doc.numPages }, (_, index) => renderPageAt(index))
-  await Promise.all(pageTasks)
-  if (token !== pdfPreviewToken) return
-  await renderSheetPreviews()
+  if (token === sheetRenderToken) void doc.destroy()
 }
 
-async function renderReadySheets(fileToken: number): Promise<void> {
-  const version = sheetPreviewToken
-  for (let index = 0; index < pdfSheets.value.length; index++) {
-    if (fileToken !== pdfPreviewToken || version !== sheetPreviewToken) return
-    if (pdfSheetPreviews.value[index]) continue
-    await renderSingleSheet(index, fileToken, version)
-  }
-}
-
-async function loadImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image()
-    image.onload = () => resolve(image)
-    image.onerror = () => reject(new Error('页面图片加载失败'))
-    image.src = url
-  })
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
-  return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82))
-}
-
-async function renderSingleSheet(sheetIndex: number, fileToken: number, version = sheetPreviewToken): Promise<void> {
-  if (fileToken !== pdfPreviewToken || version !== sheetPreviewToken) return
-  const group = pdfSheets.value[sheetIndex]
-  if (!group || !group.length || group.some((item) => !item.url)) return
-  const grid = pdfSheetGrid.value
-  const area = currentPaperArea.value
-  let [paperWidth, paperHeight] = paperSizeMm[form.value.paper_size] || paperSizeMm.A4
-  if (form.value.orientation === 'landscape') [paperWidth, paperHeight] = [paperHeight, paperWidth]
-  if (area) {
-    paperWidth = area.width
-    paperHeight = area.height
-  }
-  const canvasWidth = 800
-  const canvasHeight = Math.round(canvasWidth * paperHeight / paperWidth)
-  const canvas = document.createElement('canvas')
-  canvas.width = canvasWidth
-  canvas.height = canvasHeight
-  const context = canvas.getContext('2d')
-  if (!context) return
-  context.fillStyle = '#fff'
-  context.fillRect(0, 0, canvas.width, canvas.height)
-  const printLeft = area ? canvas.width * (area.left / area.width) : 0
-  const printTop = area ? canvas.height * (area.top / area.height) : 0
-  const printWidth = area ? canvas.width * ((area.width - area.left - area.right) / area.width) : canvas.width
-  const printHeight = area ? canvas.height * ((area.height - area.bottom - area.top) / area.height) : canvas.height
-  const cellWidth = printWidth / grid.cols
-  const cellHeight = printHeight / grid.rows
-  const images = await Promise.all(group.map((item) => loadImage(item.url).catch(() => null)))
-  if (fileToken !== pdfPreviewToken || version !== sheetPreviewToken) return
-  for (let index = 0; index < group.length; index++) {
-    const image = images[index]
-    if (!image) continue
-    const pageAspect = image.naturalWidth / image.naturalHeight
-    const cellAspect = cellWidth / cellHeight
-    let angle = 0
-    if (cellAspect > 1.2 && pageAspect < 0.9) angle = 90
-    if (cellAspect < 0.9 && pageAspect > 1.2) angle = 90
-    if (layout.value.reverse) angle += 180
-    const rotated = angle % 180 !== 0
-    const fitWidth = rotated ? image.naturalHeight : image.naturalWidth
-    const fitHeight = rotated ? image.naturalWidth : image.naturalHeight
-    const scale = Math.min((cellWidth - 4) / fitWidth, (cellHeight - 4) / fitHeight)
-    const col = index % grid.cols
-    const row = Math.floor(index / grid.cols)
-    const centerX = printLeft + col * cellWidth + cellWidth / 2
-    const centerY = printTop + row * cellHeight + cellHeight / 2
-    context.save()
-    context.translate(centerX, centerY)
-    if (layout.value.flip_horizontal) context.scale(-1, 1)
-    context.rotate(angle * Math.PI / 180)
-    context.drawImage(
-      image,
-      -image.naturalWidth * scale / 2,
-      -image.naturalHeight * scale / 2,
-      image.naturalWidth * scale,
-      image.naturalHeight * scale,
-    )
-    context.restore()
-    if (layout.value.border) {
-      context.strokeStyle = '#111827'
-      context.lineWidth = 2
-      context.strokeRect(printLeft + col * cellWidth + 1, printTop + row * cellHeight + 1, cellWidth - 2, cellHeight - 2)
+// The server lays the document out and the browser renders that exact PDF with
+// PDF.js, so the preview cannot drift from the printed output and only one
+// download is needed.
+async function buildServerPreview(): Promise<void> {
+  if (!isPdf.value && !isNasPdf.value) return
+  const token = ++previewBuildToken
+  previewLoading.value = true
+  previewError.value = ''
+  previewProgress.value = { done: 0, total: 0, stage: '正在生成版面预览' }
+  try {
+    let previewId = ''
+    if (file.value) {
+      previewId = await ensurePreviewSession()
     }
-  }
-  const blob = await canvasToBlob(canvas)
-  if (!blob || fileToken !== pdfPreviewToken || version !== sheetPreviewToken) return
-  const next = [...pdfSheetPreviews.value]
-  const previous = next[sheetIndex]
-  if (previous?.url.startsWith('blob:')) URL.revokeObjectURL(previous.url)
-  next[sheetIndex] = { url: URL.createObjectURL(blob) }
-  pdfSheetPreviews.value = next
-}
-
-async function renderSheetPreviews(): Promise<void> {
-  const token = ++sheetPreviewToken
-  for (let index = 0; index < pdfSheets.value.length; index++) {
-    if (token !== sheetPreviewToken) return
-    await renderSingleSheet(index, pdfPreviewToken, token)
+    if (token !== previewBuildToken) return
+    const body = {
+      preview_id: previewId,
+      nas_path: file.value ? '' : nasPath.value,
+      printer_id: selectedPrinter.value || 0,
+      layout_options: layoutOptionsPayload.value,
+      page_range: form.value.page_range,
+      paper_size: form.value.paper_size,
+      orientation: form.value.orientation,
+    }
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (adminToken.value) headers['X-Admin-Token'] = adminToken.value
+    const res = await fetch(apiUrl('/api/preview/prepare'), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      let message = '版面预览生成失败'
+      try {
+        const payload = await res.json()
+        message = payload?.error?.message || message
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message)
+    }
+    const result = (await res.json()) as ServerPreview
+    if (token !== previewBuildToken) return
+    previewResult.value = result
+    for (const url of Object.values(previewSheetUrls.value)) {
+      if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+    }
+    previewSheetUrls.value = {}
+    pageCount.value = result.page_count
+    selectedPages.value = result.sheets.flatMap((sheet) => sheet.pages)
+    previewLoading.value = false
+    // Render the laid-out PDF in the browser: one download, no per-sheet
+    // requests, and the pages come straight from the file that will print.
+    await renderSheetImages(apiUrl(result.pdf_url))
+  } catch (e) {
+    if (token !== previewBuildToken) return
+    previewError.value = (e as Error).message || '版面预览生成失败'
+  } finally {
+    if (token === previewBuildToken) previewLoading.value = false
   }
 }
 
@@ -659,15 +516,7 @@ async function refreshPreviewNow() {
     return
   }
   if (isPdf.value || isNasPdf.value) {
-    previewLoading.value = true
-    previewError.value = ''
-    try {
-      await renderPdfPreview()
-    } catch (e) {
-      previewError.value = (e as Error).message || 'PDF 预览生成失败'
-    } finally {
-      previewLoading.value = false
-    }
+    await buildServerPreview()
     return
   }
   const controller = new AbortController()
@@ -720,34 +569,23 @@ function refreshPreview() {
 
 watch([file, nasPath, selectedPrinter], () => refreshPreview())
 
-watch([() => form.value.paper_size, () => form.value.orientation], () => {
-  if (isPdf.value || isNasPdf.value) {
-    void renderSheetPreviews()
-    return
-  }
-  refreshPreview()
-})
-
-watch(paperAreas, () => {
-  if (isPdf.value || isNasPdf.value) void renderSheetPreviews()
-})
-
-watch([() => form.value.color_mode, () => form.value.scaling], () => {
-  // PDF pages are already rendered; color/scaling only affects the preview layer.
-  if (isPdf.value || isNasPdf.value) return
-  refreshPreview()
-})
-
-watch(() => form.value.page_range, () => {
-  if (!isPdf.value && !isNasPdf.value) refreshPreview()
-})
+// Layout, paper and page selection all change the laid-out PDF, so the server
+// has to rebuild it. Colour and scaling are pure presentation and only affect
+// the CSS filter, which keeps those switches instant.
+watch(
+  [() => form.value.paper_size, () => form.value.orientation, () => form.value.page_range,
+    () => layout.value.pages_per_sheet, () => layout.value.direction, () => layout.value.border,
+    () => layout.value.reverse, () => layout.value.flip_horizontal],
+  () => {
+    if (isPdf.value || isNasPdf.value) {
+      refreshPreview()
+      return
+    }
+    refreshPreview()
+  },
+)
 
 watch(selectedPrinter, loadPPDOptions)
-watch(
-  [() => layout.value.pages_per_sheet, () => layout.value.reverse, () => layout.value.flip_horizontal,
-    () => layout.value.border, () => form.value.orientation, () => form.value.paper_size],
-  () => { void renderSheetPreviews() },
-)
 
 async function loadPrinters() {
   try {
@@ -938,7 +776,10 @@ async function submit() {
       })
     } else {
       const fd = new FormData()
-      fd.append('file', file.value!)
+      // Reuse the document already uploaded for the preview: on a slow link
+      // re-uploading tens of megabytes would delay printing by minutes.
+      if (previewSessionId) fd.append('preview_id', previewSessionId)
+      else fd.append('file', file.value!)
       fd.append('printer_id', String(selectedPrinter.value))
       for (const [k, v] of Object.entries(form.value)) fd.append(k, String(v))
       fd.append('ppd_options', JSON.stringify(extraPPDOptions.value))
@@ -1067,19 +908,25 @@ onUnmounted(() => {
           <button class="preview-remove" title="移除文件" aria-label="移除文件" @click="clearSource">×</button>
           <div class="preview-head">
             <span class="file-name">{{ nasName }}</span>
-            <span class="file-sub">来自 NAS · 已授权<template v-if="pageCount"> · 原文档 {{ pageCount }} 页</template><template v-else-if="pageCountLoading"> · 读取页数…</template><template v-if="isNasPdf"> · 已选 {{ selectedPages.length }} 页<template v-if="layout.pages_per_sheet > 1"> · 每张 {{ layout.pages_per_sheet }} 页 → 预计 {{ pdfSheets.length }} 张纸</template></template></span>
+            <span class="file-sub">来自 NAS · 已授权<template v-if="pageCount"> · 原文档 {{ pageCount }} 页</template><template v-else-if="pageCountLoading"> · 读取页数…</template><template v-if="isNasPdf"> · 已选 {{ selectedPages.length }} 页<template v-if="layout.pages_per_sheet > 1"> · 每张 {{ layout.pages_per_sheet }} 页 → 预计 {{ previewSheets.length }} 张纸</template></template></span>
           </div>
           <div v-if="isNasPdf" class="pdf-page-grid">
-            <div v-for="(sheet, sheetIndex) in pdfSheets" :key="sheetIndex" class="pdf-sheet-card" :class="{ 'single-page': layout.pages_per_sheet === 1 }" :style="{ aspectRatio: previewSheetAspect }">
-              <img v-if="pdfSheetPreviews[sheetIndex]" :src="pdfSheetPreviews[sheetIndex].url" alt="打印版面预览" class="pdf-sheet-image" :style="{ filter: previewFilter }" @click="onSheetClick(sheet)" />
+            <div
+              v-for="sheet in previewSheets"
+              :key="sheet.index"
+              class="pdf-sheet-card"
+              :class="{ 'single-page': sheet.pages.length === 1 }"
+              :style="{ aspectRatio: previewSheetAspect }"
+            >
+              <img v-if="previewSheetUrls[sheet.index]" :src="previewSheetUrls[sheet.index]" alt="打印版面预览" class="pdf-sheet-image" :style="{ filter: previewFilter }" loading="lazy" />
               <div v-else class="pdf-page-loading">正在生成版面预览…</div>
-              <label v-if="layout.pages_per_sheet === 1 && sheet[0]" class="pdf-page-select" @click.stop>
-                <input type="checkbox" :checked="isPageSelected(sheet[0].page)" @change="togglePage(sheet[0].page)" />
-                第 {{ sheet[0].page }} 页
+              <label v-if="sheet.pages.length === 1" class="pdf-page-select" @click.stop>
+                <input type="checkbox" :checked="isPageSelected(sheet.pages[0])" @change="togglePage(sheet.pages[0])" />
+                第 {{ sheet.pages[0] }} 页
               </label>
-              <div v-if="layout.pages_per_sheet > 1" class="pdf-sheet-label">第 {{ sheetIndex + 1 }} 张（共 {{ pdfSheets.length }} 张）</div>
+              <div v-else class="pdf-sheet-label">第 {{ sheet.index + 1 }} 张（共 {{ previewSheets.length }} 张）</div>
             </div>
-            <div v-if="previewLoading && !pdfPages.length" class="preview-loading">{{ previewProgress.stage || '正在加载 PDF…' }}<template v-if="previewProgress.total"> · {{ previewProgress.done }}/{{ previewProgress.total }} 页</template></div>
+            <div v-if="previewLoading && !previewSheets.length" class="preview-loading">{{ previewProgress.stage || '正在生成版面预览…' }}</div>
           </div>
           <div v-else class="print-paper" :style="{ aspectRatio: previewAspect }">
             <img v-if="previewUrl" :src="previewUrl" alt="打印效果预览" class="preview-image print-preview-image" :style="{ filter: previewFilter }" />
@@ -1101,19 +948,25 @@ onUnmounted(() => {
           <button class="preview-remove" title="移除文件" aria-label="移除文件" @click="setFile(null)">×</button>
           <div class="preview-head">
             <span class="file-name">{{ file.name }}</span>
-            <span class="file-sub">{{ formatSize(file.size) }}<template v-if="pageCount"> · 原文档 {{ pageCount }} 页</template><template v-else-if="pageCountLoading"> · 读取页数…</template><template v-if="isPdf"> · 已选 {{ selectedPages.length }} 页<template v-if="layout.pages_per_sheet > 1"> · 每张 {{ layout.pages_per_sheet }} 页 → 预计 {{ pdfSheets.length }} 张纸</template></template></span>
+            <span class="file-sub">{{ formatSize(file.size) }}<template v-if="pageCount"> · 原文档 {{ pageCount }} 页</template><template v-else-if="pageCountLoading"> · 读取页数…</template><template v-if="isPdf"> · 已选 {{ selectedPages.length }} 页<template v-if="layout.pages_per_sheet > 1"> · 每张 {{ layout.pages_per_sheet }} 页 → 预计 {{ previewSheets.length }} 张纸</template></template></span>
           </div>
           <div v-if="isPdf" class="pdf-page-grid">
-            <div v-for="(sheet, sheetIndex) in pdfSheets" :key="sheetIndex" class="pdf-sheet-card" :class="{ 'single-page': layout.pages_per_sheet === 1 }" :style="{ aspectRatio: previewSheetAspect }">
-              <img v-if="pdfSheetPreviews[sheetIndex]" :src="pdfSheetPreviews[sheetIndex].url" alt="打印版面预览" class="pdf-sheet-image" :style="{ filter: previewFilter }" @click="onSheetClick(sheet)" />
+            <div
+              v-for="sheet in previewSheets"
+              :key="sheet.index"
+              class="pdf-sheet-card"
+              :class="{ 'single-page': sheet.pages.length === 1 }"
+              :style="{ aspectRatio: previewSheetAspect }"
+            >
+              <img v-if="previewSheetUrls[sheet.index]" :src="previewSheetUrls[sheet.index]" alt="打印版面预览" class="pdf-sheet-image" :style="{ filter: previewFilter }" loading="lazy" />
               <div v-else class="pdf-page-loading">正在生成版面预览…</div>
-              <label v-if="layout.pages_per_sheet === 1 && sheet[0]" class="pdf-page-select" @click.stop>
-                <input type="checkbox" :checked="isPageSelected(sheet[0].page)" @change="togglePage(sheet[0].page)" />
-                第 {{ sheet[0].page }} 页
+              <label v-if="sheet.pages.length === 1" class="pdf-page-select" @click.stop>
+                <input type="checkbox" :checked="isPageSelected(sheet.pages[0])" @change="togglePage(sheet.pages[0])" />
+                第 {{ sheet.pages[0] }} 页
               </label>
-              <div v-if="layout.pages_per_sheet > 1" class="pdf-sheet-label">第 {{ sheetIndex + 1 }} 张（共 {{ pdfSheets.length }} 张）</div>
+              <div v-else class="pdf-sheet-label">第 {{ sheet.index + 1 }} 张（共 {{ previewSheets.length }} 张）</div>
             </div>
-            <div v-if="previewLoading && !pdfPages.length" class="preview-loading">{{ previewProgress.stage || '正在加载 PDF…' }}<template v-if="previewProgress.total"> · {{ previewProgress.done }}/{{ previewProgress.total }} 页</template></div>
+            <div v-if="previewLoading && !previewSheets.length" class="preview-loading">{{ previewProgress.stage || '正在生成版面预览…' }}</div>
           </div>
           <div v-else class="print-paper" :style="{ aspectRatio: previewAspect }">
             <img v-if="previewUrl" :src="previewUrl" alt="打印效果预览" class="preview-image print-preview-image" :style="{ filter: previewFilter }" />

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -137,14 +138,45 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusRequestEntityTooLarge, "upload_too_large", "file exceeds the upload limit")
 		return
 	}
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, "invalid_file", "file is required")
-		return
-	}
-	defer file.Close()
 
-	ext := strings.ToLower(filepath.Ext(header.Filename))
+	// A file already uploaded for the preview session is reused instead of
+	// being sent again. On a slow link the document can be tens of megabytes,
+	// so a second upload would double the wait before printing starts.
+	var filename string
+	var ext string
+	var srcPath string
+	var header *multipart.FileHeader
+	var file multipart.File
+	if previewID := strings.TrimSpace(r.FormValue("preview_id")); previewID != "" {
+		s.previewMu.Lock()
+		session, ok := s.previewSessions[previewID]
+		if ok {
+			session.lastUsed = time.Now()
+			srcPath = session.path
+			filename = sanitizeFilename(session.name)
+		}
+		s.previewMu.Unlock()
+		if !ok {
+			writeError(w, http.StatusNotFound, "preview_not_found", "preview session not found or expired")
+			return
+		}
+		ext = strings.ToLower(filepath.Ext(srcPath))
+	} else {
+		uploaded, fileHeader, err := r.FormFile("file")
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, "invalid_file", "file or preview_id is required")
+			return
+		}
+		defer uploaded.Close()
+		file = uploaded
+		header = fileHeader
+		filename = sanitizeFilename(header.Filename)
+		ext = strings.ToLower(filepath.Ext(header.Filename))
+		if !allowedExt[ext] {
+			writeError(w, http.StatusUnprocessableEntity, "invalid_file_type", "仅支持 PDF、JPEG、PNG、WebP、Office 文档、PostScript")
+			return
+		}
+	}
 	if !allowedExt[ext] {
 		writeError(w, http.StatusUnprocessableEntity, "invalid_file_type", "仅支持 PDF、JPEG、PNG、WebP、Office 文档、PostScript")
 		return
@@ -160,21 +192,30 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := sanitizeFilename(header.Filename)
 	_ = os.MkdirAll(filepath.Join(s.cfg.DataDir, "uploads"), 0o755)
 	dst := filepath.Join(s.cfg.DataDir, "uploads", fmt.Sprintf("%d-%s", time.Now().UnixNano(), filename))
-	out, err := os.Create(dst)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
-		return
-	}
-	if _, err := io.Copy(out, file); err != nil {
+	if srcPath != "" {
+		// Copy from the preview cache so the job keeps its own file even after
+		// the preview session expires.
+		if err := copyLocalFile(srcPath, dst); err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+			return
+		}
+	} else {
+		out, err := os.Create(dst)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+			return
+		}
+		if _, err := io.Copy(out, file); err != nil {
+			out.Close()
+			_ = os.Remove(dst)
+			writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+			return
+		}
 		out.Close()
-		_ = os.Remove(dst)
-		writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
-		return
 	}
-	out.Close()
+	_ = header
 
 	copies := atoiDefault(r.FormValue("copies"), 1)
 	if copies < 1 {
@@ -277,7 +318,7 @@ func (s *Server) handlePreviewSession(w http.ResponseWriter, r *http.Request) {
 		_ = os.Remove(rawPath)
 	}
 	s.previewMu.Lock()
-	s.previewSessions[id] = &previewSession{path: previewPath, lastUsed: time.Now()}
+	s.previewSessions[id] = &previewSession{path: previewPath, name: header.Filename, lastUsed: time.Now()}
 	s.previewMu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]string{"preview_id": id})
 }
@@ -572,6 +613,21 @@ func normalizePPDOptions(raw string) string {
 		return "{}"
 	}
 	return string(data)
+}
+
+func copyLocalFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
 }
 
 func (s *Server) allowedNASPath(path string) bool {

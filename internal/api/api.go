@@ -22,6 +22,7 @@ import (
 	"github.com/liuzhaojun/print-portal/internal/discovery"
 	"github.com/liuzhaojun/print-portal/internal/driver"
 	"github.com/liuzhaojun/print-portal/internal/job"
+	"github.com/liuzhaojun/print-portal/internal/preview"
 	"github.com/liuzhaojun/print-portal/internal/printer"
 	"github.com/liuzhaojun/print-portal/internal/scan"
 	"github.com/liuzhaojun/print-portal/internal/storage"
@@ -42,10 +43,13 @@ type Server struct {
 
 	previewMu       sync.Mutex
 	previewSessions map[string]*previewSession
+	previews        *preview.Service
+	previewAreas    map[string]*preview.Area
 }
 
 type previewSession struct {
 	path     string
+	name     string
 	lastUsed time.Time
 }
 
@@ -72,6 +76,8 @@ func New(
 		logger:          logger,
 		mux:             http.NewServeMux(),
 		previewSessions: map[string]*previewSession{},
+		previews:        preview.New(cfg.DataDir),
+		previewAreas:    map[string]*preview.Area{},
 	}
 	s.routes()
 	return s
@@ -89,6 +95,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/print/nas", s.handlePrintNAS)
 	s.mux.HandleFunc("POST /api/preview", s.handlePreview)
 	s.mux.HandleFunc("POST /api/preview/session", s.handlePreviewSession)
+	s.mux.HandleFunc("POST /api/preview/prepare", s.handlePreviewPrepare)
+	s.mux.HandleFunc("GET /api/preview/{id}/sheet/{index}", s.handlePreviewSheet)
+	s.mux.HandleFunc("GET /api/preview/{id}/document.pdf", s.handlePreviewDocument)
 	s.mux.HandleFunc("GET /api/nas/preview", s.handleNASPreview)
 	s.mux.HandleFunc("GET /api/jobs", s.handleListJobs)
 	s.mux.HandleFunc("GET /api/jobs/{id}", s.handleGetJob)
