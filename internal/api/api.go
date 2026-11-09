@@ -49,6 +49,7 @@ type Server struct {
 
 type previewSession struct {
 	path     string
+	name     string
 	lastUsed time.Time
 }
 
@@ -96,6 +97,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/preview/session", s.handlePreviewSession)
 	s.mux.HandleFunc("POST /api/preview/prepare", s.handlePreviewPrepare)
 	s.mux.HandleFunc("GET /api/preview/{id}/sheet/{index}", s.handlePreviewSheet)
+	s.mux.HandleFunc("GET /api/preview/{id}/document.pdf", s.handlePreviewDocument)
 	s.mux.HandleFunc("GET /api/nas/preview", s.handleNASPreview)
 	s.mux.HandleFunc("GET /api/jobs", s.handleListJobs)
 	s.mux.HandleFunc("GET /api/jobs/{id}", s.handleGetJob)

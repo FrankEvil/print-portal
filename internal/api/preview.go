@@ -90,6 +90,34 @@ func (s *Server) handlePreviewPrepare(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// handlePreviewDocument streams the laid-out PDF. The print page renders this
+// single file with PDF.js, so it downloads the document once instead of
+// fetching one image per sheet.
+func (s *Server) handlePreviewDocument(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	path, ok := s.previews.DocumentPath(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, "preview_not_found", "preview not found or expired")
+		return
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+		return
+	}
+	// ServeContent handles Range requests, which is what lets PDF.js stream and
+	// show the first pages before the whole file has arrived.
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Cache-Control", "private, max-age=600")
+	http.ServeContent(w, r, "preview.pdf", info.ModTime(), file)
+}
+
 // handlePreviewSheet renders one sheet and serves it as a PNG.
 func (s *Server) handlePreviewSheet(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

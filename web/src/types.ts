@@ -108,6 +108,7 @@ export interface ServerPreview {
   paper_width: number
   paper_height: number
   printable: boolean
+  pdf_url: string
 }
 
 export interface PaperArea {

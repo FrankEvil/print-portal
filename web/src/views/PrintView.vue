@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { TrimApp } from '@trimjs/web-app'
-import { adminToken, api, apiUrl } from '../api'
+import { adminToken, api, apiBase, apiUrl } from '../api'
 import { toast } from '../toast'
 import type { Job, PaperArea, PPDOption, Printer, ServerPreview } from '../types'
 import { formatJobParams } from '../jobDisplay'
 import StatusBadge from '../components/StatusBadge.vue'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `${apiBase}${pdfjsWorker}`
 
 const printers = ref<Printer[]>([])
 const selectedPrinter = ref<number | null>(null)
@@ -27,7 +31,7 @@ const previewError = ref('')
 const previewProgress = ref({ done: 0, total: 0, stage: '' })
 const previewResult = ref<ServerPreview | null>(null)
 const previewSheetUrls = ref<Record<number, string>>({})
-const previewObserver = ref<IntersectionObserver | null>(null)
+let sheetRenderToken = 0
 let previewBuildToken = 0
 const selectedPages = ref<number[]>([])
 const extraPPDOptions = ref<Record<string, string>>({})
@@ -158,9 +162,11 @@ const layoutOptionsPayload = computed(() => ({
 }))
 
 function clearPdfPages() {
-  previewObserver.value?.disconnect()
-  previewObserver.value = null
+  sheetRenderToken++
   previewResult.value = null
+  for (const url of Object.values(previewSheetUrls.value)) {
+    if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+  }
   previewSheetUrls.value = {}
   selectedPages.value = []
 }
@@ -372,37 +378,52 @@ function clearPreview() {
   previewProgress.value = { done: 0, total: 0, stage: '' }
 }
 
-function previewSheetUrl(index: number): string {
-  const result = previewResult.value
-  if (!result) return ''
-  return apiUrl(`/api/preview/${result.id}/sheet/${index}`)
-}
-
-function observeSheet(el: Element | null, index: number) {
-  if (!el || !previewObserver.value) return
-  ;(el as HTMLElement).dataset.sheetIndex = String(index)
-  previewObserver.value.observe(el)
-}
-
-function setupPreviewObserver() {
-  if (previewObserver.value) previewObserver.value.disconnect()
-  previewObserver.value = new IntersectionObserver((entries) => {
-    for (const item of entries) {
-      if (!item.isIntersecting) continue
-      const index = Number((item.target as HTMLElement).dataset.sheetIndex)
-      if (Number.isNaN(index)) continue
-      const result = previewResult.value
-      if (!result) continue
-      const existing = previewSheetUrls.value[index]
-      if (existing) continue
-      previewSheetUrls.value = { ...previewSheetUrls.value, [index]: previewSheetUrl(index) }
-      previewObserver.value?.unobserve(item.target)
+async function renderSheetImages(pdfUrl: string): Promise<void> {
+  const token = ++sheetRenderToken
+  const doc = await pdfjsLib.getDocument({ url: pdfUrl }).promise
+  if (token !== sheetRenderToken) {
+    void doc.destroy()
+    return
+  }
+  const sheets = previewResult.value?.sheets || []
+  previewProgress.value = { done: 0, total: doc.numPages, stage: '正在渲染版面预览' }
+  // Render sequentially so the first sheets appear immediately instead of all
+  // competing for the same main thread.
+  for (let index = 0; index < doc.numPages; index++) {
+    if (token !== sheetRenderToken) {
+      void doc.destroy()
+      return
     }
-  }, { rootMargin: '200px 0px' })
+    const page = await doc.getPage(index + 1)
+    const viewport = page.getViewport({ scale: 1.4 })
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.floor(viewport.width)
+    canvas.height = Math.floor(viewport.height)
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('浏览器不支持 Canvas')
+    await page.render({ canvasContext: context, viewport }).promise
+    if (token !== sheetRenderToken) {
+      void doc.destroy()
+      return
+    }
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+    if (blob) {
+      const previous = previewSheetUrls.value[index]
+      if (previous?.startsWith('blob:')) URL.revokeObjectURL(previous)
+      previewSheetUrls.value = { ...previewSheetUrls.value, [index]: URL.createObjectURL(blob) }
+    }
+    previewProgress.value = {
+      done: index + 1,
+      total: doc.numPages,
+      stage: '正在渲染版面预览',
+    }
+  }
+  if (token === sheetRenderToken) void doc.destroy()
 }
 
-// The server owns the layout: it lays the document out once and renders each
-// sheet from that same PDF, so the preview always matches the printed output.
+// The server lays the document out and the browser renders that exact PDF with
+// PDF.js, so the preview cannot drift from the printed output and only one
+// download is needed.
 async function buildServerPreview(): Promise<void> {
   if (!isPdf.value && !isNasPdf.value) return
   const token = ++previewBuildToken
@@ -444,15 +465,16 @@ async function buildServerPreview(): Promise<void> {
     const result = (await res.json()) as ServerPreview
     if (token !== previewBuildToken) return
     previewResult.value = result
+    for (const url of Object.values(previewSheetUrls.value)) {
+      if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+    }
     previewSheetUrls.value = {}
     pageCount.value = result.page_count
     selectedPages.value = result.sheets.flatMap((sheet) => sheet.pages)
-    setupPreviewObserver()
-    // Show the first sheets immediately; the observer handles the rest so the
-    // server is not asked to render the whole document at once.
-    const eager: Record<number, string> = {}
-    for (const sheet of result.sheets.slice(0, 2)) eager[sheet.index] = previewSheetUrl(sheet.index)
-    previewSheetUrls.value = eager
+    previewLoading.value = false
+    // Render the laid-out PDF in the browser: one download, no per-sheet
+    // requests, and the pages come straight from the file that will print.
+    await renderSheetImages(apiUrl(result.pdf_url))
   } catch (e) {
     if (token !== previewBuildToken) return
     previewError.value = (e as Error).message || '版面预览生成失败'
@@ -754,7 +776,10 @@ async function submit() {
       })
     } else {
       const fd = new FormData()
-      fd.append('file', file.value!)
+      // Reuse the document already uploaded for the preview: on a slow link
+      // re-uploading tens of megabytes would delay printing by minutes.
+      if (previewSessionId) fd.append('preview_id', previewSessionId)
+      else fd.append('file', file.value!)
       fd.append('printer_id', String(selectedPrinter.value))
       for (const [k, v] of Object.entries(form.value)) fd.append(k, String(v))
       fd.append('ppd_options', JSON.stringify(extraPPDOptions.value))
@@ -889,7 +914,6 @@ onUnmounted(() => {
             <div
               v-for="sheet in previewSheets"
               :key="sheet.index"
-              :ref="(el) => observeSheet(el as Element | null, sheet.index)"
               class="pdf-sheet-card"
               :class="{ 'single-page': sheet.pages.length === 1 }"
               :style="{ aspectRatio: previewSheetAspect }"
@@ -930,7 +954,6 @@ onUnmounted(() => {
             <div
               v-for="sheet in previewSheets"
               :key="sheet.index"
-              :ref="(el) => observeSheet(el as Element | null, sheet.index)"
               class="pdf-sheet-card"
               :class="{ 'single-page': sheet.pages.length === 1 }"
               :style="{ aspectRatio: previewSheetAspect }"

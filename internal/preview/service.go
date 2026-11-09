@@ -62,7 +62,12 @@ type Result struct {
 	PaperWidth    float64 `json:"paper_width"`
 	PaperHeight   float64 `json:"paper_height"`
 	Printable     bool    `json:"printable"`
-	LayoutPDF     string  `json:"-"`
+	// PDFURL points at the laid-out PDF. The browser renders this file
+	// directly, so it downloads once instead of requesting one image per
+	// sheet, and what it shows is byte-for-byte what gets printed.
+	PDFURL string `json:"pdf_url"`
+	// PDFPath is the on-disk location used by the print job.
+	PDFPath string `json:"-"`
 }
 
 type entry struct {
@@ -166,13 +171,26 @@ func (s *Service) Prepare(ctx context.Context, req Request) (*Result, error) {
 		PaperWidth:    paperWidth,
 		PaperHeight:   paperHeight,
 		Printable:     req.Area != nil,
-		LayoutPDF:     layoutPDF,
+		PDFURL:        "/api/preview/" + id + "/document.pdf",
+		PDFPath:       layoutPDF,
 	}
 
 	s.mu.Lock()
 	s.byID[id] = &entry{result: result, dir: dir, lastUse: time.Now()}
 	s.mu.Unlock()
 	return result, nil
+}
+
+// DocumentPath returns the laid-out PDF for a prepared preview.
+func (s *Service) DocumentPath(id string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item, ok := s.byID[id]
+	if !ok {
+		return "", false
+	}
+	item.lastUse = time.Now()
+	return item.result.PDFPath, true
 }
 
 // Result returns a previously prepared result.
@@ -216,7 +234,7 @@ func (s *Service) SheetImage(ctx context.Context, id string, index int, area *Ar
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
-	if err := renderPage(ctx, item.result.LayoutPDF, index, dpi, raw); err != nil {
+	if err := renderPage(ctx, item.result.PDFPath, index, dpi, raw); err != nil {
 		return "", err
 	}
 	defer os.Remove(raw)
