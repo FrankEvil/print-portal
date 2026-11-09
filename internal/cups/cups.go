@@ -332,6 +332,10 @@ type PrintOptions struct {
 	Scaling      string
 	ExtraOptions map[string]string
 	Layout       layout.Options
+	// LaidOut reports that the PDF was produced by layout.Apply, so its page
+	// geometry already matches the target paper. Passing orientation or scaling
+	// to CUPS in that case would rotate or resize the content a second time.
+	LaidOut bool
 }
 
 // Submit sends a file to a CUPS queue and returns the CUPS job id.
@@ -349,7 +353,7 @@ func (c *Client) Submit(ctx context.Context, queue, file string, opts PrintOptio
 	if opts.PaperSize != "" {
 		args = append(args, "-o", "media="+opts.PaperSize)
 	}
-	if opts.Orientation == "landscape" {
+	if !opts.LaidOut && opts.Orientation == "landscape" {
 		args = append(args, "-o", "orientation-requested=4")
 	}
 	switch opts.ColorMode {
@@ -358,11 +362,13 @@ func (c *Client) Submit(ctx context.Context, queue, file string, opts PrintOptio
 	case "color":
 		args = append(args, "-o", "print-color-mode=color")
 	}
-	switch opts.Scaling {
-	case "fit", "auto":
-		args = append(args, "-o", "fit-to-page")
-	case "fill":
-		args = append(args, "-o", "fill")
+	if !opts.LaidOut {
+		switch opts.Scaling {
+		case "fit", "auto":
+			args = append(args, "-o", "fit-to-page")
+		case "fill":
+			args = append(args, "-o", "fill")
+		}
 	}
 	copies := opts.Copies
 	if copies <= 0 {
@@ -384,6 +390,12 @@ var ErrNoPPD = errors.New("PPD not found")
 
 var ppdFilterRE = regexp.MustCompile(`(?m)^\*cupsFilter2?:\s+"([^"]+)"`)
 
+// PrintOptionArgsForTest exposes the option list so other packages can assert
+// which flags reach CUPS.
+func PrintOptionArgsForTest(opts PrintOptions) []string {
+	return printOptionArgs(opts)
+}
+
 func printOptionArgs(opts PrintOptions) []string {
 	var out []string
 	if opts.PageRange != "" {
@@ -398,7 +410,7 @@ func printOptionArgs(opts PrintOptions) []string {
 	if opts.PaperSize != "" {
 		out = append(out, "media="+opts.PaperSize)
 	}
-	if opts.Orientation == "landscape" {
+	if !opts.LaidOut && opts.Orientation == "landscape" {
 		out = append(out, "orientation-requested=4")
 	}
 	switch opts.ColorMode {
@@ -407,11 +419,13 @@ func printOptionArgs(opts PrintOptions) []string {
 	case "color":
 		out = append(out, "print-color-mode=color")
 	}
-	switch opts.Scaling {
-	case "fit", "auto":
-		out = append(out, "fit-to-page")
-	case "fill":
-		out = append(out, "fill")
+	if !opts.LaidOut {
+		switch opts.Scaling {
+		case "fit", "auto":
+			out = append(out, "fit-to-page")
+		case "fill":
+			out = append(out, "fill")
+		}
 	}
 	keys := make([]string, 0, len(opts.ExtraOptions))
 	for key := range opts.ExtraOptions {

@@ -160,10 +160,37 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 	opts.Layout.PaperSize = j.PaperSize
 	opts.Layout.Orientation = j.Orientation
 	opts.Layout.PageRange = j.PageRange
-	// Large multi-page jobs are split into small CUPS jobs and submitted
-	// one at a time. This keeps the USB/printer buffer from being flooded.
+	// The layout step is shared with the preview service: when the user already
+	// previewed this document the laid-out PDF is reused, so the printed output
+	// is byte-for-byte the same pagination the preview showed.
+	//
+	// Layout must run before chunking. Splitting the source first would place
+	// pages 4 and 5 on separate sheets even though they belong together, and
+	// every chunk would restart at sheet 1.
+	layoutPath := filepath.Join(jobDir, "layout.pdf")
+	if layoutOptsActive(opts.Layout) {
+		if err := layout.Apply(convertCtx, pdfPath, layoutPath, opts.Layout); err != nil {
+			m.fail(j, "layout failed: "+err.Error())
+			return
+		}
+		pdfPath = layoutPath
+		// The page range was consumed by the layout step; the resulting PDF
+		// already contains exactly the selected pages.
+		opts.PageRange = ""
+		// Orientation and scaling are already baked into the page geometry, so
+		// they must not be applied again downstream.
+		opts.LaidOut = true
+	}
+
+	// Large multi-page jobs are split into small CUPS jobs and submitted one at
+	// a time. This keeps the USB/printer buffer from being flooded. Chunking now
+	// happens on the laid-out PDF, so sheet boundaries stay intact.
+	sheetCount := j.Pages
+	if layoutOptsActive(opts.Layout) {
+		sheetCount = pageCountOf(convertCtx, pdfPath, m)
+	}
 	chunkPages := settingInt(m.store, "chunk_pages", 4)
-	if chunkPages > 0 && j.PageRange == "" && j.Pages > chunkPages {
+	if chunkPages > 0 && opts.PageRange == "" && sheetCount > chunkPages {
 		chunks, splitErr := m.conv.SplitPDF(convertCtx, pdfPath, filepath.Join(jobDir, "chunks"), chunkPages)
 		if splitErr == nil && len(chunks) > 1 {
 			if err := m.submitChunks(ctx, j, printer, chunks, opts); err != nil {
@@ -174,18 +201,6 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 		if splitErr != nil {
 			m.logger.Printf("job %d chunking unavailable, fallback to single job: %v", j.ID, splitErr)
 		}
-	}
-	// The layout step is shared with the preview service: when the user already
-	// previewed this document the laid-out PDF is reused, so the printed output
-	// is byte-for-byte the same pagination the preview showed.
-	layoutPath := filepath.Join(jobDir, "layout.pdf")
-	if layoutOptsActive(opts.Layout) {
-		if err := layout.Apply(convertCtx, pdfPath, layoutPath, opts.Layout); err != nil {
-			m.fail(j, "layout failed: "+err.Error())
-			return
-		}
-		pdfPath = layoutPath
-		opts.PageRange = ""
 	}
 
 	renderedPath := pdfPath + ".raw"
@@ -217,6 +232,16 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 		m.logger.Printf("update job %d: %v", j.ID, err)
 	}
 	m.logger.Printf("job %d submitted as CUPS job %s", j.ID, cupsID)
+}
+
+// pageCountOf counts the pages of a laid-out PDF so chunking uses the sheet
+// count rather than the source page count.
+func pageCountOf(ctx context.Context, pdf string, m *Manager) int {
+	pages, err := m.conv.PageCount(ctx, pdf)
+	if err != nil || pages <= 0 {
+		return 0
+	}
+	return pages
 }
 
 func layoutOptsActive(opts layout.Options) bool {
