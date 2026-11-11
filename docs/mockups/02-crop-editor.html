@@ -1,0 +1,150 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+:root {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #eef2ff;
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #94a3b8;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --accent: #4f46e5;
+  --accent-soft: #eef2ff;
+  --shadow: 0 1px 2px rgba(15,23,42,.04), 0 16px 40px rgba(15,23,42,.06);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #e0e7ff 0%, transparent 45%),
+    radial-gradient(1000px 500px at 110% 0%, #fce7f3 0%, transparent 40%),
+    var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+.page { width: 1440px; height: 900px; padding: 34px 120px; overflow: hidden; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 34px; }
+.brand { display: flex; align-items: center; gap: 14px; }
+.logo {
+  width: 46px; height: 46px; border-radius: 13px;
+  background: linear-gradient(135deg, #8b7cf6, #5b54e8);
+  color: #fff; font-weight: 800; font-size: 23px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 22px rgba(79,70,229,.28);
+}
+.brand-title { font-size: 20px; font-weight: 700; letter-spacing: .2px; }
+.brand-sub { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+.nav { display: flex; gap: 34px; font-size: 15px; color: var(--text-2); }
+.nav .on { color: var(--accent); font-weight: 600; }
+.card { background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 28px 30px; }
+.card-title { font-size: 20px; font-weight: 700; margin: 0 0 8px; }
+.card-sub { font-size: 13px; color: var(--text-2); margin: 0 0 20px; line-height: 1.6; }
+.mode-tabs { display: inline-flex; background: #f1f5f9; border-radius: 12px; padding: 4px; gap: 2px; margin-bottom: 22px; }
+.mode-tab { border: 0; background: transparent; color: var(--text-2); font-size: 14px; padding: 9px 22px; border-radius: 9px; font-weight: 600; }
+.mode-tab.active { background: #fff; color: var(--accent); box-shadow: 0 1px 2px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.08); }
+.field-label { font-size: 13px; color: var(--text-2); font-weight: 600; margin-bottom: 8px; display: block; }
+.select, .input {
+  width: 100%; height: 42px; border: 1px solid var(--line); border-radius: 10px;
+  background: #fff; padding: 0 13px; font-size: 14px; color: var(--text);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.select::after { content: "⌄"; color: var(--text-3); font-size: 15px; }
+.btn { border: 0; border-radius: 10px; font-size: 14px; font-weight: 600; padding: 12px 20px; }
+.btn-primary { background: linear-gradient(180deg, #6d63f0, #4f46e5); color: #fff; box-shadow: 0 8px 20px rgba(79,70,229,.25); }
+.btn-ghost { background: #fff; border: 1px solid var(--line); color: var(--text-2); }
+.layout { display: grid; grid-template-columns: 1fr 390px; gap: 28px; align-items: start; }
+
+
+body { background: #e9edf5; }
+.page { width: 1440px; height: 900px; padding: 0; display:flex; align-items:center; justify-content:center; background: rgba(15,23,42,.42); }
+.modal { width: 1080px; height: 720px; background:#fff; border-radius:20px; box-shadow:0 30px 80px rgba(15,23,42,.35); display:flex; flex-direction:column; overflow:hidden; }
+.modal-head { padding: 24px 30px 18px; display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--line); }
+.modal-title { font-size:20px; font-weight:700; }
+.modal-sub { font-size:13px; color:var(--text-2); margin-top:6px; }
+.close { width:34px;height:34px;border-radius:9px;background:var(--surface-2);color:var(--text-2);display:flex;align-items:center;justify-content:center;font-size:18px;}
+.modal-body { flex:1; display:flex; min-height:0; }
+.canvas-wrap { flex:1; background:#dfe3ec; display:flex; align-items:center; justify-content:center; padding:28px; }
+.photo { width:640px; height:480px; position:relative; background:
+  linear-gradient(120deg,#e6d6bc,#d8c5a4 45%,#cdb995);
+  box-shadow: inset 0 0 80px rgba(120,95,60,.22); border-radius:6px; overflow:hidden; }
+.photo::before { content:""; position:absolute; inset:0; background:
+  repeating-linear-gradient(95deg, rgba(255,255,255,.06) 0 3px, transparent 3px 14px); }
+.card-real { position:absolute; left:120px; top:104px; width:400px; height:252px; transform:rotate(-4deg); border-radius:12px;
+  background:linear-gradient(135deg,#d7e7ff,#eef5ff); border:1px solid #aac5e8; box-shadow:0 10px 24px rgba(60,60,80,.28); overflow:hidden;}
+.card-real .cn { position:absolute; left:24px; top:18px; font-size:10px; letter-spacing:2px; color:#3d5f92;}
+.card-real .title { position:absolute; left:24px; top:34px; font-size:16px; font-weight:700; color:#1c3a68;}
+.card-real .portrait { position:absolute; right:24px; top:64px; width:74px; height:94px; background:linear-gradient(160deg,#c2d3e7,#a9bfd8); border-radius:4px;}
+.card-real .ln { position:absolute; left:24px; height:8px; background:#ccdcf0; border-radius:3px;}
+.crop-box { position:absolute; left:166px; top:128px; width:352px; height:222px; border:2px solid #4f46e5; box-shadow:0 0 0 9999px rgba(15,23,42,.42); }
+.crop-box .handle { position:absolute; width:12px; height:12px; background:#fff; border:2px solid #4f46e5; border-radius:3px; }
+.h-tl { left:-7px; top:-7px; } .h-tr { right:-7px; top:-7px; } .h-bl { left:-7px; bottom:-7px; } .h-br { right:-7px; bottom:-7px; }
+.h-t { left:50%; top:-7px; margin-left:-6px; } .h-b { left:50%; bottom:-7px; margin-left:-6px; }
+.h-l { left:-7px; top:50%; margin-top:-6px; } .h-r { right:-7px; top:50%; margin-top:-6px; }
+.grid-line { position:absolute; background: rgba(255,255,255,.55); }
+.toolbar { width:280px; border-left:1px solid var(--line); padding:22px 22px; background:#fff; }
+.tool-title { font-size:12px; color:var(--text-3); font-weight:700; letter-spacing:.5px; margin: 4px 0 10px; }
+.tool-group { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:18px; }
+.tool-btn { height:38px; border:1px solid var(--line); border-radius:9px; background:#fff; font-size:13px; color:var(--text-2); display:flex; align-items:center; justify-content:center; gap:6px; }
+.tool-btn.wide { grid-column: span 2; }
+.slider { width:100%; height:4px; background:var(--line); border-radius:2px; position:relative; margin:16px 0 10px; }
+.slider .track { position:absolute; left:0; top:0; height:4px; width:45%; background:var(--accent); border-radius:2px; }
+.slider .knob { position:absolute; left:44%; top:-6px; width:16px; height:16px; border-radius:50%; background:#fff; border:2px solid var(--accent); box-shadow:0 1px 4px rgba(15,23,42,.2); }
+.slider-labels { display:flex; justify-content:space-between; font-size:11px; color:var(--text-3); }
+.ratio-row { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-2); background:#f8fafc; border-radius:9px; padding:10px 12px; margin-bottom:18px;}
+.ratio-dot { width:14px; height:14px; border-radius:4px; border:2px solid var(--accent); background:#eef2ff; }
+.modal-foot { padding: 16px 30px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:12px; }
+</style></head><body><div class="page">
+<div class="modal">
+  <div class="modal-head">
+    <div><div class="modal-title">裁剪身份证正面</div><div class="modal-sub">拖动裁剪框调整范围，可使用旋转、翻转和比例锁定</div></div>
+    <div class="close">×</div>
+  </div>
+  <div class="modal-body">
+    <div class="canvas-wrap">
+      <div class="photo">
+        <div class="card-real">
+          <div class="cn">中华人民共和国</div>
+          <div class="title">居民身份证</div>
+          <div class="portrait"></div>
+          <div class="ln" style="top:86px;width:150px"></div>
+          <div class="ln" style="top:104px;width:118px"></div>
+          <div class="ln" style="top:122px;width:172px"></div>
+          <div class="ln" style="top:140px;width:96px"></div>
+        </div>
+        <div class="crop-box">
+          <div class="handle h-tl"></div><div class="handle h-tr"></div><div class="handle h-bl"></div><div class="handle h-br"></div>
+          <div class="handle h-t"></div><div class="handle h-b"></div><div class="handle h-l"></div><div class="handle h-r"></div>
+          <div class="grid-line" style="left:33.3%;top:0;width:1px;height:100%"></div>
+          <div class="grid-line" style="left:66.6%;top:0;width:1px;height:100%"></div>
+          <div class="grid-line" style="top:33.3%;left:0;height:1px;width:100%"></div>
+          <div class="grid-line" style="top:66.6%;left:0;height:1px;width:100%"></div>
+        </div>
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="tool-title">旋转</div>
+      <div class="tool-group">
+        <div class="tool-btn">⟲ 左转 90°</div>
+        <div class="tool-btn">⟳ 右转 90°</div>
+      </div>
+      <div class="tool-title">微调角度</div>
+      <div class="slider"><div class="track"></div><div class="knob"></div></div>
+      <div class="slider-labels"><span>-15°</span><span>0°</span><span>+15°</span></div>
+      <div class="tool-title" style="margin-top:22px">翻转</div>
+      <div class="tool-group">
+        <div class="tool-btn">⇋ 水平翻转</div>
+        <div class="tool-btn">⇅ 垂直翻转</div>
+        <div class="tool-btn wide">↺ 重置</div>
+      </div>
+      <div class="ratio-row"><span class="ratio-dot"></span>锁定身份证比例 85.6 : 54</div>
+      <div style="font-size:12px;color:var(--text-3);line-height:1.7;background:#f8fafc;border-radius:10px;padding:12px 14px">
+        裁剪结果按原图分辨率保存，不会因为屏幕缩放变模糊。
+      </div>
+    </div>
+  </div>
+  <div class="modal-foot"><button class="btn btn-ghost">取消</button><button class="btn btn-primary">确认裁剪</button></div>
+</div>
+</div></body></html>

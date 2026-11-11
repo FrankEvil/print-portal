@@ -224,13 +224,22 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	if copies > 99 {
 		copies = 99
 	}
+	printMode := normalizePrintMode(r.FormValue("print_mode"))
+	pageRange := strings.TrimSpace(r.FormValue("page_range"))
+	duplex := defaultStr(r.FormValue("duplex"), "one-sided")
+	if printMode != "document" {
+		// The print mode composer has already produced the final A4 pages.
+		pageRange = ""
+		duplex = "one-sided"
+	}
 	j := &storage.Job{
 		PrinterID:     printerID,
 		Source:        "web",
 		Filename:      filename,
 		SourceIP:      clientIP(r),
-		PageRange:     strings.TrimSpace(r.FormValue("page_range")),
-		Duplex:        defaultStr(r.FormValue("duplex"), "one-sided"),
+		PageRange:     pageRange,
+		Duplex:        duplex,
+		PrintMode:     printMode,
 		Copies:        copies,
 		PaperSize:     defaultStr(r.FormValue("paper_size"), "A4"),
 		Orientation:   defaultStr(r.FormValue("orientation"), "portrait"),
@@ -857,6 +866,15 @@ func sanitizeFilename(name string) string {
 		name = "upload"
 	}
 	return name
+}
+
+func normalizePrintMode(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "idcard", "invoice":
+		return strings.ToLower(strings.TrimSpace(v))
+	default:
+		return "document"
+	}
 }
 
 func defaultStr(v, fallback string) string {

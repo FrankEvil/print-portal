@@ -1,0 +1,153 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+:root {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #eef2ff;
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #94a3b8;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --accent: #4f46e5;
+  --accent-soft: #eef2ff;
+  --shadow: 0 1px 2px rgba(15,23,42,.04), 0 16px 40px rgba(15,23,42,.06);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #e0e7ff 0%, transparent 45%),
+    radial-gradient(1000px 500px at 110% 0%, #fce7f3 0%, transparent 40%),
+    var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+.page { width: 1440px; height: 900px; padding: 34px 120px; overflow: hidden; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 34px; }
+.brand { display: flex; align-items: center; gap: 14px; }
+.logo {
+  width: 46px; height: 46px; border-radius: 13px;
+  background: linear-gradient(135deg, #8b7cf6, #5b54e8);
+  color: #fff; font-weight: 800; font-size: 23px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 22px rgba(79,70,229,.28);
+}
+.brand-title { font-size: 20px; font-weight: 700; letter-spacing: .2px; }
+.brand-sub { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+.nav { display: flex; gap: 34px; font-size: 15px; color: var(--text-2); }
+.nav .on { color: var(--accent); font-weight: 600; }
+.card { background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 28px 30px; }
+.card-title { font-size: 20px; font-weight: 700; margin: 0 0 8px; }
+.card-sub { font-size: 13px; color: var(--text-2); margin: 0 0 20px; line-height: 1.6; }
+.mode-tabs { display: inline-flex; background: #f1f5f9; border-radius: 12px; padding: 4px; gap: 2px; margin-bottom: 22px; }
+.mode-tab { border: 0; background: transparent; color: var(--text-2); font-size: 14px; padding: 9px 22px; border-radius: 9px; font-weight: 600; }
+.mode-tab.active { background: #fff; color: var(--accent); box-shadow: 0 1px 2px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.08); }
+.field-label { font-size: 13px; color: var(--text-2); font-weight: 600; margin-bottom: 8px; display: block; }
+.select, .input {
+  width: 100%; height: 42px; border: 1px solid var(--line); border-radius: 10px;
+  background: #fff; padding: 0 13px; font-size: 14px; color: var(--text);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.select::after { content: "⌄"; color: var(--text-3); font-size: 15px; }
+.btn { border: 0; border-radius: 10px; font-size: 14px; font-weight: 600; padding: 12px 20px; }
+.btn-primary { background: linear-gradient(180deg, #6d63f0, #4f46e5); color: #fff; box-shadow: 0 8px 20px rgba(79,70,229,.25); }
+.btn-ghost { background: #fff; border: 1px solid var(--line); color: var(--text-2); }
+.layout { display: grid; grid-template-columns: 1fr 390px; gap: 28px; align-items: start; }
+
+
+.file-list { display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+.file-row { display:flex; align-items:center; gap:14px; border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:#fff; }
+.file-row.img { border-color:#fde68a; background:#fffdf5; }
+.file-icon { width:40px; height:40px; border-radius:9px; background:#eef2ff; color:#4f46e5; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
+.file-icon.jpg { background:#fef3c7; color:#b45309; }
+.file-main { flex:1; }
+.file-name { font-size:14px; font-weight:600; }
+.file-meta { font-size:12px; color:var(--text-3); margin-top:3px; }
+.file-tag { font-size:11px; font-weight:600; padding:4px 9px; border-radius:999px; background:#dcfce7; color:#15803d; }
+.file-tag.warn { background:#fef3c7; color:#b45309; }
+.add-row { height:46px; border:1.5px dashed var(--line-strong); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--text-3); font-size:13px; gap:8px; background:#fafbfe;}
+.settings-row { margin-bottom:18px; }
+.segment { display:flex; background:#f1f5f9; border-radius:10px; padding:3px; gap:2px;}
+.segment div { flex:1; text-align:center; font-size:13px; padding:8px 0; border-radius:8px; color:var(--text-2); font-weight:600;}
+.segment .on { background:#fff; color:var(--accent); box-shadow:0 1px 3px rgba(15,23,42,.08);}
+.toggle-row { display:flex; align-items:center; justify-content:space-between; padding:4px 0 0; }
+.toggle { width:42px; height:24px; border-radius:999px; background:var(--accent); position:relative; }
+.toggle::after { content:""; position:absolute; width:20px; height:20px; border-radius:50%; background:#fff; right:2px; top:2px; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+.toggle.off { background:#cbd5e1; }
+.toggle.off::after { right:20px; }
+.preview-strip { margin-top: 24px; display:flex; gap:18px; align-items:flex-start; }
+.sheet { width:200px; height:283px; background:#fff; box-shadow:0 6px 18px rgba(15,23,42,.12); position:relative; border-radius:2px; }
+.sheet .inv { position:absolute; left:10px; width:180px; height:120px; border:1px solid #e5e7eb; background:#fff; }
+.sheet .inv .ih { font-size:7px; color:#b91c1c; font-weight:700; margin:8px 8px 4px; }
+.sheet .inv .il { height:3px; background:#eef2f7; border-radius:1px; margin:4px 8px; }
+.sheet .cut { position:absolute; left:6px; right:6px; border-top:1px dashed #cbd5e1; }
+.sheet .cap { position:absolute; bottom:10px; width:100%; text-align:center; font-size:10px; color:#94a3b8; }
+</style></head><body><div class="page">
+<div class="header">
+  <div class="brand">
+    <div class="logo">P</div>
+    <div><div class="brand-title">Print Portal</div><div class="brand-sub">局域网打印门户</div></div>
+  </div>
+  <div class="nav"><span class="on">打印</span><span>扫描</span><span>管理</span><span>新窗口</span></div>
+</div>
+
+<div class="layout">
+  <div class="card">
+    <h2 class="card-title">选择发票</h2>
+    <p class="card-sub">支持 PDF 电子发票和图片；按原始尺寸排版，不缩放。</p>
+    <div class="mode-tabs">
+      <button class="mode-tab">普通文档</button>
+      <button class="mode-tab">身份证</button>
+      <button class="mode-tab active">发票</button>
+    </div>
+    <div class="file-list">
+      <div class="file-row">
+        <div class="file-icon">PDF</div>
+        <div class="file-main"><div class="file-name">增值税电子普通发票_202611.pdf</div><div class="file-meta">210 × 140 mm · 1 页</div></div>
+        <div class="file-tag">1:1 原尺寸</div>
+      </div>
+      <div class="file-row">
+        <div class="file-icon">PDF</div>
+        <div class="file-main"><div class="file-name">差旅费报销发票.pdf</div><div class="file-meta">210 × 140 mm · 2 页</div></div>
+        <div class="file-tag">1:1 原尺寸</div>
+      </div>
+      <div class="file-row img">
+        <div class="file-icon jpg">JPG</div>
+        <div class="file-main"><div class="file-name">出租车发票.jpg</div><div class="file-meta">已裁剪 · 76 × 177.8 mm（卷票）</div></div>
+        <div class="file-tag warn">图片</div>
+      </div>
+    </div>
+    <div class="add-row">＋ 添加发票（PDF / JPG / PNG，可多选）</div>
+    <div class="note" style="margin-top:16px">PDF 发票自动读取页面尺寸；图片发票需要先在裁剪器里裁到票面范围，并选择发票尺寸。</div>
+    <div class="preview-strip">
+      <div class="sheet">
+        <div class="inv" style="top:14px"><div class="ih">增值税电子普通发票</div><div class="il" style="width:140px"></div><div class="il" style="width:120px"></div><div class="il" style="width:150px"></div><div class="il" style="width:90px"></div></div>
+        <div class="cut" style="top:140px"></div>
+        <div class="inv" style="top:150px"><div class="ih">增值税电子普通发票</div><div class="il" style="width:140px"></div><div class="il" style="width:120px"></div><div class="il" style="width:150px"></div><div class="il" style="width:90px"></div></div>
+        <div class="cap">第 1 张 A4 · 2 张发票</div>
+      </div>
+      <div class="sheet">
+        <div class="inv" style="top:14px"><div class="ih">差旅费报销发票</div><div class="il" style="width:140px"></div><div class="il" style="width:120px"></div><div class="il" style="width:150px"></div><div class="il" style="width:90px"></div></div>
+        <div class="cut" style="top:140px"></div>
+        <div class="inv" style="top:150px;height:60px"><div class="ih">出租车发票（卷票）</div><div class="il" style="width:100px"></div><div class="il" style="width:80px"></div></div>
+        <div class="cap">第 2 张 A4 · 2 张发票</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h2 class="card-title">发票设置</h2>
+    <p class="card-sub">自动选择能 1:1 放下的纸张方向。</p>
+    <div class="settings-row"><span class="field-label">打印机</span><div class="select">Brother DCP-7060D（默认）</div></div>
+    <div class="settings-row"><span class="field-label">每张 A4</span><div class="segment"><div>1 张</div><div class="on">2 张</div></div></div>
+    <div class="settings-row"><span class="field-label">纸张</span><div class="select">A4（自动横竖排）</div></div>
+    <div class="settings-row"><span class="field-label">份数</span><div class="input">1</div></div>
+    <div class="settings-row toggle-row"><span class="field-label" style="margin:0">自动裁掉白边</span><div class="toggle"></div></div>
+    <div class="settings-row toggle-row"><span class="field-label" style="margin:0">显示裁剪线</span><div class="toggle"></div></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:10px;height:46px">打印 3 张发票</button>
+    <div style="text-align:center;font-size:12px;color:var(--text-3);margin-top:12px">将输出 2 张 A4</div>
+  </div>
+</div>
+</div></body></html>

@@ -73,6 +73,8 @@
 | `scaling` | string | `auto` / `fit` / `fill` / `none` |
 | `ppd_options` | string | 可选，PPD 额外选项 JSON，如 `{"Resolution":"600dpi","InputSlot":"Auto"}` |
 | `layout_options` | string | 可选，布局选项 JSON，如 `{"pages_per_sheet":2,"direction":"lrtb","border":true,"reverse":false,"flip_horizontal":false}` |
+| `print_mode` | string | 可选，`document`（默认）/ `idcard` / `invoice` |
+| `preview_id` | string | 可选，复用打印模式或预览会话中已上传的文件 |
 
 响应：`202 Accepted`
 
@@ -86,6 +88,58 @@
 ```
 
 前端通过 `GET /api/jobs/{id}` 轮询任务状态，不阻塞等待打印完成。
+
+### 打印模式
+
+#### POST `/api/printmode/idcard`
+
+上传身份证正面/反面（已由前端裁剪），合成一张 A4 PDF，返回预览会话 ID。
+
+`multipart/form-data`：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `front` | file | 身份证正面（JPG / PNG） |
+| `back` | file | 身份证反面（JPG / PNG） |
+| `layout` | string | `vertical`（默认，上下）或 `horizontal`（左右） |
+| `border` | string | `1` 显示裁剪虚线 |
+
+响应：
+
+```json
+{ "preview_id": "1794379663847074000", "page_count": 1 }
+```
+
+#### POST `/api/printmode/invoice`
+
+上传一个或多个 PDF / 图片发票，合成 A4 页面并以预览会话返回。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `files` | file[] | 可重复，PDF / JPG / PNG |
+| `image_sizes` | string | 图片发票尺寸 JSON 数组，如 `[{"width_mm":210,"height_mm":140}]` |
+| `per_sheet` | int | 每张 A4 放 1 或 2 张，默认 1 |
+| `trim` | string | `0` 关闭自动裁白边，默认开启 |
+| `cut_lines` | string | `1` 显示裁剪线 |
+
+响应：
+
+```json
+{
+  "preview_id": "...",
+  "page_count": 2,
+  "items": [{ "name": "发票.pdf", "kind": "pdf", "pages": [{ "width_mm": 210, "height_mm": 140 }] }],
+  "sheets": [{ "index": 0, "items": ["发票.pdf"] }]
+}
+```
+
+#### POST `/api/printmode/inspect`
+
+上传发票文件，只读取页面尺寸，不生成预览。
+
+#### GET `/api/printmode/preview/{id}`
+
+下载/预览打印模式合成的 PDF。
 
 ### POST `/api/preview/geometry`
 

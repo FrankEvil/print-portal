@@ -73,6 +73,7 @@ CREATE TABLE jobs (
   scaling         TEXT NOT NULL DEFAULT 'auto',
   ppd_options     TEXT NOT NULL DEFAULT '{}',  -- PPD 额外选项，JSON
   layout_options  TEXT NOT NULL DEFAULT '{}',  -- 布局选项，JSON
+  print_mode      TEXT NOT NULL DEFAULT 'document', -- document / idcard / invoice
   status          TEXT NOT NULL DEFAULT 'pending',
   cups_job_id     TEXT NOT NULL DEFAULT '',
   error_message   TEXT NOT NULL DEFAULT '',

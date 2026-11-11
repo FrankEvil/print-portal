@@ -1,0 +1,151 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+:root {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #eef2ff;
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #94a3b8;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --accent: #4f46e5;
+  --accent-soft: #eef2ff;
+  --shadow: 0 1px 2px rgba(15,23,42,.04), 0 16px 40px rgba(15,23,42,.06);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #e0e7ff 0%, transparent 45%),
+    radial-gradient(1000px 500px at 110% 0%, #fce7f3 0%, transparent 40%),
+    var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+.page { width: 1440px; height: 900px; padding: 34px 120px; overflow: hidden; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 34px; }
+.brand { display: flex; align-items: center; gap: 14px; }
+.logo {
+  width: 46px; height: 46px; border-radius: 13px;
+  background: linear-gradient(135deg, #8b7cf6, #5b54e8);
+  color: #fff; font-weight: 800; font-size: 23px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 22px rgba(79,70,229,.28);
+}
+.brand-title { font-size: 20px; font-weight: 700; letter-spacing: .2px; }
+.brand-sub { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+.nav { display: flex; gap: 34px; font-size: 15px; color: var(--text-2); }
+.nav .on { color: var(--accent); font-weight: 600; }
+.card { background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 28px 30px; }
+.card-title { font-size: 20px; font-weight: 700; margin: 0 0 8px; }
+.card-sub { font-size: 13px; color: var(--text-2); margin: 0 0 20px; line-height: 1.6; }
+.mode-tabs { display: inline-flex; background: #f1f5f9; border-radius: 12px; padding: 4px; gap: 2px; margin-bottom: 22px; }
+.mode-tab { border: 0; background: transparent; color: var(--text-2); font-size: 14px; padding: 9px 22px; border-radius: 9px; font-weight: 600; }
+.mode-tab.active { background: #fff; color: var(--accent); box-shadow: 0 1px 2px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.08); }
+.field-label { font-size: 13px; color: var(--text-2); font-weight: 600; margin-bottom: 8px; display: block; }
+.select, .input {
+  width: 100%; height: 42px; border: 1px solid var(--line); border-radius: 10px;
+  background: #fff; padding: 0 13px; font-size: 14px; color: var(--text);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.select::after { content: "⌄"; color: var(--text-3); font-size: 15px; }
+.btn { border: 0; border-radius: 10px; font-size: 14px; font-weight: 600; padding: 12px 20px; }
+.btn-primary { background: linear-gradient(180deg, #6d63f0, #4f46e5); color: #fff; box-shadow: 0 8px 20px rgba(79,70,229,.25); }
+.btn-ghost { background: #fff; border: 1px solid var(--line); color: var(--text-2); }
+.layout { display: grid; grid-template-columns: 1fr 390px; gap: 28px; align-items: start; }
+
+
+.slots { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.slot { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: var(--surface-2); }
+.slot.done { border-color: #c7d2fe; background: #f8faff; }
+.slot-head { font-size: 13px; font-weight: 700; color: var(--text-2); margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;}
+.badge { font-size: 11px; color: #15803d; background: #dcfce7; border-radius: 999px; padding: 3px 9px; font-weight: 600; }
+.drop { height: 172px; border: 1.5px dashed var(--line-strong); border-radius: 12px; background: #fff; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color: var(--text-3); font-size: 13px; }
+.plus { width: 42px; height: 42px; border-radius: 11px; background: var(--accent-soft); color: var(--accent); display:flex; align-items:center; justify-content:center; font-size: 24px; font-weight: 300; }
+.slot-meta { font-size: 12px; color: var(--text-3); margin-top: 10px; }
+.mini-card { width: 230px; height: 145px; border-radius: 9px; background: linear-gradient(135deg,#cfe3ff,#e8f0ff); position:relative; overflow:hidden; box-shadow: 0 4px 14px rgba(15,23,42,.12); border: 1px solid #b8cdf0;}
+.mini-card .mc-top { position:absolute; left:14px; top:12px; font-size: 8px; color:#365a94; letter-spacing:1px;}
+.mini-card .mc-title { position:absolute; left:14px; top:26px; font-size: 11px; color:#1e3a6d; font-weight:700;}
+.mini-card .mc-photo { position:absolute; right:14px; top:42px; width:44px; height:56px; background:#c7d6ea; border-radius:3px;}
+.mini-card .mc-line { position:absolute; left:14px; height:5px; background:#d5e2f3; border-radius:2px;}
+.mini-card.back { background: linear-gradient(135deg,#f8e3cf,#fff1df); border-color:#e5cfb4;}
+.mini-card.back .mc-title { color:#6b4a22;}
+.note { margin-top: 18px; font-size: 12px; color: var(--text-3); background:#f8fafc; border-radius:10px; padding: 12px 14px; line-height:1.6;}
+.settings-row { margin-bottom: 18px; }
+.segment { display:flex; background:#f1f5f9; border-radius:10px; padding:3px; gap:2px;}
+.segment div { flex:1; text-align:center; font-size:13px; padding:8px 0; border-radius:8px; color:var(--text-2); font-weight:600;}
+.segment .on { background:#fff; color:var(--accent); box-shadow:0 1px 3px rgba(15,23,42,.08);}
+.toggle-row { display:flex; align-items:center; justify-content:space-between; padding: 4px 0 0; }
+.toggle { width:42px; height:24px; border-radius:999px; background:var(--accent); position:relative; }
+.toggle::after { content:""; position:absolute; width:20px; height:20px; border-radius:50%; background:#fff; right:2px; top:2px; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+.toggle.off { background:#cbd5e1; }
+.toggle.off::after { right:20px; }
+.recent { margin-top: 26px; }
+</style></head><body><div class="page">
+<div class="header">
+  <div class="brand">
+    <div class="logo">P</div>
+    <div><div class="brand-title">Print Portal</div><div class="brand-sub">局域网打印门户</div></div>
+  </div>
+  <div class="nav"><span class="on">打印</span><span>扫描</span><span>管理</span><span>新窗口</span></div>
+</div>
+
+<div class="layout">
+  <div class="card">
+    <h2 class="card-title">选择文件</h2>
+    <p class="card-sub">选择打印模式后上传对应的文件，系统会按模式自动排版。</p>
+    <div class="mode-tabs">
+      <button class="mode-tab">普通文档</button>
+      <button class="mode-tab active">身份证</button>
+      <button class="mode-tab">发票</button>
+    </div>
+    <div class="slots">
+      <div class="slot done">
+        <div class="slot-head"><span>身份证正面</span><span class="badge">已裁剪</span></div>
+        <div class="drop" style="border-style:solid;border-color:#dbe4f5;background:#fff">
+          <div class="mini-card">
+            <div class="mc-top">中华人民共和国</div>
+            <div class="mc-title">居民身份证</div>
+            <div class="mc-photo"></div>
+            <div class="mc-line" style="top:62px;width:86px"></div>
+            <div class="mc-line" style="top:74px;width:72px"></div>
+            <div class="mc-line" style="top:86px;width:96px"></div>
+            <div class="mc-line" style="top:98px;width:60px"></div>
+          </div>
+        </div>
+        <div class="slot-meta">正面.jpg · 85.6 × 54 mm</div>
+      </div>
+      <div class="slot done">
+        <div class="slot-head"><span>身份证反面</span><span class="badge">已裁剪</span></div>
+        <div class="drop" style="border-style:solid;border-color:#dbe4f5;background:#fff">
+          <div class="mini-card back">
+            <div class="mc-title" style="top:20px">中华人民共和国居民身份证</div>
+            <div class="mc-line" style="top:52px;width:150px"></div>
+            <div class="mc-line" style="top:66px;width:120px"></div>
+            <div class="mc-line" style="top:80px;width:90px"></div>
+            <div style="position:absolute;right:18px;bottom:16px;font-size:9px;color:#8a6a3f">签发机关 · 有效期限</div>
+          </div>
+        </div>
+        <div class="slot-meta">反面.jpg · 85.6 × 54 mm</div>
+      </div>
+    </div>
+    <div class="note">提示：点击任一图片可重新裁剪。身份证会自动按 85.6 × 54 mm 实际尺寸放到 A4 上，正反面上下排列。</div>
+  </div>
+  <div class="card">
+    <h2 class="card-title">打印设置</h2>
+    <p class="card-sub">身份证模式已隐藏无关参数。</p>
+    <div class="settings-row"><span class="field-label">打印机</span><div class="select">Brother DCP-7060D（默认）</div></div>
+    <div class="settings-row"><span class="field-label">排列方式</span>
+      <div class="segment"><div class="on">上下</div><div>左右</div></div>
+    </div>
+    <div class="settings-row"><span class="field-label">纸张</span><div class="select">A4</div></div>
+    <div class="settings-row"><span class="field-label">份数</span><div class="input">1</div></div>
+    <div class="settings-row toggle-row"><span class="field-label" style="margin:0">显示裁剪虚线</span><div class="toggle"></div></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:18px;height:46px">打印</button>
+    <div style="text-align:center;font-size:12px;color:var(--text-3);margin-top:12px">提交后即可离开，任务在后台排队处理</div>
+  </div>
+</div>
+</div></body></html>

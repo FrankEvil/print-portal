@@ -1,0 +1,59 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+:root{--bg:#f4f6fb;--text:#0f172a;--text2:#475569;--text3:#94a3b8;--line:#e2e8f0;--accent:#4f46e5;--accent-soft:#eef2ff;}
+*{box-sizing:border-box}html,body{margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:radial-gradient(700px 400px at 10% -10%,#e0e7ff 0,transparent 50%),var(--bg);color:var(--text)}
+.page{width:390px;height:844px;padding:18px 18px 24px;overflow:hidden;position:relative}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#8b7cf6,#5b54e8);color:#fff;font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center}
+.bt{font-size:16px;font-weight:700}.bs{font-size:10px;color:var(--text3);margin-top:2px}
+.card{background:#fff;border-radius:16px;box-shadow:0 8px 26px rgba(15,23,42,.07);padding:18px;margin-bottom:14px}
+.card-title{font-size:17px;font-weight:700;margin:0 0 4px}
+.card-sub{font-size:11px;color:var(--text2);margin:0 0 14px;line-height:1.5}
+.mode-tabs{display:flex;background:#f1f5f9;border-radius:10px;padding:3px;margin-bottom:14px}
+.mode-tab{flex:1;border:0;background:transparent;color:var(--text2);font-size:12px;padding:8px 0;border-radius:8px;font-weight:600}
+.mode-tab.active{background:#fff;color:var(--accent);box-shadow:0 1px 3px rgba(15,23,42,.08)}
+.slot{border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px;background:#f8fafc}
+.slot.done{border-color:#c7d2fe;background:#f8faff}
+.slot-head{font-size:12px;font-weight:700;color:var(--text2);display:flex;justify-content:space-between;margin-bottom:8px}
+.badge{font-size:10px;color:#15803d;background:#dcfce7;border-radius:999px;padding:2px 7px}
+.mini{height:92px;border-radius:8px;background:linear-gradient(135deg,#d7e7ff,#eef5ff);border:1px solid #aac5e8;position:relative;overflow:hidden}
+.mini.back{background:linear-gradient(135deg,#f8e3cf,#fff1df);border-color:#e5cfb4}
+.mini .mc1{position:absolute;left:10px;top:8px;font-size:6px;color:#3d5f92;letter-spacing:1px}
+.mini .mc2{position:absolute;left:10px;top:18px;font-size:9px;font-weight:700;color:#1c3a68}
+.mini .ph{position:absolute;right:10px;top:28px;width:30px;height:38px;background:#c2d3e7;border-radius:2px}
+.mini .l{position:absolute;left:10px;height:4px;background:#ccdcf0;border-radius:2px}
+.meta{font-size:10px;color:var(--text3);margin-top:6px}
+.row{display:flex;gap:10px;margin-bottom:10px}
+.col{flex:1}
+.label{font-size:11px;color:var(--text2);font-weight:600;margin-bottom:5px;display:block}
+.select,.input{height:36px;border:1px solid var(--line);border-radius:9px;background:#fff;padding:0 10px;font-size:12px;display:flex;align-items:center;justify-content:space-between;color:var(--text)}
+.segment{display:flex;background:#f1f5f9;border-radius:9px;padding:3px;gap:2px}
+.segment div{flex:1;text-align:center;font-size:11px;padding:7px 0;border-radius:7px;color:var(--text2);font-weight:600}
+.segment .on{background:#fff;color:var(--accent);box-shadow:0 1px 3px rgba(15,23,42,.08)}
+.btn{height:42px;border:0;border-radius:10px;background:linear-gradient(180deg,#6d63f0,#4f46e5);color:#fff;font-size:14px;font-weight:600;width:100%;box-shadow:0 8px 20px rgba(79,70,229,.25)}
+.note{font-size:10px;color:var(--text3);text-align:center;margin-top:8px}
+</style></head><body><div class="page">
+  <div class="header"><div class="brand"><div class="logo">P</div><div><div class="bt">Print Portal</div><div class="bs">局域网打印门户</div></div></div><div style="font-size:12px;color:var(--text2)">打印</div></div>
+  <div class="card">
+    <h2 class="card-title">选择文件</h2><p class="card-sub">身份证模式 · 正反面自动排到一张 A4</p>
+    <div class="mode-tabs"><button class="mode-tab">普通文档</button><button class="mode-tab active">身份证</button><button class="mode-tab">发票</button></div>
+    <div class="slot done"><div class="slot-head"><span>身份证正面</span><span class="badge">已裁剪</span></div>
+      <div class="mini"><div class="mc1">中华人民共和国</div><div class="mc2">居民身份证</div><div class="ph"></div><div class="l" style="top:44px;width:100px"></div><div class="l" style="top:54px;width:80px"></div><div class="l" style="top:64px;width:110px"></div></div>
+      <div class="meta">正面.jpg · 85.6 × 54 mm</div>
+    </div>
+    <div class="slot done"><div class="slot-head"><span>身份证反面</span><span class="badge">已裁剪</span></div>
+      <div class="mini back"><div class="mc2" style="top:12px">中华人民共和国居民身份证</div><div class="l" style="top:34px;width:120px;background:#ecd9c0"></div><div class="l" style="top:44px;width:90px;background:#ecd9c0"></div></div>
+      <div class="meta">反面.jpg · 85.6 × 54 mm</div>
+    </div>
+  </div>
+  <div class="card">
+    <h2 class="card-title" style="font-size:16px">打印设置</h2>
+    <div class="row"><div class="col"><span class="label">排列方式</span><div class="segment"><div class="on">上下</div><div>左右</div></div></div></div>
+    <div class="row"><div class="col"><span class="label">纸张</span><div class="select">A4</div></div><div class="col"><span class="label">份数</span><div class="input">1</div></div></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text2);margin:4px 0 14px"><span>显示裁剪虚线</span><div style="width:38px;height:22px;background:var(--accent);border-radius:999px;position:relative"><span style="position:absolute;width:18px;height:18px;background:#fff;border-radius:50%;right:2px;top:2px"></span></div></div>
+    <button class="btn">打印</button>
+    <div class="note">提交后即可离开，任务在后台排队处理</div>
+  </div>
+</div></body></html>

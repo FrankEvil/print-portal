@@ -1,0 +1,92 @@
+<script setup lang="ts">
+import { onUnmounted, ref, watch } from 'vue'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { apiBase, apiUrl } from '../api'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `${apiBase}${pdfjsWorker}`
+
+const props = defineProps<{
+  src: string
+  label?: string
+  maxWidth?: number
+}>()
+
+const pages = ref<{ index: number; url: string }[]>([])
+const loading = ref(false)
+const error = ref('')
+let doc: pdfjsLib.PDFDocumentProxy | null = null
+let token = 0
+
+async function load() {
+  const request = ++token
+  loading.value = true
+  error.value = ''
+  pages.value = []
+  try {
+    if (doc) {
+      await doc.destroy()
+      doc = null
+    }
+    const url = props.src.startsWith('http') ? props.src : apiUrl(props.src)
+    const loaded = await pdfjsLib.getDocument({ url }).promise
+    if (request !== token) {
+      await loaded.destroy()
+      return
+    }
+    doc = loaded
+    const target = props.maxWidth || 820
+    const out: { index: number; url: string }[] = []
+    for (let i = 1; i <= loaded.numPages; i++) {
+      const page = await loaded.getPage(i)
+      const base = page.getViewport({ scale: 1 })
+      const scale = Math.min(2, target / base.width)
+      const viewport = page.getViewport({ scale })
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(viewport.width))
+      canvas.height = Math.max(1, Math.round(viewport.height))
+      const ctx = canvas.getContext('2d')
+      if (!ctx) continue
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      await page.render({ canvasContext: ctx, viewport }).promise
+      out.push({ index: i, url: canvas.toDataURL('image/jpeg', 0.88) })
+      if (request !== token) return
+    }
+    pages.value = out
+  } catch (e) {
+    if (request === token) error.value = (e as Error).message
+  } finally {
+    if (request === token) loading.value = false
+  }
+}
+
+watch(() => props.src, load, { immediate: true })
+
+onUnmounted(() => {
+  token++
+  doc?.destroy()
+})
+</script>
+
+<template>
+  <div class="mode-preview">
+    <div v-if="loading" class="mode-preview-state">正在生成预览…</div>
+    <div v-else-if="error" class="mode-preview-state error">{{ error }}</div>
+    <div v-else class="mode-preview-grid">
+      <div v-for="page in pages" :key="page.index" class="mode-preview-page">
+        <img :src="page.url" :alt="`第 ${page.index} 页预览`" />
+        <div class="mode-preview-label">第 {{ page.index }} 页<template v-if="label"> · {{ label }}</template></div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.mode-preview-state { padding: 48px 20px; text-align: center; color: var(--text-3); font-size: 13px; }
+.mode-preview-state.error { color: var(--danger); }
+.mode-preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; }
+.mode-preview-page { background: #fff; border-radius: 10px; box-shadow: 0 4px 16px rgba(15, 23, 42, .1); padding: 10px; }
+.mode-preview-page img { width: 100%; display: block; border-radius: 3px; background: #fff; }
+.mode-preview-label { margin-top: 9px; text-align: center; font-size: 11px; color: var(--text-3); }
+</style>

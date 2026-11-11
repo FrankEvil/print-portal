@@ -1,0 +1,133 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+:root {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #eef2ff;
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #94a3b8;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --accent: #4f46e5;
+  --accent-soft: #eef2ff;
+  --shadow: 0 1px 2px rgba(15,23,42,.04), 0 16px 40px rgba(15,23,42,.06);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #e0e7ff 0%, transparent 45%),
+    radial-gradient(1000px 500px at 110% 0%, #fce7f3 0%, transparent 40%),
+    var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+.page { width: 1440px; height: 900px; padding: 34px 120px; overflow: hidden; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 34px; }
+.brand { display: flex; align-items: center; gap: 14px; }
+.logo {
+  width: 46px; height: 46px; border-radius: 13px;
+  background: linear-gradient(135deg, #8b7cf6, #5b54e8);
+  color: #fff; font-weight: 800; font-size: 23px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 22px rgba(79,70,229,.28);
+}
+.brand-title { font-size: 20px; font-weight: 700; letter-spacing: .2px; }
+.brand-sub { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+.nav { display: flex; gap: 34px; font-size: 15px; color: var(--text-2); }
+.nav .on { color: var(--accent); font-weight: 600; }
+.card { background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 28px 30px; }
+.card-title { font-size: 20px; font-weight: 700; margin: 0 0 8px; }
+.card-sub { font-size: 13px; color: var(--text-2); margin: 0 0 20px; line-height: 1.6; }
+.mode-tabs { display: inline-flex; background: #f1f5f9; border-radius: 12px; padding: 4px; gap: 2px; margin-bottom: 22px; }
+.mode-tab { border: 0; background: transparent; color: var(--text-2); font-size: 14px; padding: 9px 22px; border-radius: 9px; font-weight: 600; }
+.mode-tab.active { background: #fff; color: var(--accent); box-shadow: 0 1px 2px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.08); }
+.field-label { font-size: 13px; color: var(--text-2); font-weight: 600; margin-bottom: 8px; display: block; }
+.select, .input {
+  width: 100%; height: 42px; border: 1px solid var(--line); border-radius: 10px;
+  background: #fff; padding: 0 13px; font-size: 14px; color: var(--text);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.select::after { content: "⌄"; color: var(--text-3); font-size: 15px; }
+.btn { border: 0; border-radius: 10px; font-size: 14px; font-weight: 600; padding: 12px 20px; }
+.btn-primary { background: linear-gradient(180deg, #6d63f0, #4f46e5); color: #fff; box-shadow: 0 8px 20px rgba(79,70,229,.25); }
+.btn-ghost { background: #fff; border: 1px solid var(--line); color: var(--text-2); }
+.layout { display: grid; grid-template-columns: 1fr 390px; gap: 28px; align-items: start; }
+
+
+.preview-card { padding: 26px 30px; }
+.preview-stage { background:#eef1f6; border-radius:14px; height: 640px; display:flex; align-items:center; justify-content:center; }
+.paper { width: 350px; height: 495px; background:#fff; box-shadow: 0 10px 30px rgba(15,23,42,.16); position:relative; }
+.paper .card-slot { position:absolute; left:50%; transform:translateX(-50%); width:255px; height:161px; }
+.paper .card-slot .label { position:absolute; left:0; top:-22px; font-size:11px; color:#94a3b8; }
+.paper .dash { position:absolute; inset:-6px; border:1px dashed #94a3b8; }
+.paper .id-front, .paper .id-back { width:255px; height:161px; border-radius:8px; background:linear-gradient(135deg,#d7e7ff,#eef5ff); border:1px solid #aac5e8; position:relative; overflow:hidden;}
+.paper .id-back { background:linear-gradient(135deg,#f8e3cf,#fff1df); border-color:#e5cfb4;}
+.paper .id-front .t1 { position:absolute; left:14px; top:13px; font-size:7px; color:#3d5f92; letter-spacing:1.5px;}
+.paper .id-front .t2 { position:absolute; left:14px; top:24px; font-size:11px; font-weight:700; color:#1c3a68;}
+.paper .id-front .ph { position:absolute; right:14px; top:38px; width:44px; height:56px; background:#c2d3e7; border-radius:3px;}
+.paper .id-front .l { position:absolute; left:14px; height:5px; background:#ccdcf0; border-radius:2px;}
+.paper .id-back .t2 { position:absolute; left:14px; top:14px; font-size:10px; font-weight:700; color:#6b4a22;}
+.paper .id-back .l { position:absolute; left:14px; height:5px; background:#ecd9c0; border-radius:2px;}
+.settings-row { margin-bottom:18px; }
+.segment { display:flex; background:#f1f5f9; border-radius:10px; padding:3px; gap:2px;}
+.segment div { flex:1; text-align:center; font-size:13px; padding:8px 0; border-radius:8px; color:var(--text-2); font-weight:600;}
+.segment .on { background:#fff; color:var(--accent); box-shadow:0 1px 3px rgba(15,23,42,.08);}
+.toggle-row { display:flex; align-items:center; justify-content:space-between; padding:4px 0 0; }
+.toggle { width:42px; height:24px; border-radius:999px; background:var(--accent); position:relative; }
+.toggle::after { content:""; position:absolute; width:20px; height:20px; border-radius:50%; background:#fff; right:2px; top:2px; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+</style></head><body><div class="page">
+<div class="header">
+  <div class="brand">
+    <div class="logo">P</div>
+    <div><div class="brand-title">Print Portal</div><div class="brand-sub">局域网打印门户</div></div>
+  </div>
+  <div class="nav"><span class="on">打印</span><span>扫描</span><span>管理</span><span>新窗口</span></div>
+</div>
+
+<div class="layout">
+  <div class="card preview-card">
+    <h2 class="card-title">打印预览</h2>
+    <p class="card-sub">这是最终纸面效果，预览与打印完全一致。</p>
+    <div class="preview-stage">
+      <div class="paper">
+        <div class="card-slot" style="top:110px">
+          <div class="label">正面</div>
+          <div class="dash"></div>
+          <div class="id-front">
+            <div class="t1">中华人民共和国</div><div class="t2">居民身份证</div>
+            <div class="ph"></div>
+            <div class="l" style="top:90px;width:104px"></div>
+            <div class="l" style="top:101px;width:82px"></div>
+            <div class="l" style="top:112px;width:120px"></div>
+          </div>
+        </div>
+        <div class="card-slot" style="top:320px">
+          <div class="label">反面</div>
+          <div class="dash"></div>
+          <div class="id-back">
+            <div class="t2">中华人民共和国居民身份证</div>
+            <div class="l" style="top:44px;width:180px"></div>
+            <div class="l" style="top:57px;width:145px"></div>
+            <div class="l" style="top:70px;width:110px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h2 class="card-title">身份证设置</h2>
+    <p class="card-sub">已按 85.6 × 54 mm 实际尺寸排版。</p>
+    <div class="settings-row"><span class="field-label">打印机</span><div class="select">Brother DCP-7060D（默认）</div></div>
+    <div class="settings-row"><span class="field-label">排列方式</span><div class="segment"><div class="on">上下</div><div>左右</div></div></div>
+    <div class="settings-row"><span class="field-label">纸张</span><div class="select">A4</div></div>
+    <div class="settings-row"><span class="field-label">份数</span><div class="input">1</div></div>
+    <div class="settings-row toggle-row"><span class="field-label" style="margin:0">显示裁剪虚线</span><div class="toggle"></div></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:18px;height:46px">打印</button>
+    <div style="text-align:center;font-size:12px;color:var(--text-3);margin-top:12px">提交后即可离开，任务在后台排队处理</div>
+  </div>
+</div>
+</div></body></html>

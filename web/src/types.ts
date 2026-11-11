@@ -58,6 +58,7 @@ export interface Job {
   orientation: string
   color_mode: string
   scaling: string
+  print_mode?: 'document' | 'idcard' | 'invoice'
   status: JobStatus
   cups_job_id: string
   error_message: string

@@ -64,6 +64,11 @@ func (s *Server) SweepPreviewSessions(maxAge time.Duration) int {
 	for id, session := range s.previewSessions {
 		if session.lastUsed.Before(cutoff) {
 			_ = os.Remove(session.path)
+			// Mode previews live in a per-composition directory holding the
+			// uploaded source images; remove that as well.
+			if base := filepath.Base(filepath.Dir(session.path)); strings.HasPrefix(base, "idcard-") || strings.HasPrefix(base, "invoice-") {
+				_ = os.RemoveAll(filepath.Dir(session.path))
+			}
 			delete(s.previewSessions, id)
 			removed++
 			continue
@@ -78,10 +83,15 @@ func (s *Server) SweepPreviewSessions(maxAge time.Duration) int {
 		return removed
 	}
 	for _, entry := range entries {
+		full := filepath.Join(dir, entry.Name())
 		if entry.IsDir() {
+			if strings.HasPrefix(entry.Name(), "idcard-") || strings.HasPrefix(entry.Name(), "invoice-") || strings.HasPrefix(entry.Name(), "inspect-") {
+				if info, err := entry.Info(); err == nil && info.ModTime().Before(cutoff) {
+					_ = os.RemoveAll(full)
+				}
+			}
 			continue
 		}
-		full := filepath.Join(dir, entry.Name())
 		if active[filepath.Clean(full)] {
 			continue
 		}
@@ -135,6 +145,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/preview", s.handlePreview)
 	s.mux.HandleFunc("POST /api/preview/session", s.handlePreviewSession)
 	s.mux.HandleFunc("POST /api/preview/geometry", s.handlePreviewGeometry)
+	s.mux.HandleFunc("POST /api/printmode/idcard", s.handlePrintModeIDCard)
+	s.mux.HandleFunc("POST /api/printmode/invoice", s.handlePrintModeInvoice)
+	s.mux.HandleFunc("POST /api/printmode/inspect", s.handlePrintModeInspect)
+	s.mux.HandleFunc("GET /api/printmode/preview/{id}", s.handlePrintModePreview)
 	s.mux.HandleFunc("GET /api/nas/preview", s.handleNASPreview)
 	s.mux.HandleFunc("GET /api/jobs", s.handleListJobs)
 	s.mux.HandleFunc("GET /api/jobs/{id}", s.handleGetJob)

@@ -13,6 +13,11 @@ const scalingLabels: Record<string, string> = {
   none: '原始大小',
 }
 
+const modeLabels: Record<string, string> = {
+  idcard: '身份证',
+  invoice: '发票',
+}
+
 export function formatJobParams(job: Job): string {
   if (job.source === 'test') {
     const parts = ['测试页', `${job.copies || 1} 份`, job.paper_size || 'A4']
@@ -21,6 +26,11 @@ export function formatJobParams(job: Job): string {
   }
   if (job.source !== 'web') {
     return job.cups_user ? `本地直连 · ${job.cups_user}` : '本地直连'
+  }
+  if (job.print_mode && job.print_mode !== 'document') {
+    const parts = [modeLabels[job.print_mode] || job.print_mode, `${job.copies} 份`]
+    if (job.pages > 0) parts.push(`${job.pages} 页`)
+    return parts.join(' · ')
   }
   const parts = [
     `${job.copies} 份`,

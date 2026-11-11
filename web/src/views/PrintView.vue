@@ -8,9 +8,12 @@ import { toast } from '../toast'
 import type { Job, LayoutGeometry, PaperArea, PPDOption, Printer } from '../types'
 import { formatJobParams } from '../jobDisplay'
 import StatusBadge from '../components/StatusBadge.vue'
+import IdCardPrintPanel from '../components/IdCardPrintPanel.vue'
+import InvoicePrintPanel from '../components/InvoicePrintPanel.vue'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `${apiBase}${pdfjsWorker}`
 
+const printMode = ref<'document' | 'idcard' | 'invoice'>('document')
 const printers = ref<Printer[]>([])
 const selectedPrinter = ref<number | null>(null)
 const ppdOptions = ref<PPDOption[]>([])
@@ -940,7 +943,13 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div v-else class="print-layout" :class="{ 'has-preview': file || nasPath }">
+    <template v-else>
+      <div class="mode-bar">
+        <button class="mode-pill" :class="{ active: printMode === 'document' }" type="button" @click="printMode = 'document'">普通文档</button>
+        <button class="mode-pill" :class="{ active: printMode === 'idcard' }" type="button" @click="printMode = 'idcard'">身份证</button>
+        <button class="mode-pill" :class="{ active: printMode === 'invoice' }" type="button" @click="printMode = 'invoice'">发票</button>
+      </div>
+      <div v-if="printMode === 'document'" class="print-layout" :class="{ 'has-preview': file || nasPath }">
       <section class="card">
         <div class="section-head">
           <div>
@@ -1189,7 +1198,10 @@ onUnmounted(() => {
         </button>
         <p class="card-desc" style="text-align: center; margin-top: 10px">提交后即可离开，任务在后台排队处理</p>
       </section>
-    </div>
+      </div>
+      <IdCardPrintPanel v-else-if="printMode === 'idcard'" :printers="printers" v-model:printer-id="selectedPrinter" @submitted="loadJobs" />
+      <InvoicePrintPanel v-else :printers="printers" v-model:printer-id="selectedPrinter" @submitted="loadJobs" />
+    </template>
 
     <section class="card" style="margin-top: 20px">
       <div class="section-head">

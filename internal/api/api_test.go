@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"log"
 	"mime/multipart"
@@ -280,5 +283,92 @@ func TestFnOSIdentityHeadersOnlyTrustedFromSocket(t *testing.T) {
 	server.SocketHandler().ServeHTTP(rec, request())
 	if rec.Code != http.StatusOK {
 		t.Errorf("socket admin status = %d, want 200", rec.Code)
+	}
+}
+
+func TestPrintModeIDCardAndInvoice(t *testing.T) {
+	ts, _ := newTestServer(t)
+	defer ts.Close()
+
+	// Build two tiny PNGs for the ID card.
+	pngBytes := func(c color.RGBA) []byte {
+		img := image.NewRGBA(image.Rect(0, 0, 120, 76))
+		for y := 0; y < 76; y++ {
+			for x := 0; x < 120; x++ {
+				img.Set(x, y, c)
+			}
+		}
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err != nil {
+			t.Fatal(err)
+		}
+		return buf.Bytes()
+	}
+
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	fw, _ := w.CreateFormFile("front", "front.png")
+	_, _ = fw.Write(pngBytes(color.RGBA{200, 220, 255, 255}))
+	bw, _ := w.CreateFormFile("back", "back.png")
+	_, _ = bw.Write(pngBytes(color.RGBA{255, 235, 210, 255}))
+	_ = w.WriteField("layout", "vertical")
+	_ = w.WriteField("border", "1")
+	_ = w.Close()
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/printmode/idcard", &body)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("X-Admin-Token", "secret")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("idcard status = %d", res.StatusCode)
+	}
+	var idcard struct {
+		PreviewID string `json:"preview_id"`
+	}
+	_ = json.NewDecoder(res.Body).Decode(&idcard)
+	if idcard.PreviewID == "" {
+		t.Fatal("missing idcard preview_id")
+	}
+	preview, err := http.Get(ts.URL + "/api/printmode/preview/" + idcard.PreviewID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview.Body.Close()
+	if preview.StatusCode != http.StatusOK {
+		t.Fatalf("idcard preview status = %d", preview.StatusCode)
+	}
+
+	// Invoice endpoint with two image invoices.
+	var invoiceBody bytes.Buffer
+	iw := multipart.NewWriter(&invoiceBody)
+	f1, _ := iw.CreateFormFile("files", "a.png")
+	_, _ = f1.Write(pngBytes(color.RGBA{255, 255, 255, 255}))
+	f2, _ := iw.CreateFormFile("files", "b.png")
+	_, _ = f2.Write(pngBytes(color.RGBA{255, 255, 255, 255}))
+	_ = iw.WriteField("image_sizes", `[{"width_mm":210,"height_mm":140},{"width_mm":210,"height_mm":140}]`)
+	_ = iw.WriteField("per_sheet", "2")
+	_ = iw.WriteField("trim", "1")
+	_ = iw.Close()
+	req2, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/printmode/invoice", &invoiceBody)
+	req2.Header.Set("Content-Type", iw.FormDataContentType())
+	req2.Header.Set("X-Admin-Token", "secret")
+	res2, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res2.Body.Close()
+	if res2.StatusCode != http.StatusOK {
+		t.Fatalf("invoice status = %d", res2.StatusCode)
+	}
+	var invoice struct {
+		PreviewID string `json:"preview_id"`
+		PageCount int    `json:"page_count"`
+	}
+	_ = json.NewDecoder(res2.Body).Decode(&invoice)
+	if invoice.PreviewID == "" || invoice.PageCount != 1 {
+		t.Fatalf("invoice response = %+v", invoice)
 	}
 }

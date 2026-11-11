@@ -245,6 +245,7 @@ type Job struct {
 	Scaling       string `json:"scaling"`
 	PPDOptions    string `json:"ppd_options,omitempty"`
 	LayoutOptions string `json:"layout_options,omitempty"`
+	PrintMode     string `json:"print_mode,omitempty"`
 	Status        string `json:"status"`
 	CupsJobID     string `json:"cups_job_id"`
 	ErrorMessage  string `json:"error_message"`
@@ -254,11 +255,11 @@ type Job struct {
 	UpdatedAt     string `json:"updated_at"`
 }
 
-const jobColumns = `id, printer_id, source, filename, source_ip, cups_user, pages, page_range, duplex, copies, paper_size, orientation, color_mode, scaling, ppd_options, layout_options, status, cups_job_id, error_message, stored_path, preview_path, created_at, updated_at`
+const jobColumns = `id, printer_id, source, filename, source_ip, cups_user, pages, page_range, duplex, copies, paper_size, orientation, color_mode, scaling, ppd_options, layout_options, print_mode, status, cups_job_id, error_message, stored_path, preview_path, created_at, updated_at`
 
 func scanJob(scanner interface{ Scan(...any) error }) (*Job, error) {
 	var j Job
-	if err := scanner.Scan(&j.ID, &j.PrinterID, &j.Source, &j.Filename, &j.SourceIP, &j.CupsUser, &j.Pages, &j.PageRange, &j.Duplex, &j.Copies, &j.PaperSize, &j.Orientation, &j.ColorMode, &j.Scaling, &j.PPDOptions, &j.LayoutOptions, &j.Status, &j.CupsJobID, &j.ErrorMessage, &j.StoredPath, &j.PreviewPath, &j.CreatedAt, &j.UpdatedAt); err != nil {
+	if err := scanner.Scan(&j.ID, &j.PrinterID, &j.Source, &j.Filename, &j.SourceIP, &j.CupsUser, &j.Pages, &j.PageRange, &j.Duplex, &j.Copies, &j.PaperSize, &j.Orientation, &j.ColorMode, &j.Scaling, &j.PPDOptions, &j.LayoutOptions, &j.PrintMode, &j.Status, &j.CupsJobID, &j.ErrorMessage, &j.StoredPath, &j.PreviewPath, &j.CreatedAt, &j.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &j, nil
@@ -278,9 +279,12 @@ func (s *Store) CreateJob(j *Job) error {
 	if strings.TrimSpace(j.LayoutOptions) == "" {
 		j.LayoutOptions = "{}"
 	}
-	res, err := s.db.Exec(`INSERT INTO jobs(printer_id, source, filename, source_ip, cups_user, pages, page_range, duplex, copies, paper_size, orientation, color_mode, scaling, ppd_options, layout_options, status, cups_job_id, error_message, stored_path, preview_path, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		j.PrinterID, j.Source, j.Filename, j.SourceIP, j.CupsUser, j.Pages, j.PageRange, j.Duplex, j.Copies, j.PaperSize, j.Orientation, j.ColorMode, j.Scaling, j.PPDOptions, j.LayoutOptions, j.Status, j.CupsJobID, j.ErrorMessage, j.StoredPath, j.PreviewPath, t, t)
+	if strings.TrimSpace(j.PrintMode) == "" {
+		j.PrintMode = "document"
+	}
+	res, err := s.db.Exec(`INSERT INTO jobs(printer_id, source, filename, source_ip, cups_user, pages, page_range, duplex, copies, paper_size, orientation, color_mode, scaling, ppd_options, layout_options, print_mode, status, cups_job_id, error_message, stored_path, preview_path, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		j.PrinterID, j.Source, j.Filename, j.SourceIP, j.CupsUser, j.Pages, j.PageRange, j.Duplex, j.Copies, j.PaperSize, j.Orientation, j.ColorMode, j.Scaling, j.PPDOptions, j.LayoutOptions, j.PrintMode, j.Status, j.CupsJobID, j.ErrorMessage, j.StoredPath, j.PreviewPath, t, t)
 	if err != nil {
 		return err
 	}
@@ -354,8 +358,8 @@ func (s *Store) ListJobs(f JobFilter) ([]Job, error) {
 }
 
 func (s *Store) UpdateJob(j *Job) error {
-	_, err := s.db.Exec(`UPDATE jobs SET status=?, cups_job_id=?, error_message=?, pages=?, stored_path=?, preview_path=?, updated_at=? WHERE id=?`,
-		j.Status, j.CupsJobID, j.ErrorMessage, j.Pages, j.StoredPath, j.PreviewPath, now(), j.ID)
+	_, err := s.db.Exec(`UPDATE jobs SET status=?, cups_job_id=?, error_message=?, pages=?, stored_path=?, preview_path=?, print_mode=?, updated_at=? WHERE id=?`,
+		j.Status, j.CupsJobID, j.ErrorMessage, j.Pages, j.StoredPath, j.PreviewPath, j.PrintMode, now(), j.ID)
 	return err
 }
 

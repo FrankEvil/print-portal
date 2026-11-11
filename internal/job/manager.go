@@ -178,6 +178,13 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 	opts.Layout.PaperSize = j.PaperSize
 	opts.Layout.Orientation = j.Orientation
 	opts.Layout.PageRange = j.PageRange
+	if j.PrintMode != "" && j.PrintMode != "document" {
+		// ID card and invoice modes already produced an A4-ready PDF. Do not
+		// run N-up/rotation/scaling again, and do not forward the page range.
+		opts.Layout = layout.Options{}
+		opts.PageRange = ""
+		opts.LaidOut = true
+	}
 	// The layout step is shared with the preview service: when the user already
 	// previewed this document the laid-out PDF is reused, so the printed output
 	// is byte-for-byte the same pagination the preview showed.
