@@ -179,7 +179,7 @@ async function pickNasPdf() {
 }
 
 async function refreshGeometry() {
-  if (!file.value || !pageCount.value) return
+  if ((!file.value && !nasPath.value) || !pageCount.value) return
   const token = ++geometryToken
   geometryLoading.value = true
   geometryError.value = ''
@@ -287,7 +287,7 @@ async function submit() {
       </div>
       <input ref="fileInput" class="hidden-file" type="file" accept=".pdf,application/pdf" @change="onFilePicked" />
 
-      <div v-if="file" class="book-preview">
+      <div v-if="file || nasPath" class="book-preview">
         <div class="book-preview-head">
           <span>打印预览</span>
           <div class="book-view-tabs">
