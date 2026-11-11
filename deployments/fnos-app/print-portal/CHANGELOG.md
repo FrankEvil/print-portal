@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.6
+
+- 修复裁剪框与画布坐标基准不一致：裁剪结果相对选择区域向上/向左偏移、右侧/底部被裁掉的问题
+- 裁剪框现在与画布处于同一个定位容器，拖动框、预览和最终导出完全对齐
+- 已在本地浏览器验证裁剪框与图片边界对齐
+
 ## 0.4.5
 
 - 修复 PDF.js worker 地址重复拼接导致 `Setting up fake worker failed`：改用 `new URL(worker, document.baseURI)` 解析

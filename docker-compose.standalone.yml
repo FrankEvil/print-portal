@@ -1,7 +1,7 @@
 # 普通 Docker / 非 fnOS 版本：使用预构建镜像，Token 登录
 services:
   print-portal:
-    image: ghcr.io/frankevil/print-portal:0.4.5
+    image: ghcr.io/frankevil/print-portal:0.4.6
     container_name: print-portal
     restart: unless-stopped
     privileged: true
@@ -18,7 +18,7 @@ services:
       PRINT_PORTAL_AUTH_MODE: "token"
       ADMIN_TOKEN: "${ADMIN_TOKEN:?set ADMIN_TOKEN in .env}"
       PRINT_PORTAL_PUBLIC_HOST: "${PRINT_PORTAL_PUBLIC_HOST:-}"
-      PRINT_PORTAL_VERSION: "0.4.5"
+      PRINT_PORTAL_VERSION: "0.4.6"
       PRINTD_ADDR: ":8088"
       CUPS_SERVER: "127.0.0.1:631"
       PRINT_PORTAL_IPP_ADDR: "0.0.0.0:8631"

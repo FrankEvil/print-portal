@@ -292,17 +292,19 @@ const handles = ['nw', 'ne', 'sw', 'se', 'n', 's', 'w', 'e']
       </header>
       <div class="crop-body">
         <div class="crop-stage">
-          <canvas ref="stage" :width="stageW" :height="stageH" />
-          <div class="crop-dim" :style="cropStyle">
-            <div class="crop-box" @pointerdown="startDrag($event, 'move')">
-              <div
-                v-for="handle in handles"
-                :key="handle"
-                class="crop-handle"
-                :class="'h-' + handle"
-                @pointerdown.stop="startDrag($event, handle)"
-              />
-              <div class="crop-grid g1" /><div class="crop-grid g2" /><div class="crop-grid g3" /><div class="crop-grid g4" />
+          <div class="crop-canvas-wrap" :style="{ width: stageW + 'px', height: stageH + 'px' }">
+            <canvas ref="stage" :width="stageW" :height="stageH" />
+            <div class="crop-dim" :style="cropStyle">
+              <div class="crop-box" @pointerdown="startDrag($event, 'move')">
+                <div
+                  v-for="handle in handles"
+                  :key="handle"
+                  class="crop-handle"
+                  :class="'h-' + handle"
+                  @pointerdown.stop="startDrag($event, handle)"
+                />
+                <div class="crop-grid g1" /><div class="crop-grid g2" /><div class="crop-grid g3" /><div class="crop-grid g4" />
+              </div>
             </div>
           </div>
         </div>
@@ -345,7 +347,8 @@ const handles = ['nw', 'ne', 'sw', 'se', 'n', 's', 'w', 'e']
 .crop-close { width: 34px; height: 34px; border: 0; border-radius: 9px; background: var(--surface-2); color: var(--text-2); font-size: 18px; cursor: pointer; }
 .crop-body { flex: 1; display: flex; min-height: 0; }
 .crop-stage { flex: 1; background: #dfe3ec; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-.crop-stage canvas { display: block; }
+.crop-canvas-wrap { position: relative; flex: none; }
+.crop-stage canvas { display: block; width: 100%; height: 100%; }
 .crop-dim { position: absolute; box-shadow: 0 0 0 9999px rgba(15, 23, 42, .42); }
 .crop-box { position: absolute; inset: 0; border: 2px solid var(--accent); cursor: move; touch-action: none; }
 .crop-handle { position: absolute; width: 12px; height: 12px; background: #fff; border: 2px solid var(--accent); border-radius: 3px; z-index: 2; }

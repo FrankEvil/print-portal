@@ -1,5 +1,5 @@
 appname         = print-portal
-version         = 0.4.5
+version         = 0.4.6
 display_name    = Print Portal
 platform        = x86
 micro_app        = true
