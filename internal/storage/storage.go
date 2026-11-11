@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -384,6 +385,81 @@ func (s *Store) ClearFinishedJobs() (int64, error) {
 	return res.RowsAffected()
 }
 
+// RetentionJob is the minimal job row needed by retention cleanup.
+type RetentionJob struct {
+	ID         int64
+	Status     string
+	StoredPath string
+	UpdatedAt  string
+}
+
+// ListFinishedJobs returns every terminal job together with its stored file
+// path. Callers use it to remove the files before dropping the database rows.
+func (s *Store) ListFinishedJobs() ([]RetentionJob, error) {
+	return s.listRetentionJobs(`status IN ('completed','failed','cancelled')`)
+}
+
+// ListExpiredJobs returns terminal jobs last updated before cutoff (RFC3339).
+func (s *Store) ListExpiredJobs(cutoff string) ([]RetentionJob, error) {
+	rows, err := s.db.Query(`SELECT id, status, stored_path, updated_at FROM jobs
+		WHERE status IN ('completed','failed','cancelled') AND updated_at < ?`, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RetentionJob
+	for rows.Next() {
+		var j RetentionJob
+		if err := rows.Scan(&j.ID, &j.Status, &j.StoredPath, &j.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
+}
+
+// ListRetentionJobs returns every job's ID and stored file path. It is used to
+// decide which upload files are still referenced by a job.
+func (s *Store) ListRetentionJobs() ([]RetentionJob, error) {
+	return s.listRetentionJobs("1=1")
+}
+
+func (s *Store) listRetentionJobs(where string) ([]RetentionJob, error) {
+	rows, err := s.db.Query(`SELECT id, status, stored_path, updated_at FROM jobs WHERE ` + where + ` ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RetentionJob
+	for rows.Next() {
+		var j RetentionJob
+		if err := rows.Scan(&j.ID, &j.Status, &j.StoredPath, &j.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
+}
+
+// DeleteJobRecords removes the given job rows and their local name mappings.
+func (s *Store) DeleteJobRecords(ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, 0, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	list := strings.Join(placeholders, ",")
+	_, _ = s.db.Exec(`DELETE FROM local_job_names WHERE cups_job_id IN (
+		SELECT cups_job_id FROM jobs WHERE id IN (`+list+`) AND source='local'
+	)`, args...)
+	_, err := s.db.Exec(`DELETE FROM jobs WHERE id IN (`+list+`)`, args...)
+	return err
+}
+
 // SaveLocalJobName persists the document name captured by the IPP gateway
 // for a CUPS job created by a LAN client.
 func (s *Store) SaveLocalJobName(cupsJobID, name string) error {
@@ -639,4 +715,61 @@ func (s *Store) GetScanJob(id int64) (*ScanJob, error) {
 		return nil, nil
 	}
 	return &j, err
+}
+
+// ListExpiredScanJobs returns scan jobs created before cutoff (RFC3339).
+func (s *Store) ListExpiredScanJobs(cutoff string) ([]ScanJob, error) {
+	rows, err := s.db.Query(`SELECT id, scanner, filename, format, resolution, color_mode, status, stored_path, created_at, updated_at
+		FROM scan_jobs WHERE created_at < ? ORDER BY id`, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ScanJob
+	for rows.Next() {
+		var j ScanJob
+		if err := rows.Scan(&j.ID, &j.Scanner, &j.Filename, &j.Format, &j.Resolution, &j.ColorMode, &j.Status, &j.StoredPath, &j.CreatedAt, &j.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
+}
+
+// ListScanJobs returns every recorded scan job.
+func (s *Store) ListScanJobs() ([]ScanJob, error) {
+	rows, err := s.db.Query(`SELECT id, scanner, filename, format, resolution, color_mode, status, stored_path, created_at, updated_at
+		FROM scan_jobs ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ScanJob
+	for rows.Next() {
+		var j ScanJob
+		if err := rows.Scan(&j.ID, &j.Scanner, &j.Filename, &j.Format, &j.Resolution, &j.ColorMode, &j.Status, &j.StoredPath, &j.CreatedAt, &j.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
+}
+
+// DeleteScanJobRecord removes one scan job row.
+func (s *Store) DeleteScanJobRecord(id int64) error {
+	_, err := s.db.Exec(`DELETE FROM scan_jobs WHERE id=?`, id)
+	return err
+}
+
+// SettingInt returns an integer setting value, or fallback when unset/invalid.
+func (s *Store) SettingInt(key string, fallback int) int {
+	value, ok, err := s.GetSetting(key)
+	if err != nil || !ok || strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	n, convErr := strconv.Atoi(strings.TrimSpace(value))
+	if convErr != nil {
+		return fallback
+	}
+	return n
 }

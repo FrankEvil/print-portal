@@ -743,7 +743,12 @@ func (s *Server) handleJobFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "本地任务没有原始文件")
 		return
 	}
-	path := filepath.Join(s.cfg.DataDir, "jobs", fmt.Sprintf("%d", id), "converted.pdf")
+	// Serve exactly what was sent to CUPS: the laid-out PDF when layout was
+	// applied, otherwise the plain conversion result.
+	path := filepath.Join(s.cfg.DataDir, "jobs", fmt.Sprintf("%d", id), "layout.pdf")
+	if _, err := os.Stat(path); err != nil {
+		path = filepath.Join(s.cfg.DataDir, "jobs", fmt.Sprintf("%d", id), "converted.pdf")
+	}
 	if _, err := os.Stat(path); err != nil {
 		writeError(w, http.StatusNotFound, "not_found", "converted file not available")
 		return

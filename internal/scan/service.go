@@ -122,3 +122,53 @@ func (s *Service) File(id int64) (*storage.ScanJob, string, error) {
 	}
 	return job, job.StoredPath, nil
 }
+
+// Cleanup removes scan history older than maxAge together with its files.
+// A non-positive maxAge means "keep forever".
+func (s *Service) Cleanup(maxAge time.Duration) (int, error) {
+	if maxAge <= 0 {
+		return 0, nil
+	}
+	cutoff := time.Now().Add(-maxAge).Format(time.RFC3339)
+	expired, err := s.store.ListExpiredScanJobs(cutoff)
+	if err != nil {
+		return 0, err
+	}
+	removed := 0
+	for _, job := range expired {
+		if job.StoredPath != "" {
+			_ = os.Remove(job.StoredPath)
+		}
+		if err := s.store.DeleteScanJobRecord(job.ID); err == nil {
+			removed++
+		}
+	}
+
+	// Remove files left behind by a crash between writing the file and the
+	// database insert.
+	remaining, err := s.store.ListScanJobs()
+	if err == nil {
+		referenced := make(map[string]bool, len(remaining))
+		for _, job := range remaining {
+			if job.StoredPath != "" {
+				referenced[filepath.Clean(job.StoredPath)] = true
+			}
+		}
+		limit := time.Now().Add(-maxAge)
+		if entries, readErr := os.ReadDir(filepath.Join(s.dataDir, "scans")); readErr == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				full := filepath.Join(s.dataDir, "scans", entry.Name())
+				if referenced[filepath.Clean(full)] {
+					continue
+				}
+				if info, statErr := entry.Info(); statErr == nil && info.ModTime().Before(limit) {
+					_ = os.Remove(full)
+				}
+			}
+		}
+	}
+	return removed, nil
+}

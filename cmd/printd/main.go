@@ -23,6 +23,7 @@ import (
 	"github.com/liuzhaojun/print-portal/internal/driver"
 	"github.com/liuzhaojun/print-portal/internal/ippgateway"
 	"github.com/liuzhaojun/print-portal/internal/job"
+	"github.com/liuzhaojun/print-portal/internal/logging"
 	"github.com/liuzhaojun/print-portal/internal/printer"
 	"github.com/liuzhaojun/print-portal/internal/scan"
 	"github.com/liuzhaojun/print-portal/internal/storage"
@@ -39,7 +40,7 @@ func main() {
 		}
 	}
 
-	logFile, err := os.OpenFile(filepath.Join(cfg.DataDir, "logs", "printd.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	logFile, err := logging.NewRotatingWriter(filepath.Join(cfg.DataDir, "logs", "printd.log"), 20<<20, 5)
 	if err != nil {
 		log.Fatalf("open log file: %v", err)
 	}
@@ -107,6 +108,43 @@ func main() {
 	}()
 
 	server := api.New(cfg, store, cupsClient, jobManager, printerService, driverService, discoveryService, scanService, logger)
+
+	// Retention housekeeping. The first pass runs shortly after startup and
+	// then hourly; settings are re-read on every pass so changes apply live.
+	go func() {
+		run := func() {
+			cleanCtx, cleanCancel := context.WithTimeout(ctx, 5*time.Minute)
+			defer cleanCancel()
+			tempHours := store.SettingInt("temp_retention_hours", 24)
+			historyDays := store.SettingInt("job_history_days", 30)
+			if tempHours > 0 {
+				server.SweepPreviewSessions(time.Duration(tempHours) * time.Hour)
+			}
+			if _, err := jobManager.CleanupRetention(cleanCtx); err != nil {
+				logger.Printf("retention cleanup: %v", err)
+			}
+			if _, err := scanService.Cleanup(time.Duration(historyDays) * 24 * time.Hour); err != nil {
+				logger.Printf("scan cleanup: %v", err)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Minute):
+		}
+		run()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				run()
+			}
+		}
+	}()
+
 	if cfg.SocketPath != "" {
 		_ = os.MkdirAll(filepath.Dir(cfg.SocketPath), 0o755)
 		_ = os.Remove(cfg.SocketPath)

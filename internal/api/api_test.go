@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/liuzhaojun/print-portal/internal/config"
 	"github.com/liuzhaojun/print-portal/internal/convert"
@@ -187,5 +188,47 @@ func TestConvertDetectUsedByAPI(t *testing.T) {
 	_ = os.WriteFile(path, []byte("%PDF"), 0o644)
 	if convert.Detect(path) != convert.KindPDF {
 		t.Error("detect failed")
+	}
+}
+
+func TestSweepPreviewSessions(t *testing.T) {
+	dir := t.TempDir()
+	previewDir := filepath.Join(dir, "previews")
+	if err := os.MkdirAll(previewDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldPath := filepath.Join(previewDir, "old.pdf")
+	activePath := filepath.Join(previewDir, "active.pdf")
+	orphanPath := filepath.Join(previewDir, "orphan.pdf")
+	for _, path := range []string{oldPath, activePath, orphanPath} {
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldTime := time.Now().Add(-3 * time.Hour)
+	for _, path := range []string{oldPath, orphanPath} {
+		_ = os.Chtimes(path, oldTime, oldTime)
+	}
+	s := &Server{
+		cfg: config.Config{DataDir: dir},
+		previewSessions: map[string]*previewSession{
+			"old":    {path: oldPath, lastUsed: oldTime},
+			"active": {path: activePath, lastUsed: time.Now()},
+		},
+	}
+	if removed := s.SweepPreviewSessions(time.Hour); removed != 1 {
+		t.Errorf("removed = %d, want 1", removed)
+	}
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Error("expired preview file still present")
+	}
+	if _, err := os.Stat(activePath); err != nil {
+		t.Error("active preview file was removed")
+	}
+	if _, err := os.Stat(orphanPath); !os.IsNotExist(err) {
+		t.Error("orphan preview file still present")
+	}
+	if len(s.previewSessions) != 1 {
+		t.Errorf("sessions = %d, want 1", len(s.previewSessions))
 	}
 }

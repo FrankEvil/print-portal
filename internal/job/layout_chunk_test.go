@@ -65,4 +65,26 @@ func TestLayoutOptsActive(t *testing.T) {
 	}
 }
 
+// Duplex jobs must be chunked in even numbers, otherwise every chunk starts a
+// new front/back pairing and the pages shift after the first chunk.
+func TestEffectiveChunkPages(t *testing.T) {
+	cases := []struct {
+		base   int
+		duplex string
+		want   int
+	}{
+		{3, "two-sided-long-edge", 4},
+		{3, "two-sided-short-edge", 4},
+		{1, "two-sided-long-edge", 2},
+		{3, "one-sided", 3},
+		{4, "two-sided-long-edge", 4},
+		{0, "two-sided-long-edge", 0},
+	}
+	for _, tc := range cases {
+		if got := effectiveChunkPages(tc.base, tc.duplex); got != tc.want {
+			t.Errorf("effectiveChunkPages(%d, %q) = %d, want %d", tc.base, tc.duplex, got, tc.want)
+		}
+	}
+}
+
 var _ = context.Background

@@ -118,7 +118,7 @@ curl -fsS -X POST "http://127.0.0.1:18088/api/admin/printers" \
   | grep -q '"name":"Brother DCP-7060D"' || fail "create printer"
 
 echo "== list printers =="
-curl -fsS "http://127.0.0.1:18088/api/printers" | grep -q '"queue":"dcp-ppd"' || fail "list printers"
+curl -fsS "http://127.0.0.1:18088/api/printers" -H "X-Admin-Token: testtoken" | grep -q '"queue":"dcp-ppd"' || fail "list printers"
 
 echo "== sharing info =="
 SHARING=$(curl -fsS "http://127.0.0.1:18088/api/admin/sharing" -H "X-Admin-Token: testtoken")
@@ -126,11 +126,11 @@ echo "$SHARING" | grep -q 'ipp://.*/printers/dcp-ppd' || fail "sharing ppd uri"
 echo "$SHARING" | grep -q 'ipp://.*/printers/dcp-raw' || fail "sharing raw uri"
 
 echo "== public ppd options =="
-curl -fsS "http://127.0.0.1:18088/api/printers/1/ppd-options" | grep -q 'PageSize' || fail "public ppd options"
+curl -fsS "http://127.0.0.1:18088/api/printers/1/ppd-options" -H "X-Admin-Token: testtoken" | grep -q 'PageSize' || fail "public ppd options"
 
 echo "== submit print job =="
 printf '%%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%%%EOF\n' > "$WORK/test.pdf"
-RESP=$(curl -fsS -X POST "http://127.0.0.1:18088/api/print" \
+RESP=$(curl -fsS -X POST "http://127.0.0.1:18088/api/print" -H "X-Admin-Token: testtoken" \
   -F "file=@$WORK/test.pdf;type=application/pdf" \
   -F "printer_id=1" -F "copies=2" -F "duplex=two-sided-long-edge")
 echo "$RESP"
@@ -140,16 +140,21 @@ JOB_ID=$(echo "$RESP" | sed -n 's/.*"job_id":\([0-9]*\).*/\1/p')
 echo "== wait for background worker =="
 STATUS=""
 for i in $(seq 1 50); do
-  STATUS=$(curl -fsS "http://127.0.0.1:18088/api/jobs/$JOB_ID" | sed -n 's/.*"status":"\([a-z]*\)".*/\1/p')
+  STATUS=$(curl -fsS "http://127.0.0.1:18088/api/jobs/$JOB_ID" -H "X-Admin-Token: testtoken" | sed -n 's/.*"status":"\([a-z]*\)".*/\1/p')
   [ "$STATUS" = "submitted" ] && break
   sleep 0.2
 done
 [ "$STATUS" = "submitted" ] || fail "job status = $STATUS, want submitted"
 
 echo "== job detail fields =="
-DETAIL=$(curl -fsS "http://127.0.0.1:18088/api/jobs/$JOB_ID")
+DETAIL=$(curl -fsS "http://127.0.0.1:18088/api/jobs/$JOB_ID" -H "X-Admin-Token: testtoken")
 echo "$DETAIL" | grep -q '"copies":2' || fail "copies"
 echo "$DETAIL" | grep -q '"printer_name":"Brother DCP-7060D"' || fail "printer_name"
+
+echo "== retention: upload and intermediates removed =="
+[ -z "$(ls -A "$WORK/data/uploads" 2>/dev/null)" ] || fail "upload original was not removed"
+[ -z "$(find "$WORK/data/jobs/$JOB_ID" -name '*.raw' -o -name 'chunks' 2>/dev/null)" ] || fail "intermediate files remain"
+[ -f "$WORK/data/jobs/$JOB_ID/converted.pdf" ] || fail "converted.pdf missing"
 
 echo "== drivers =="
 curl -fsS "http://127.0.0.1:18088/api/admin/drivers" -H "X-Admin-Token: testtoken" | grep -q '"name":"brlaser"' || fail "drivers"
@@ -195,17 +200,17 @@ done
 echo "$SCAN_STATE" | grep -q 'usb://Brother/DCP-7060D' || fail "usb scan devices"
 
 echo "== cancel and retry =="
-RESP2=$(curl -fsS -X POST "http://127.0.0.1:18088/api/print" \
+RESP2=$(curl -fsS -X POST "http://127.0.0.1:18088/api/print" -H "X-Admin-Token: testtoken" \
   -F "file=@$WORK/test.pdf;type=application/pdf" -F "printer_id=1")
 JOB2=$(echo "$RESP2" | sed -n 's/.*"job_id":\([0-9]*\).*/\1/p')
 STATUS2=""
 for i in $(seq 1 50); do
-  STATUS2=$(curl -fsS "http://127.0.0.1:18088/api/jobs/$JOB2" | sed -n 's/.*"status":"\([a-z]*\)".*/\1/p')
+  STATUS2=$(curl -fsS "http://127.0.0.1:18088/api/jobs/$JOB2" -H "X-Admin-Token: testtoken" | sed -n 's/.*"status":"\([a-z]*\)".*/\1/p')
   [ "$STATUS2" = "submitted" ] && break
   sleep 0.2
 done
-curl -fsS -X DELETE "http://127.0.0.1:18088/api/jobs/$JOB2" | grep -q '"status":"cancelled"' || fail "cancel"
-RETRY=$(curl -fsS -X POST "http://127.0.0.1:18088/api/jobs/$JOB2/retry")
+curl -fsS -X DELETE "http://127.0.0.1:18088/api/jobs/$JOB2" -H "X-Admin-Token: testtoken" | grep -q '"status":"cancelled"' || fail "cancel"
+RETRY=$(curl -fsS -X POST "http://127.0.0.1:18088/api/jobs/$JOB2/retry" -H "X-Admin-Token: testtoken")
 NEW_ID=$(echo "$RETRY" | sed -n 's/.*"job_id":\([0-9]*\).*/\1/p')
 [ -n "$NEW_ID" ] && [ "$NEW_ID" -gt "$JOB2" ] || fail "retry"
 
@@ -216,14 +221,14 @@ echo "== app logs =="
 curl -fsS "http://127.0.0.1:18088/api/admin/logs" -H "X-Admin-Token: testtoken" | grep -q '"lines"' || fail "app logs"
 
 echo "== scanners =="
-curl -fsS "http://127.0.0.1:18088/api/scanners" | grep -q 'Test Scanner' || fail "scanners"
+curl -fsS "http://127.0.0.1:18088/api/scanners" -H "X-Admin-Token: testtoken" | grep -q 'Test Scanner' || fail "scanners"
 
 echo "== scan and download =="
-SCAN=$(curl -fsS -X POST "http://127.0.0.1:18088/api/scan" -H 'Content-Type: application/json' \
+SCAN=$(curl -fsS -X POST "http://127.0.0.1:18088/api/scan" -H "X-Admin-Token: testtoken" -H 'Content-Type: application/json' \
   -d '{"scanner":"test:dev1","format":"pdf","resolution":300,"color_mode":"color"}')
 echo "$SCAN" | grep -q '"status":"completed"' || fail "scan status"
 SCAN_ID=$(echo "$SCAN" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
-curl -fsS "http://127.0.0.1:18088/api/scans/$SCAN_ID/download" | grep -q '%PDF' || fail "scan download"
+curl -fsS "http://127.0.0.1:18088/api/scans/$SCAN_ID/download" -H "X-Admin-Token: testtoken" | grep -q '%PDF' || fail "scan download"
 
 echo "== unauthorized admin =="
 CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18088/api/admin/overview")

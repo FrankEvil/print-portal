@@ -111,6 +111,17 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 		m.fail(j, "cannot create job directory: "+err.Error())
 		return
 	}
+	// Chunks and rasterized files are only needed while submitting. Remove them
+	// as soon as the job leaves the processing path so long-lived job records
+	// do not keep hundreds of megabytes of intermediate data.
+	defer func() {
+		_ = os.RemoveAll(filepath.Join(jobDir, "chunks"))
+		if rawFiles, err := filepath.Glob(filepath.Join(jobDir, "*.raw")); err == nil {
+			for _, path := range rawFiles {
+				_ = os.Remove(path)
+			}
+		}
+	}()
 	pdfPath := filepath.Join(jobDir, "converted.pdf")
 	convertCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
@@ -118,6 +129,13 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 	if err := m.conv.ToPDF(convertCtx, j.StoredPath, pdfPath); err != nil {
 		m.fail(j, "convert failed: "+err.Error())
 		return
+	}
+	// converted.pdf is now the source of truth. Drop the uploaded original to
+	// keep uploads bounded; Retry falls back to converted.pdf.
+	if j.StoredPath != "" {
+		_ = os.Remove(j.StoredPath)
+		j.StoredPath = ""
+		_ = m.store.UpdateJob(j)
 	}
 	m.logger.Printf("job %d converted to %s", j.ID, pdfPath)
 
@@ -189,7 +207,7 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 	if layoutOptsActive(opts.Layout) {
 		sheetCount = pageCountOf(convertCtx, pdfPath, m)
 	}
-	chunkPages := settingInt(m.store, "chunk_pages", 4)
+	chunkPages := effectiveChunkPages(settingInt(m.store, "chunk_pages", 4), opts.Duplex)
 	if chunkPages > 0 && opts.PageRange == "" && sheetCount > chunkPages {
 		chunks, splitErr := m.conv.SplitPDF(convertCtx, pdfPath, filepath.Join(jobDir, "chunks"), chunkPages)
 		if splitErr == nil && len(chunks) > 1 {
@@ -246,6 +264,25 @@ func pageCountOf(ctx context.Context, pdf string, m *Manager) int {
 
 func layoutOptsActive(opts layout.Options) bool {
 	return opts.PagesPerSheet > 1 || opts.Border || opts.Reverse || opts.FlipHorizontal
+}
+
+// effectiveChunkPages keeps duplex jobs on an even sheet boundary. Every chunk
+// is submitted as an independent CUPS job, so an odd chunk would break the
+// front/back pairing and shift all following pages.
+func effectiveChunkPages(base int, duplex string) int {
+	if base <= 0 {
+		return base
+	}
+	if duplex != "two-sided-long-edge" && duplex != "two-sided-short-edge" {
+		return base
+	}
+	if base == 1 {
+		return 2
+	}
+	if base%2 != 0 {
+		return base + 1
+	}
+	return base
 }
 
 func decodeLayoutOptions(raw string) layout.Options {
@@ -600,6 +637,10 @@ func (m *Manager) Retry(id int64) (*storage.Job, error) {
 	if old.Status != "failed" && old.Status != "cancelled" {
 		return nil, fmt.Errorf("job in state %s cannot be retried", old.Status)
 	}
+	source := m.retrySource(old)
+	if source == "" {
+		return nil, errors.New("原始文件已清理，请重新上传后再打印")
+	}
 	clone := &storage.Job{
 		PrinterID:     old.PrinterID,
 		Source:        "web",
@@ -616,13 +657,27 @@ func (m *Manager) Retry(id int64) (*storage.Job, error) {
 		PPDOptions:    old.PPDOptions,
 		LayoutOptions: old.LayoutOptions,
 		Status:        "pending",
-		StoredPath:    old.StoredPath,
+		StoredPath:    source,
 	}
 	if err := m.store.CreateJob(clone); err != nil {
 		return nil, err
 	}
 	m.Wake()
 	return clone, nil
+}
+
+// retrySource returns a file that can be used to rebuild the job. The original
+// upload is deleted after a successful conversion to keep disk usage bounded,
+// so fall back to the job's converted PDF.
+func (m *Manager) retrySource(old *storage.Job) string {
+	if path := strings.TrimSpace(old.StoredPath); path != "" {
+		return path
+	}
+	converted := filepath.Join(m.dataDir, "jobs", strconv.FormatInt(old.ID, 10), "converted.pdf")
+	if _, err := os.Stat(converted); err == nil {
+		return converted
+	}
+	return ""
 }
 
 // KindName is a helper for API logging.

@@ -50,6 +50,50 @@ type previewSession struct {
 	lastUsed time.Time
 }
 
+// SweepPreviewSessions drops preview sessions unused for longer than maxAge
+// and removes their files. Files in the previews directory that no session
+// references are leftovers from a crash or restart and are removed as well.
+func (s *Server) SweepPreviewSessions(maxAge time.Duration) int {
+	if maxAge <= 0 {
+		return 0
+	}
+	cutoff := time.Now().Add(-maxAge)
+	removed := 0
+	active := map[string]bool{}
+	s.previewMu.Lock()
+	for id, session := range s.previewSessions {
+		if session.lastUsed.Before(cutoff) {
+			_ = os.Remove(session.path)
+			delete(s.previewSessions, id)
+			removed++
+			continue
+		}
+		active[filepath.Clean(session.path)] = true
+	}
+	s.previewMu.Unlock()
+
+	dir := filepath.Join(s.cfg.DataDir, "previews")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return removed
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		full := filepath.Join(dir, entry.Name())
+		if active[filepath.Clean(full)] {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil || !info.ModTime().Before(cutoff) {
+			continue
+		}
+		_ = os.Remove(full)
+	}
+	return removed
+}
+
 func New(
 	cfg config.Config,
 	store *storage.Store,

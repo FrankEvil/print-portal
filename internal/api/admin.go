@@ -842,7 +842,7 @@ func (s *Server) handleAdminJobs(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, "clear_cups_failed", err.Error())
 			return
 		}
-		cleared, err := s.store.ClearFinishedJobs()
+		cleared, err := s.jobs.PurgeFinished(ctx)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "clear_failed", err.Error())
 			return
@@ -929,7 +929,6 @@ var allowedSettings = map[string]string{
 	"chunk_pages":          "4",
 	"temp_retention_hours": "24",
 	"job_history_days":     "30",
-	"default_printer_id":   "0",
 	"language":             "zh",
 	"theme":                "auto",
 	"public_host":          "",

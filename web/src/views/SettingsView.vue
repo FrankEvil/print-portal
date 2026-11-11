@@ -10,11 +10,10 @@ const theme = ref<ThemeMode>(getTheme())
 
 const fields: { key: string; label: string; type?: string; hint?: string }[] = [
   { key: 'max_upload_mb', label: '上传大小上限（MB）', type: 'number' },
-  { key: 'chunk_pages', label: '大文件分块页数', type: 'number', hint: '超过该页数会分块依次打印，默认 4 页；0 表示不分块' },
-  { key: 'temp_retention_hours', label: '临时文件保留（小时）', type: 'number' },
-  { key: 'job_history_days', label: '任务历史保留（天）', type: 'number' },
+  { key: 'chunk_pages', label: '大文件分块页数', type: 'number', hint: '超过该页数会分块依次打印，默认 4 页；0 表示不分块。双面打印会自动取偶数' },
+  { key: 'temp_retention_hours', label: '临时文件保留（小时）', type: 'number', hint: '预览缓存和未使用的上传文件；0 表示永久保留' },
+  { key: 'job_history_days', label: '任务历史保留（天）', type: 'number', hint: '超过该天数的已完成任务会连同文件一起清理；0 表示永久保留' },
   { key: 'language', label: '语言', hint: '当前 P1 仅中文' },
-  { key: 'default_printer_id', label: '默认打印机 ID', type: 'number' },
 ]
 
 async function load() {
