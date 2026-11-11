@@ -57,7 +57,7 @@ let composeTimer: number | undefined
 let composeToken = 0
 
 const previewSrc = computed(() => previewId.value ? `/api/printmode/preview/${previewId.value}` : '')
-const canPrint = computed(() => previewId.value !== '' && !previewLoading.value && items.value.length > 0 && !submitting.value)
+const canPrint = computed(() => previewId.value !== '' && !previewLoading.value && items.value.length > 0 && !submitting.value && items.value.every((item) => item.kind === 'pdf' || item.blob))
 const editingItem = computed(() => items.value.find((item) => item.id === editingId.value) || null)
 
 watch([items, perSheet, trim, cutLines], () => {
@@ -126,7 +126,7 @@ function presetOf(item: InvoiceItem) {
 function itemMeta(item: InvoiceItem) {
   if (item.kind === 'image') {
     const preset = presetOf(item)
-    return `图片 · 已裁剪 · ${preset.label.replace(' 自定义', '')}`
+    return `图片 · ${item.blob ? '已裁剪' : '未裁剪'} · ${preset.label.replace(' 自定义', '')}`
   }
   if (!item.pages.length) return '正在读取页面尺寸…'
   if (item.pages.length === 1) {
@@ -165,6 +165,14 @@ function removeItem(item: InvoiceItem) {
 async function compose() {
   if (!items.value.length) {
     previewId.value = ''
+    previewLoading.value = false
+    composeError.value = ''
+    return
+  }
+  if (items.value.some((item) => item.kind === 'image' && !item.blob)) {
+    previewId.value = ''
+    previewLoading.value = false
+    composeError.value = '请先裁剪所有图片发票'
     return
   }
   const request = ++composeToken

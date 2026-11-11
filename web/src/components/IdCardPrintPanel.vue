@@ -100,6 +100,8 @@ function onCropCancel() {
 async function compose() {
   if (!cropped.value.front || !cropped.value.back) {
     previewId.value = ''
+    previewLoading.value = false
+    composeError.value = ''
     return
   }
   const request = ++composeToken
