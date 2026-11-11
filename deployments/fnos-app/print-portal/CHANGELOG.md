@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.5
+
+- 修复 PDF.js worker 地址重复拼接导致 `Setting up fake worker failed`：改用 `new URL(worker, document.baseURI)` 解析
+- 覆盖普通文档预览和身份证/发票模式预览
+- 已验证 worker 请求返回 200，无动态导入失败
+
 ## 0.4.4
 
 - 修复身份证裁剪框默认过大、只能在很小范围内移动的问题：初始框改为图片可用区域的 60%

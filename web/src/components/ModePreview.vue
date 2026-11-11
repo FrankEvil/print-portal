@@ -2,9 +2,9 @@
 import { onUnmounted, ref, watch } from 'vue'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { apiBase, apiUrl } from '../api'
+import { apiUrl } from '../api'
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `${apiBase}${pdfjsWorker}`
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(pdfjsWorker, document.baseURI).href
 
 const props = defineProps<{
   src: string

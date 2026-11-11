@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { TrimApp } from '@trimjs/web-app'
-import { adminToken, api, apiBase, apiUrl } from '../api'
+import { adminToken, api, apiUrl } from '../api'
 import { toast } from '../toast'
 import type { Job, LayoutGeometry, PaperArea, PPDOption, Printer } from '../types'
 import { formatJobParams } from '../jobDisplay'
@@ -11,7 +11,7 @@ import StatusBadge from '../components/StatusBadge.vue'
 import IdCardPrintPanel from '../components/IdCardPrintPanel.vue'
 import InvoicePrintPanel from '../components/InvoicePrintPanel.vue'
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `${apiBase}${pdfjsWorker}`
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(pdfjsWorker, document.baseURI).href
 
 const printMode = ref<'document' | 'idcard' | 'invoice'>('document')
 const printers = ref<Printer[]>([])
