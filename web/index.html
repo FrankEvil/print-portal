@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0f172a" />
     <title>Print Portal · 打印门户</title>
+    <script>
+      // The fnOS gateway serves the app under /app/<name>. Set a <base> at
+      // parse time so relative Vite assets also work when the gateway serves
+      // this file without an extra server-side rewrite.
+      (function () {
+        var match = window.location.pathname.match(/^\/app\/[^/]+/)
+        var base = match ? match[0] + '/' : '/'
+        document.write('<base href="' + base + '">')
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>
