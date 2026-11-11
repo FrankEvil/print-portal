@@ -19,6 +19,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - PRINT_PORTAL_AUTH_MODE=fnos
+      - PRINT_PORTAL_VERSION=${VERSION}
       - PRINTD_SOCKET=/run/print-portal/app.sock
       - PRINT_PORTAL_APP_NAME=print-portal
       - PRINT_PORTAL_NAS_ROOTS=/vol1,/vol2
