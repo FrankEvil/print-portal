@@ -22,7 +22,7 @@ services:
       - PRINTD_SOCKET=/run/print-portal/app.sock
       - PRINT_PORTAL_APP_NAME=print-portal
       - PRINT_PORTAL_NAS_ROOTS=/vol1,/vol2
-      - PRINTD_ADDR=:8088
+      - PRINTD_ADDR=127.0.0.1:8088
       - CUPS_SERVER=127.0.0.1:631
       - PRINT_PORTAL_IPP_ADDR=0.0.0.0:8631
     restart: unless-stopped

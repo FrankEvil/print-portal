@@ -232,3 +232,53 @@ func TestSweepPreviewSessions(t *testing.T) {
 		t.Errorf("sessions = %d, want 1", len(s.previewSessions))
 	}
 }
+
+func TestFnOSIdentityHeadersOnlyTrustedFromSocket(t *testing.T) {
+	server := &Server{
+		cfg:    config.Config{AuthMode: "fnos"},
+		logger: log.New(io.Discard, "", 0),
+		mux:    http.NewServeMux(),
+	}
+	server.admin("GET /api/admin/ping", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+
+	request := func() *http.Request {
+		req := httptest.NewRequest(http.MethodGet, "/api/admin/ping", nil)
+		req.Header.Set("X-Trim-Userid", "1")
+		req.Header.Set("X-Trim-Isadmin", "true")
+		return req
+	}
+
+	// A LAN client hitting port 8088 can forge these headers; it must be
+	// rejected before reaching the handler.
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, request())
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("TCP request status = %d, want 401", rec.Code)
+	}
+
+	// A socket request without identity is not logged in.
+	noUser := httptest.NewRequest(http.MethodGet, "/api/admin/ping", nil)
+	rec = httptest.NewRecorder()
+	server.SocketHandler().ServeHTTP(rec, noUser)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("socket no-user status = %d, want 401", rec.Code)
+	}
+
+	// A socket request from a non-admin user is forbidden on admin routes.
+	nonAdmin := httptest.NewRequest(http.MethodGet, "/api/admin/ping", nil)
+	nonAdmin.Header.Set("X-Trim-Userid", "2")
+	rec = httptest.NewRecorder()
+	server.SocketHandler().ServeHTTP(rec, nonAdmin)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("socket non-admin status = %d, want 403", rec.Code)
+	}
+
+	// The gateway socket with a valid administrator passes.
+	rec = httptest.NewRecorder()
+	server.SocketHandler().ServeHTTP(rec, request())
+	if rec.Code != http.StatusOK {
+		t.Errorf("socket admin status = %d, want 200", rec.Code)
+	}
+}

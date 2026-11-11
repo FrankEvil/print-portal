@@ -53,8 +53,10 @@ X-Trim-Username
 - `X-Trim-Isadmin != true`：管理 API 返回 403
 - 不需要用户输入 `ADMIN_TOKEN`
 - 必须先登录 fnOS
-- 直接访问 8088 时会自动跳转到飞牛网关入口，触发 fnOS 登录/授权
-- 不应直接暴露 8088 端口给公网
+- `X-Trim-*` 身份头只在 `PRINTD_SOCKET`（飞牛网关 Unix Socket）上被信任
+- 直接访问 HTTP 8088 的 `/api/*` 一律返回 401，无法通过伪造请求头绕过网关
+- 静态页面在缺少身份头时会 302 到飞牛网关入口，触发 fnOS 登录/授权
+- fnOS 部署应将 `PRINTD_ADDR` 绑定到 `127.0.0.1:8088`，不要暴露给公网
 
 应用包：
 

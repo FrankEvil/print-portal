@@ -93,7 +93,7 @@ docker compose -f docker-compose.standalone.yml up -d
 首次启动会拉取：
 
 ```text
-ghcr.io/frankevil/print-portal:0.3.4
+ghcr.io/frankevil/print-portal:0.3.5
 ```
 
 更新：
@@ -184,8 +184,11 @@ docker compose -f docker-compose.fnos.yml up -d --build
 当前 `docker-compose.fnos.yml` 使用：
 
 - `network_mode: host`：保留 mDNS / USB / 局域网发现
-- `PRINT_PORTAL_IPP_ADDR: "192.168.2.30:8631"`：只监听局域网 IP
-- `web-proxy` sidecar：把 `8080` 暴露给 fnOS 域名反代
+- `PRINTD_ADDR: "127.0.0.1:8088"`：Web 仅监听本机，局域网只能经 `web-proxy` 或飞牛网关访问
+- `PRINT_PORTAL_IPP_ADDR: "0.0.0.0:8631"`：IPP 网关按需限制到局域网网段
+- `web-proxy` sidecar：host 网络监听 `8080`，反向代理到 `127.0.0.1:8088`
+
+fnOS 应用包使用飞牛统一网关（Unix Socket）鉴权，`PRINTD_ADDR` 同样绑定 `127.0.0.1`；伪造 `X-Trim-*` 请求头无法从局域网直接调用管理 API。
 
 ### 5.1 fnOS 域名
 
@@ -193,7 +196,7 @@ docker compose -f docker-compose.fnos.yml up -d --build
 
 ```text
 fnOS 域名 → print-portal-web-proxy:8080
-             → host.docker.internal:8088
+             → 127.0.0.1:8088
 ```
 
 在 fnOS 中把域名反代到 `print-portal-web-proxy` 的 `8080`。
@@ -204,7 +207,7 @@ fnOS 域名 → print-portal-web-proxy:8080
 
 - 允许 `192.168.2.0/24` 访问 TCP 8631
 - 拒绝其他来源访问 8631
-- 公网只开放 Web 入口（8080 或 8088）
+- 公网只开放 Web 入口（fnOS 版本为 8080）
 
 不要把 8631 暴露到公网。
 
@@ -212,7 +215,7 @@ fnOS 域名 → print-portal-web-proxy:8080
 
 | 端口 | 用途 | 建议访问范围 |
 |---|---|---|
-| 8088 | Web 打印 / 管理 | 局域网 |
+| 8088 | Web 打印 / 管理 | 仅本机（fnOS 版本） |
 | 8631 | printd IPP 网关 | 仅局域网 |
 | 8080 | fnOS Web 代理（可选） | 按域名反代配置 |
 | 631 | 容器内 CUPS | 仅 127.0.0.1 |

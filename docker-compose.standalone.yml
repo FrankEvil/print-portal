@@ -1,7 +1,7 @@
 # 普通 Docker / 非 fnOS 版本：使用预构建镜像，Token 登录
 services:
   print-portal:
-    image: ghcr.io/frankevil/print-portal:0.1.8
+    image: ghcr.io/frankevil/print-portal:0.3.5
     container_name: print-portal
     restart: unless-stopped
     privileged: true

@@ -153,7 +153,7 @@ func main() {
 		} else {
 			logger.Printf("gateway socket listening on %s", cfg.SocketPath)
 			go func() {
-				if err := http.Serve(ln, server.Handler()); err != nil {
+				if err := http.Serve(ln, server.SocketHandler()); err != nil {
 					logger.Printf("gateway socket serve: %v", err)
 				}
 			}()

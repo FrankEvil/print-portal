@@ -19,7 +19,7 @@ services:
     environment:
       PRINT_PORTAL_AUTH_MODE: "token"
       ADMIN_TOKEN: "demo123"
-      PRINTD_ADDR: ":8088"
+      PRINTD_ADDR: "127.0.0.1:8088"
       CUPS_SERVER: "127.0.0.1:631"
       PRINT_PORTAL_IPP_ADDR: "192.168.2.30:8631"
 
@@ -27,11 +27,8 @@ services:
     image: nginx:latest
     container_name: print-portal-web-proxy
     restart: unless-stopped
+    network_mode: host
     depends_on:
       - print-portal
-    ports:
-      - "8080:8080"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - ./deployments/nginx-proxy.conf:/etc/nginx/nginx.conf:ro

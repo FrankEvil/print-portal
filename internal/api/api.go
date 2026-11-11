@@ -200,9 +200,19 @@ func (s *Server) routes() {
 	s.mux.Handle("/", s.staticHandler())
 }
 
-// Handler returns the root handler.
+// Handler returns the root handler for the TCP listener.
 func (s *Server) Handler() http.Handler {
-	return s.loggingMiddleware(s.stripGatewayPrefix(s.authMiddleware(s.mux)))
+	return s.buildHandler(false)
+}
+
+// SocketHandler returns the root handler for the fnOS gateway Unix socket.
+// fnOS injects identity headers there, so only this listener may trust them.
+func (s *Server) SocketHandler() http.Handler {
+	return s.buildHandler(true)
+}
+
+func (s *Server) buildHandler(trustedSocket bool) http.Handler {
+	return s.loggingMiddleware(s.stripGatewayPrefix(s.authMiddleware(trustedSocket, s.mux)))
 }
 
 func (s *Server) stripGatewayPrefix(next http.Handler) http.Handler {
@@ -224,7 +234,7 @@ func (s *Server) stripGatewayPrefix(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) authMiddleware(next http.Handler) http.Handler {
+func (s *Server) authMiddleware(trustedSocket bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Empty mode is the legacy/test default; production always sets token
 		// or fnos via config.Load.
@@ -239,6 +249,14 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		if s.cfg.AuthMode == "fnos" {
+			// X-Trim-* headers are plain HTTP headers. They are only
+			// trustworthy when the request comes from the fnOS gateway over a
+			// Unix socket; a LAN client could otherwise forge them by calling
+			// port 8088 directly.
+			if !trustedSocket {
+				writeError(w, http.StatusUnauthorized, "fnos_gateway_required", "请从 fnOS 应用中心打开")
+				return
+			}
 			if strings.TrimSpace(r.Header.Get("X-Trim-Userid")) == "" {
 				writeError(w, http.StatusUnauthorized, "unauthorized", "fnOS login required")
 				return
