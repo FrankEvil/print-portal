@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/liuzhaojun/print-portal/internal/storage"
 )
 
 // RetentionStats summarizes one cleanup pass.
@@ -20,14 +22,26 @@ type RetentionStats struct {
 // It backs the "clear print history" button: deleting only the database rows
 // used to leave orphaned job directories behind forever.
 func (m *Manager) PurgeFinished(ctx context.Context) (int, error) {
-	jobs, err := m.store.ListFinishedJobs()
+	finished, err := m.store.ListFinishedJobs()
 	if err != nil {
 		return 0, err
 	}
-	ids := make([]int64, 0, len(jobs))
-	for _, j := range jobs {
+	all, err := m.store.ListRetentionJobs()
+	if err != nil {
+		return 0, err
+	}
+	purge := make(map[int64]bool, len(finished))
+	for _, j := range finished {
+		purge[j.ID] = true
+	}
+	// A stored file may be shared by retry clones created by older versions.
+	// Only delete it when no surviving job still points at it.
+	remaining := remainingStoredRefs(all, purge)
+
+	ids := make([]int64, 0, len(finished))
+	for _, j := range finished {
 		_ = os.RemoveAll(filepath.Join(m.dataDir, "jobs", strconv.FormatInt(j.ID, 10)))
-		if j.StoredPath != "" {
+		if j.StoredPath != "" && remaining[filepath.Clean(j.StoredPath)] == 0 {
 			_ = os.Remove(j.StoredPath)
 		}
 		ids = append(ids, j.ID)
@@ -51,6 +65,12 @@ func (m *Manager) CleanupRetention(ctx context.Context) (RetentionStats, error) 
 	historyDays := m.store.SettingInt("job_history_days", 30)
 	tempHours := m.store.SettingInt("temp_retention_hours", 24)
 
+	all, err := m.store.ListRetentionJobs()
+	if err != nil {
+		return stats, err
+	}
+	purged := map[int64]bool{}
+
 	// 1. Expired terminal job records.
 	if historyDays > 0 {
 		cutoff := time.Now().Add(-time.Duration(historyDays) * 24 * time.Hour).Format(time.RFC3339)
@@ -58,12 +78,16 @@ func (m *Manager) CleanupRetention(ctx context.Context) (RetentionStats, error) 
 		if err != nil {
 			return stats, err
 		}
+		for _, j := range expired {
+			purged[j.ID] = true
+		}
+		remaining := remainingStoredRefs(all, purged)
 		ids := make([]int64, 0, len(expired))
 		for _, j := range expired {
 			dir := filepath.Join(m.dataDir, "jobs", strconv.FormatInt(j.ID, 10))
 			stats.Bytes += dirSize(dir)
 			_ = os.RemoveAll(dir)
-			if j.StoredPath != "" {
+			if j.StoredPath != "" && remaining[filepath.Clean(j.StoredPath)] == 0 {
 				stats.Bytes += fileSize(j.StoredPath)
 				_ = os.Remove(j.StoredPath)
 			}
@@ -78,13 +102,12 @@ func (m *Manager) CleanupRetention(ctx context.Context) (RetentionStats, error) 
 	}
 
 	// 2. Job directories without a database row.
-	all, err := m.store.ListRetentionJobs()
-	if err != nil {
-		return stats, err
-	}
 	known := make(map[string]bool, len(all))
 	referenced := make(map[string]bool, len(all))
 	for _, j := range all {
+		if purged[j.ID] {
+			continue
+		}
 		known[strconv.FormatInt(j.ID, 10)] = true
 		if j.StoredPath != "" {
 			referenced[filepath.Clean(j.StoredPath)] = true
@@ -133,6 +156,17 @@ func (m *Manager) CleanupRetention(ctx context.Context) (RetentionStats, error) 
 			stats.Jobs, stats.Uploads, stats.JobDirs, humanBytes(stats.Bytes))
 	}
 	return stats, nil
+}
+
+func remainingStoredRefs(all []storage.RetentionJob, purge map[int64]bool) map[string]int {
+	refs := make(map[string]int, len(all))
+	for _, j := range all {
+		if purge[j.ID] || j.StoredPath == "" {
+			continue
+		}
+		refs[filepath.Clean(j.StoredPath)]++
+	}
+	return refs
 }
 
 func fileSize(path string) int64 {

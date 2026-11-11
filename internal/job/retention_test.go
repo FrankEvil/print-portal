@@ -195,3 +195,52 @@ func TestRetryFallsBackToConvertedPDF(t *testing.T) {
 func itoa(v int64) string {
 	return strconv.FormatInt(v, 10)
 }
+
+func TestCleanupKeepsSharedUpload(t *testing.T) {
+	m, store, dir := newTestManager(t)
+	uploads := filepath.Join(dir, "uploads")
+	_ = os.MkdirAll(uploads, 0o755)
+	shared := filepath.Join(uploads, "shared.pdf")
+	_ = os.WriteFile(shared, []byte("shared"), 0o644)
+
+	old := &storage.Job{PrinterID: 1, Source: "web", Filename: "shared.pdf", Status: "completed", StoredPath: shared, Copies: 1}
+	if err := store.CreateJob(old); err != nil {
+		t.Fatal(err)
+	}
+	active := &storage.Job{PrinterID: 1, Source: "web", Filename: "shared.pdf", Status: "pending", StoredPath: shared, Copies: 1}
+	if err := store.CreateJob(active); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().Add(-60 * 24 * time.Hour).Format(time.RFC3339)
+	_, _ = store.DB().Exec(`UPDATE jobs SET updated_at=? WHERE id=?`, past, old.ID)
+
+	if _, err := m.CleanupRetention(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(shared); err != nil {
+		t.Fatal("shared upload was removed while an active job still references it")
+	}
+}
+
+func TestPurgeKeepsSharedUpload(t *testing.T) {
+	m, store, dir := newTestManager(t)
+	uploads := filepath.Join(dir, "uploads")
+	_ = os.MkdirAll(uploads, 0o755)
+	shared := filepath.Join(uploads, "shared.pdf")
+	_ = os.WriteFile(shared, []byte("shared"), 0o644)
+
+	finished := &storage.Job{PrinterID: 1, Source: "web", Filename: "shared.pdf", Status: "failed", StoredPath: shared, Copies: 1}
+	if err := store.CreateJob(finished); err != nil {
+		t.Fatal(err)
+	}
+	active := &storage.Job{PrinterID: 1, Source: "web", Filename: "shared.pdf", Status: "pending", StoredPath: shared, Copies: 1}
+	if err := store.CreateJob(active); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.PurgeFinished(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(shared); err != nil {
+		t.Fatal("shared upload was removed while an active job still references it")
+	}
+}
