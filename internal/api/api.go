@@ -358,17 +358,42 @@ func (s *Server) serveStaticFile(w http.ResponseWriter, r *http.Request, path, p
 	if clean == "." {
 		clean = ""
 	}
+	// SPA entry points must always go through the prefix rewrite. Serving the
+	// raw index.html would leave absolute /assets/... URLs in place and the
+	// fnOS gateway would 404 every chunk.
+	if clean == "" || clean == "index.html" {
+		s.serveIndex(w, r, prefix)
+		return
+	}
 	full := filepath.Join(s.cfg.StaticDir, clean)
 	if info, err := os.Stat(full); err == nil && !info.IsDir() {
+		if strings.HasPrefix(clean, "assets/") {
+			// Vite asset names contain a content hash.
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
 		http.ServeFile(w, r, full)
 		return
 	}
+	s.serveIndex(w, r, prefix)
+}
+
+func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request, prefix string) {
 	index := filepath.Join(s.cfg.StaticDir, "index.html")
 	body, err := os.ReadFile(index)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
+	// A <base> tag makes the relative asset URLs emitted by Vite resolve
+	// correctly both at the root and under the fnOS gateway prefix, including
+	// deep links such as /app/print-portal/admin/printers.
+	base := "/"
+	if prefix != "" {
+		base = strings.TrimRight(prefix, "/") + "/"
+	}
+	body = bytes.Replace(body, []byte("<head>"), []byte(`<head><base href="`+base+`">`), 1)
 	if prefix != "" {
 		body = bytes.ReplaceAll(body, []byte(`"/assets/`), []byte(`"`+prefix+`/assets/`))
 	}
@@ -458,18 +483,17 @@ func (s *Server) staticHandler() http.Handler {
 		if clean == "." {
 			clean = ""
 		}
+		if clean == "" || clean == "index.html" {
+			s.serveIndex(w, r, "")
+			return
+		}
 		full := filepath.Join(s.cfg.StaticDir, clean)
 		if info, err := os.Stat(full); err == nil && !info.IsDir() {
 			fileServer.ServeHTTP(w, r)
 			return
 		}
 		// SPA fallback.
-		index := filepath.Join(s.cfg.StaticDir, "index.html")
-		if _, err := os.Stat(index); err == nil {
-			http.ServeFile(w, r, index)
-			return
-		}
-		http.NotFound(w, r)
+		s.serveIndex(w, r, "")
 	})
 }
 

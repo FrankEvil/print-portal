@@ -372,3 +372,37 @@ func TestPrintModeIDCardAndInvoice(t *testing.T) {
 		t.Fatalf("invoice response = %+v", invoice)
 	}
 }
+
+func TestFnOSStaticIndexUsesPrefixBaseAndAssets(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	index := `<html><head></head><body><script type="module" src="./assets/app.js"></script></body></html>`
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte(index), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "assets", "app.js"), []byte("console.log(1)"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{cfg: config.Config{StaticDir: dir, AuthMode: "fnos", FnOSPrefix: "/app/print-portal"}, logger: log.New(io.Discard, "", 0)}
+
+	req := httptest.NewRequest(http.MethodGet, "/app/print-portal/", nil)
+	req.Header.Set("X-Trim-Userid", "1")
+	rec := httptest.NewRecorder()
+	s.staticHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("index status = %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `<base href="/app/print-portal/">`) {
+		t.Errorf("index missing prefix base: %s", rec.Body.String())
+	}
+
+	assetReq := httptest.NewRequest(http.MethodGet, "/app/print-portal/assets/app.js", nil)
+	assetReq.Header.Set("X-Trim-Userid", "1")
+	assetRec := httptest.NewRecorder()
+	s.staticHandler().ServeHTTP(assetRec, assetReq)
+	if assetRec.Code != http.StatusOK {
+		t.Errorf("asset status = %d", assetRec.Code)
+	}
+}
