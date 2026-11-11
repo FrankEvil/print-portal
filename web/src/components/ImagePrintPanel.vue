@@ -259,6 +259,7 @@ async function submit() {
           <h2 class="card-title">图片打印</h2>
           <p class="card-desc">{{ layoutMode === 'manual' ? '一次选择多张图片，自由拖拽拼贴到纸张。' : '一次选择多张图片，按纸张和每张张数自动排版。' }}</p>
         </div>
+        <button v-if="nasEnabled" class="btn btn-ghost btn-sm" type="button" @click="pickNasImages">从 NAS 选择</button>
       </div>
       <div class="photo-grid">
         <div v-for="item in items" :key="item.id" class="photo-card">
@@ -269,7 +270,6 @@ async function submit() {
         </div>
       </div>
       <button class="photo-add" type="button" @click="addFiles">＋ 添加图片（JPG / PNG / WebP，可多选）</button>
-      <button v-if="nasEnabled" class="photo-add" type="button" @click="pickNasImages">从 NAS 选择图片</button>
       <input ref="fileInput" class="hidden-file" type="file" multiple accept=".jpg,.jpeg,.png,.webp" @change="onFilesPicked" />
       <PhotoCollageEditor v-if="layoutMode === 'manual'" :images="collageImages" :paper-width-mm="paperDims[0]" :paper-height-mm="paperDims[1]" @update:layout="manualLayout = $event" />
 

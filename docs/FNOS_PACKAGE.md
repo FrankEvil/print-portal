@@ -46,7 +46,7 @@ ghcr.io/frankevil/print-portal:${VERSION}
 `ghcr.io`。如需改回官方源或换成其他仓库，设置 `PRINT_PORTAL_IMAGE`：
 
 ```bash
-PRINT_PORTAL_IMAGE=ghcr.io/frankevil/print-portal:0.5.0
+PRINT_PORTAL_IMAGE=ghcr.io/frankevil/print-portal:0.5.1
 ```
 
 因此上架前必须：
@@ -58,7 +58,7 @@ PRINT_PORTAL_IMAGE=ghcr.io/frankevil/print-portal:0.5.0
 docker buildx build \
   --platform linux/amd64 \
   -f deployments/Dockerfile \
-  -t ghcr.io/<你的 GitHub 用户名>/print-portal:0.5.0 \
+  -t ghcr.io/<你的 GitHub 用户名>/print-portal:0.5.1 \
   --push .
 ```
 
@@ -86,7 +86,7 @@ dist/print-portal_<version>_<platform>.fpk
 指定版本或平台：
 
 ```bash
-VERSION=0.5.0 PLATFORM=x86 bash scripts/build-fpk.sh
+VERSION=0.5.1 PLATFORM=x86 bash scripts/build-fpk.sh
 ```
 
 ## 5. fnOS 应用包注意事项
@@ -101,7 +101,7 @@ VERSION=0.5.0 PLATFORM=x86 bash scripts/build-fpk.sh
 
 ## 6. 当前本地测试包
 
-本仓库 `dist/print-portal_0.5.0_x86.fpk` 是当前测试包，镜像地址为 `ghcr.io/frankevil/print-portal:0.5.0`。
+本仓库 `dist/print-portal_0.5.1_x86.fpk` 是当前测试包，镜像地址为 `ghcr.io/frankevil/print-portal:0.5.1`。
 
 正式上架前请完成：
 
@@ -120,11 +120,11 @@ VERSION=0.5.0 PLATFORM=x86 bash scripts/build-fpk.sh
 .github/workflows/docker-publish.yml
 ```
 
-推送 `main` 或 tag `v0.5.0` 后，会在 GitHub Actions 中构建并推送：
+推送 `main` 或 tag `v0.5.1` 后，会在 GitHub Actions 中构建并推送：
 
 ```text
 ghcr.io/frankevil/print-portal:latest
-ghcr.io/frankevil/print-portal:0.5.0
+ghcr.io/frankevil/print-portal:0.5.1
 ghcr.io/frankevil/print-portal:sha-<commit>
 ```
 

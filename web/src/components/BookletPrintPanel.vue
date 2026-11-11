@@ -277,14 +277,12 @@ async function submit() {
 <template>
   <div class="print-layout has-preview">
     <section class="card">
-      <div class="section-head"><div><h2 class="card-title">书籍打印</h2><p class="card-desc">PDF 按 A4 对折成 A5 骑马钉排版，自动补空白页。</p></div></div>
+      <div class="section-head"><div><h2 class="card-title">书籍打印</h2><p class="card-desc">PDF 按 A4 对折成 A5 骑马钉排版，自动补空白页。</p></div><button v-if="nasEnabled" class="btn btn-ghost btn-sm" type="button" @click="pickNasPdf">从 NAS 选择</button></div>
       <button v-if="!file && !nasPath" class="book-drop" type="button" @click="chooseFile">选择 PDF 文件<br><span>点击选择 · 只支持 PDF，本地预览不上传</span></button>
-      <button v-if="!file && !nasPath && nasEnabled" class="book-nas" type="button" @click="pickNasPdf">从 NAS 选择 PDF</button>
       <div v-else class="book-file">
         <div class="book-icon">PDF</div>
         <div style="flex:1"><div class="book-name">{{ sourceName }}</div><div class="book-meta">原文档 {{ pageCount || '…' }} 页 · 将生成 {{ geometry?.sheet_count || '…' }} 张 A4</div></div>
         <button class="btn btn-ghost btn-sm" type="button" @click="chooseFile">更换</button>
-        <button v-if="nasEnabled" class="btn btn-ghost btn-sm" type="button" @click="pickNasPdf">从 NAS 选择</button>
         <button class="book-remove" type="button" @click="file = null; nasPath = ''">×</button>
       </div>
       <input ref="fileInput" class="hidden-file" type="file" accept=".pdf,application/pdf" @change="onFilePicked" />
