@@ -178,6 +178,11 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 	opts.Layout.PaperSize = j.PaperSize
 	opts.Layout.Orientation = j.Orientation
 	opts.Layout.PageRange = j.PageRange
+	opts.Layout.PageParity = j.PageParity
+	if j.PageParity == "odd" || j.PageParity == "even" {
+		// CUPS needs an explicit page list for the parity filter.
+		opts.PageRange = layout.CompactPages(layout.SelectPages(j.Pages, j.PageRange, j.PageParity))
+	}
 	if j.PrintMode != "" && j.PrintMode != "document" {
 		// ID card and invoice modes already produced an A4-ready PDF. Do not
 		// run N-up/rotation/scaling again, and do not forward the page range.
@@ -205,6 +210,17 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 		// Orientation and scaling are already baked into the page geometry, so
 		// they must not be applied again downstream.
 		opts.LaidOut = true
+	}
+
+	// Reverse the page order before chunking. Doing it at the PDF level makes
+	// the setting apply to the whole job even when it is split into chunks.
+	if j.OutputOrder == "reverse" {
+		reversedPath := filepath.Join(jobDir, "reversed.pdf")
+		if err := layout.ReversePages(pdfPath, reversedPath); err != nil {
+			m.fail(j, "reverse page order failed: "+err.Error())
+			return
+		}
+		pdfPath = reversedPath
 	}
 
 	// Large multi-page jobs are split into small CUPS jobs and submitted one at
@@ -655,6 +671,8 @@ func (m *Manager) Retry(id int64) (*storage.Job, error) {
 		SourceIP:      old.SourceIP,
 		Pages:         old.Pages,
 		PageRange:     old.PageRange,
+		PageParity:    old.PageParity,
+		OutputOrder:   old.OutputOrder,
 		Duplex:        old.Duplex,
 		Copies:        old.Copies,
 		PaperSize:     old.PaperSize,
@@ -663,6 +681,7 @@ func (m *Manager) Retry(id int64) (*storage.Job, error) {
 		Scaling:       old.Scaling,
 		PPDOptions:    old.PPDOptions,
 		LayoutOptions: old.LayoutOptions,
+		PrintMode:     old.PrintMode,
 		Status:        "pending",
 		StoredPath:    source,
 	}

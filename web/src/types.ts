@@ -52,13 +52,15 @@ export interface Job {
   cups_user: string
   pages: number
   page_range: string
+  page_parity?: 'all' | 'odd' | 'even'
+  output_order?: 'normal' | 'reverse'
   duplex: string
   copies: number
   paper_size: string
   orientation: string
   color_mode: string
   scaling: string
-  print_mode?: 'document' | 'idcard' | 'invoice'
+  print_mode?: 'document' | 'idcard' | 'invoice' | 'photos' | 'booklet'
   status: JobStatus
   cups_job_id: string
   error_message: string

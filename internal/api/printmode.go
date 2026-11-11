@@ -95,7 +95,22 @@ func (s *Server) handlePrintModeInvoice(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	files := r.MultipartForm.File["files"]
-	if len(files) == 0 {
+	var nasPaths []string
+	if raw := strings.TrimSpace(r.FormValue("nas_paths")); raw != "" {
+		_ = json.Unmarshal([]byte(raw), &nasPaths)
+	}
+	var itemSources []string
+	if raw := strings.TrimSpace(r.FormValue("item_sources")); raw != "" {
+		_ = json.Unmarshal([]byte(raw), &itemSources)
+	}
+	total := len(files)
+	if len(nasPaths) > total {
+		total = len(nasPaths)
+	}
+	if len(itemSources) > 0 {
+		total = len(itemSources)
+	}
+	if total == 0 {
 		writeError(w, http.StatusUnprocessableEntity, "invalid_file", "请至少选择一个发票文件")
 		return
 	}
@@ -121,29 +136,63 @@ func (s *Server) handlePrintModeInvoice(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var inputs []printmode.InvoiceInput
-	for index, header := range files {
-		ext := strings.ToLower(filepath.Ext(header.Filename))
+	fileIndex := 0
+	for index := 0; index < total; index++ {
+		source := "upload"
+		if index < len(itemSources) {
+			source = itemSources[index]
+		}
+		nasPath := ""
+		if index < len(nasPaths) {
+			nasPath = strings.TrimSpace(nasPaths[index])
+		}
+		var name, ext, path string
+		if source == "nas" {
+			if nasPath == "" {
+				writeError(w, http.StatusUnprocessableEntity, "invalid_file", "缺少 NAS 路径")
+				return
+			}
+			real, err := filepath.EvalSymlinks(nasPath)
+			if err != nil || !s.allowedNASPath(real) {
+				writeError(w, http.StatusForbidden, "path_forbidden", "NAS 文件不在允许的目录内")
+				return
+			}
+			path, name = real, filepath.Base(real)
+			ext = strings.ToLower(filepath.Ext(name))
+		} else {
+			if fileIndex >= len(files) {
+				writeError(w, http.StatusUnprocessableEntity, "invalid_file", "缺少发票文件")
+				return
+			}
+			header := files[fileIndex]
+			fileIndex++
+			name = header.Filename
+			ext = strings.ToLower(filepath.Ext(name))
+			// Keep uploaded sources in a separate namespace: ComposeInvoice
+			// generates intermediate files named invoice-001.jpg / invoice-001.pdf,
+			// and a source named invoice-001.pdf would otherwise be appended to.
+			path = filepath.Join(dir, fmt.Sprintf("source-%03d%s", index, ext))
+			file, err := header.Open()
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+				return
+			}
+			if err := saveMultipartFile(file, path); err != nil {
+				file.Close()
+				writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
+				return
+			}
+			file.Close()
+		}
 		if ext != ".pdf" && ext != ".jpg" && ext != ".jpeg" && ext != ".png" {
 			writeError(w, http.StatusUnprocessableEntity, "invalid_file_type", "发票仅支持 PDF、JPG、PNG")
 			return
 		}
-		path := filepath.Join(dir, fmt.Sprintf("invoice-%03d%s", index, ext))
-		file, err := header.Open()
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
-			return
-		}
-		if err := saveMultipartFile(file, path); err != nil {
-			file.Close()
-			writeError(w, http.StatusInternalServerError, "storage_error", err.Error())
-			return
-		}
-		file.Close()
 		kind := "image"
 		if ext == ".pdf" {
 			kind = "pdf"
 		}
-		input := printmode.InvoiceInput{Path: path, Name: header.Filename, Kind: kind}
+		input := printmode.InvoiceInput{Path: path, Name: name, Kind: kind}
 		if kind == "image" {
 			input.WidthMM, input.HeightMM = 210, 140
 			if index < len(sizes) && sizes[index].WidthMM > 0 && sizes[index].HeightMM > 0 {

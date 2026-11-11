@@ -65,6 +65,8 @@
 | `file` | file | 必填 |
 | `printer_id` | int | 必填 |
 | `page_range` | string | 可选，如 `1-2`、`1-5 8` |
+| `page_parity` | string | 可选，`all` / `odd` / `even`，在 page_range 基础上筛奇偶 |
+| `output_order` | string | 可选，`normal` / `reverse`，倒序出纸 |
 | `duplex` | string | `one-sided` / `two-sided-long-edge` / `two-sided-short-edge` |
 | `copies` | int | 默认 1 |
 | `paper_size` | string | 默认 `A4` |
@@ -73,7 +75,7 @@
 | `scaling` | string | `auto` / `fit` / `fill` / `none` |
 | `ppd_options` | string | 可选，PPD 额外选项 JSON，如 `{"Resolution":"600dpi","InputSlot":"Auto"}` |
 | `layout_options` | string | 可选，布局选项 JSON，如 `{"pages_per_sheet":2,"direction":"lrtb","border":true,"reverse":false,"flip_horizontal":false}` |
-| `print_mode` | string | 可选，`document`（默认）/ `idcard` / `invoice` |
+| `print_mode` | string | 可选，`document`（默认）/ `idcard` / `invoice` / `photos` / `booklet` |
 | `preview_id` | string | 可选，复用打印模式或预览会话中已上传的文件 |
 
 响应：`202 Accepted`
@@ -130,6 +132,85 @@
   "page_count": 2,
   "items": [{ "name": "发票.pdf", "kind": "pdf", "pages": [{ "width_mm": 210, "height_mm": 140 }] }],
   "sheets": [{ "index": 0, "items": ["发票.pdf"] }]
+}
+```
+
+#### POST `/api/printmode/photos`
+
+图片打印：多张图片排到指定纸张网格。
+
+| 字段 | 说明 |
+|---|---|
+| `files` | 图片文件，可重复 |
+| `paper_width_mm` / `paper_height_mm` | 纸张宽高（mm） |
+| `per_sheet` | 每张纸 1/2/4/6/8 张 |
+| `arrangement` | `auto` / `horizontal` / `vertical` |
+| `scaling` | `fit` / `fill` |
+| `borderless` | `1` 无边框 |
+| `margin_mm` | 白边边距（mm） |
+| `cut_lines` | `1` 显示裁剪线 |
+
+#### POST `/api/printmode/photos/manual`
+
+手动拼贴：图片按用户给定的纸张坐标渲染。
+
+| 字段 | 说明 |
+|---|---|
+| `files` | 图片文件，可重复 |
+| `paper_width_mm` / `paper_height_mm` | 纸张宽高（mm） |
+| `layout` | JSON，`{ "sheets": [{ "items": [{ "index": 0, "x_mm": 10, "y_mm": 10, "w_mm": 80, "h_mm": 60, "rotation": 0 }] }] }` |
+
+#### POST `/api/printmode/booklet/geometry`
+
+书籍版面计算：不上传 PDF，只根据页数返回骑马钉页序，前端用 PDF.js 本地渲染预览。
+
+请求：
+
+```json
+{
+  "page_count": 38,
+  "signature_pages": 0,
+  "page_range": "",
+  "page_parity": "all"
+}
+```
+
+响应：
+
+```json
+{
+  "padded_pages": 40,
+  "sheet_count": 10,
+  "side_count": 20,
+  "sheets": [
+    { "front": [0, 1], "back": [2, 0] }
+  ]
+}
+```
+
+`0` 表示补的空白页。
+
+#### POST `/api/printmode/booklet`
+
+书籍打印：PDF 按骑马钉排版，返回合订预览以及正面/反面两个打印文件。
+
+| 字段 | 说明 |
+|---|---|
+| `file` | PDF 文件 |
+| `paper_width_mm` / `paper_height_mm` | 展开纸张尺寸（A4 横版 297×210，A3 420×297） |
+| `signature_pages` | 0=整本，或 4/8/16/32 |
+| `cut_lines` | `1` 显示裁剪线 |
+| `nas_path` | 可选，NAS 上的 PDF 路径；与 `file` 二选一 |
+
+响应：
+
+```json
+{
+  "preview_id": "...",
+  "front_preview_id": "...",
+  "back_preview_id": "...",
+  "page_count": 8,
+  "sheet_count": 4
 }
 ```
 

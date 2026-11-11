@@ -30,6 +30,7 @@ type Options struct {
 	PaperSize      string `json:"paper_size"`
 	Orientation    string `json:"orientation"`
 	PageRange      string `json:"-"`
+	PageParity     string `json:"-"` // all / odd / even
 	// Margins is the PPD printable border. It is not part of the JSON contract
 	// because the client never sends it; the server fills it in so the grid is
 	// scored against the same box the preview uses.
@@ -119,7 +120,7 @@ func Apply(ctx context.Context, src, dst string, opts Options) error {
 		// Build the placement with the same function the preview uses, then let
 		// pdfcpu only perform the mechanics. Enforce stays off because the
 		// rotation was already decided by ComputeGeometry.
-		selected := selectedPageNumbers(current, opts.PageRange)
+		selected := selectedPageNumbers(current, opts.PageRange, opts.PageParity)
 		pageAspect := averagePageAspect(current)
 		geometry := ComputeGeometry(selected, opts, opts.Margins, pageAspect)
 		nup.Grid = &types.Dim{Width: float64(geometry.Cols), Height: float64(geometry.Rows)}
@@ -135,16 +136,17 @@ func Apply(ctx context.Context, src, dst string, opts Options) error {
 		}
 		next := filepath.Join(tmpDir, "nup.pdf")
 		var rangeArg []string
-		if strings.TrimSpace(opts.PageRange) != "" {
-			rangeArg = []string{strings.TrimSpace(opts.PageRange)}
+		if strings.TrimSpace(opts.PageRange) != "" || pageParityActive(opts.PageParity) {
+			rangeArg = []string{CompactPages(selected)}
 		}
 		if err := api.NUpFile([]string{current}, next, rangeArg, nup, conf); err != nil {
 			return fmt.Errorf("N-up layout failed: %w", err)
 		}
 		current = next
-	} else if strings.TrimSpace(opts.PageRange) != "" {
+	} else if strings.TrimSpace(opts.PageRange) != "" || pageParityActive(opts.PageParity) {
+		selected := selectedPageNumbers(current, opts.PageRange, opts.PageParity)
 		next := filepath.Join(tmpDir, "selected.pdf")
-		if err := api.CollectFile(current, next, []string{strings.TrimSpace(opts.PageRange)}, conf); err != nil {
+		if err := api.CollectFile(current, next, []string{CompactPages(selected)}, conf); err != nil {
 			return fmt.Errorf("page selection failed: %w", err)
 		}
 		current = next
@@ -184,42 +186,98 @@ func paperDimensionsFor(pageSize string) (float64, float64) {
 
 // selectedPageNumbers expands a page range like "1-3,5" into page numbers.
 // An empty range means every page.
-func selectedPageNumbers(pdf, pageRange string) []int {
-	total := pageCountOf(pdf)
+func selectedPageNumbers(pdf, pageRange, parity string) []int {
+	return SelectPages(pageCountOf(pdf), pageRange, parity)
+}
+
+// SelectPages expands a page range and applies the odd/even filter. An empty
+// range means every page.
+func SelectPages(total int, pageRange, parity string) []int {
 	text := strings.TrimSpace(pageRange)
-	if text == "" {
-		pages := make([]int, 0, total)
-		for page := 1; page <= total; page++ {
-			pages = append(pages, page)
-		}
-		return pages
-	}
 	seen := map[int]bool{}
-	for _, token := range strings.FieldsFunc(text, func(r rune) bool { return r == ' ' || r == ',' }) {
-		parts := strings.SplitN(token, "-", 2)
-		start, err := strconv.Atoi(parts[0])
-		if err != nil || start < 1 {
-			continue
-		}
-		end := start
-		if len(parts) == 2 {
-			if value, convErr := strconv.Atoi(parts[1]); convErr == nil && value >= start {
-				end = value
-			}
-		}
-		if total > 0 && end > total {
-			end = total
-		}
-		for page := start; page <= end; page++ {
+	if text == "" {
+		for page := 1; page <= total; page++ {
 			seen[page] = true
+		}
+	} else {
+		for _, token := range strings.FieldsFunc(text, func(r rune) bool { return r == ' ' || r == ',' }) {
+			parts := strings.SplitN(token, "-", 2)
+			start, err := strconv.Atoi(parts[0])
+			if err != nil || start < 1 {
+				continue
+			}
+			end := start
+			if len(parts) == 2 {
+				if value, convErr := strconv.Atoi(parts[1]); convErr == nil && value >= start {
+					end = value
+				}
+			}
+			if total > 0 && end > total {
+				end = total
+			}
+			for page := start; page <= end; page++ {
+				seen[page] = true
+			}
 		}
 	}
 	pages := make([]int, 0, len(seen))
 	for page := range seen {
+		if parity == "odd" && page%2 == 0 {
+			continue
+		}
+		if parity == "even" && page%2 == 1 {
+			continue
+		}
 		pages = append(pages, page)
 	}
 	sort.Ints(pages)
 	return pages
+}
+
+// ReversePages writes the pages of src in reverse order to dst. This is used
+// before chunking so "reverse paper order" applies to the whole document.
+func ReversePages(src, dst string) error {
+	dims, err := api.PageDimsFile(src)
+	if err != nil {
+		return err
+	}
+	pages := make([]string, 0, len(dims))
+	for page := len(dims); page >= 1; page-- {
+		pages = append(pages, strconv.Itoa(page))
+	}
+	return api.CollectFile(src, dst, pages, nil)
+}
+
+// CompactPages turns [1,3,5,7,9] into "1,3,5,7,9" and [1,2,3,5] into "1-3,5".
+func CompactPages(pages []int) string {
+	if len(pages) == 0 {
+		return ""
+	}
+	sorted := append([]int(nil), pages...)
+	sort.Ints(sorted)
+	var parts []string
+	start, prev := sorted[0], sorted[0]
+	flush := func() {
+		if start == prev {
+			parts = append(parts, strconv.Itoa(start))
+		} else {
+			parts = append(parts, strconv.Itoa(start)+"-"+strconv.Itoa(prev))
+		}
+	}
+	for _, page := range sorted[1:] {
+		if page == prev+1 {
+			prev = page
+			continue
+		}
+		flush()
+		start, prev = page, page
+	}
+	flush()
+	return strings.Join(parts, ",")
+}
+
+func pageParityActive(parity string) bool {
+	return parity == "odd" || parity == "even"
 }
 
 func pageCountOf(pdf string) int {

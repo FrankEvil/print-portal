@@ -1,26 +1,34 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { TrimApp } from '@trimjs/web-app'
 import { api, apiUrl } from '../api'
 import { toast } from '../toast'
 import type { Printer } from '../types'
 import CropEditor from './CropEditor.vue'
 import ModePreview from './ModePreview.vue'
 
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(pdfjsWorker, document.baseURI).href
+
 interface PageSize { width_mm: number; height_mm: number }
 interface InvoiceItem {
   id: number
-  file: File
+  file?: File
+  nasPath?: string
   blob?: Blob
   name: string
   kind: 'pdf' | 'image'
   pages: PageSize[]
   preset: number
+  sourceUrl: string
   previewUrl: string
 }
 
 const props = defineProps<{
   printers: Printer[]
   printerId: number | null
+  nasEnabled?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'update:printerId', value: number): void
@@ -46,6 +54,7 @@ const trim = ref(true)
 const cutLines = ref(true)
 const copies = ref(1)
 const previewId = ref('')
+const outputPages = ref(0)
 const previewLoading = ref(false)
 const composeError = ref('')
 const submitting = ref(false)
@@ -60,15 +69,24 @@ const previewSrc = computed(() => previewId.value ? `/api/printmode/preview/${pr
 const canPrint = computed(() => previewId.value !== '' && !previewLoading.value && items.value.length > 0 && !submitting.value && items.value.every((item) => item.kind === 'pdf' || item.blob))
 const editingItem = computed(() => items.value.find((item) => item.id === editingId.value) || null)
 
-watch([items, perSheet, trim, cutLines], () => {
-  window.clearTimeout(composeTimer)
-  composeTimer = window.setTimeout(compose, 350)
-}, { deep: true })
+watch(
+  [
+    () => items.value.map((item) => `${item.id}:${item.preset}:${item.blob ? '1' : '0'}`).join('|'),
+    perSheet,
+    trim,
+    cutLines,
+  ],
+  () => {
+    window.clearTimeout(composeTimer)
+    composeTimer = window.setTimeout(compose, 350)
+  },
+)
 
 onUnmounted(() => {
   window.clearTimeout(composeTimer)
   for (const item of items.value) {
-    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+    if (item.previewUrl.startsWith('blob:')) URL.revokeObjectURL(item.previewUrl)
+    if (item.sourceUrl.startsWith('blob:') && item.sourceUrl !== item.previewUrl) URL.revokeObjectURL(item.sourceUrl)
   }
 })
 
@@ -80,14 +98,15 @@ function onFilesPicked(event: Event) {
   const input = event.target as HTMLInputElement
   const files = Array.from(input.files || [])
   input.value = ''
-  if (files.length) ingest(files)
+  if (files.length) addLocalFiles(files)
 }
 
-function ingest(files: File[]) {
+function addLocalFiles(files: File[]) {
   const added: InvoiceItem[] = []
   for (const file of files) {
     const ext = file.name.toLowerCase().split('.').pop() || ''
     const kind: 'pdf' | 'image' = ext === 'pdf' ? 'pdf' : 'image'
+    const url = URL.createObjectURL(file)
     const item: InvoiceItem = {
       id: nextId++,
       file,
@@ -95,27 +114,95 @@ function ingest(files: File[]) {
       kind,
       pages: [],
       preset: 0,
-      previewUrl: '',
+      sourceUrl: url,
+      previewUrl: url,
     }
     items.value.push(item)
     added.push(item)
   }
-  void inspect(added)
+  void inspectLocal(added)
   const firstImage = added.find((item) => item.kind === 'image')
   if (firstImage) openEditor(firstImage)
 }
 
-async function inspect(targets: InvoiceItem[]) {
-  const form = new FormData()
-  for (const item of targets) form.append('files', item.file, item.name)
+async function pickNasFiles() {
   try {
-    const result = await api.upload<{ items: { name: string; kind: string; pages: PageSize[] }[] }>('/api/printmode/inspect', form)
-    targets.forEach((item, index) => {
-      const info = result.items[index]
-      if (info) item.pages = info.pages || []
+    const sdk = new TrimApp()
+    if (sdk.isStandaloneWeb) {
+      toast.error('请从飞牛应用中心打开后选择 NAS 文件')
+      return
+    }
+    const result = await sdk.pickUserFile({
+      directory: false,
+      multiple: true,
+      title: '选择发票文件',
+      okText: '选择',
+      accept: ['.pdf', '.jpg', '.jpeg', '.png'],
+      sidebarGroup: ['myFiles', 'otherShare', 'favorites'],
     })
+    const paths: string[] = result?.data || []
+    if (!paths.length) return
+    addNasPaths(paths)
+    toast.success(`已从 NAS 选择 ${paths.length} 个文件`)
   } catch (e) {
-    toast.error(`读取发票信息失败：${(e as Error).message}`)
+    toast.error((e as Error).message || '选择 NAS 文件失败')
+  }
+}
+
+function addNasPaths(paths: string[]) {
+  const added: InvoiceItem[] = []
+  for (const path of paths) {
+    const name = path.split(/[\\/]/).pop() || path
+    const ext = name.toLowerCase().split('.').pop() || ''
+    const kind: 'pdf' | 'image' = ext === 'pdf' ? 'pdf' : 'image'
+    const url = apiUrl(`/api/nas/preview?path=${encodeURIComponent(path)}`)
+    const item: InvoiceItem = {
+      id: nextId++,
+      nasPath: path,
+      name,
+      kind,
+      pages: [],
+      preset: 0,
+      sourceUrl: url,
+      previewUrl: url,
+    }
+    items.value.push(item)
+    added.push(item)
+  }
+  void inspectLocal(added)
+  const firstImage = added.find((item) => item.kind === 'image')
+  if (firstImage) openEditor(firstImage)
+}
+
+async function inspectLocal(targets: InvoiceItem[]) {
+  for (const item of targets) {
+    if (item.kind === 'image') {
+      item.pages = []
+      continue
+    }
+    try {
+      let data: ArrayBuffer
+      if (item.file) {
+        data = await item.file.arrayBuffer()
+      } else if (item.nasPath) {
+        const res = await fetch(item.sourceUrl)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        data = await res.arrayBuffer()
+      } else {
+        continue
+      }
+      const doc = await pdfjsLib.getDocument({ data }).promise
+      const pages: PageSize[] = []
+      for (let i = 1; i <= doc.numPages; i++) {
+        const page = await doc.getPage(i)
+        const viewport = page.getViewport({ scale: 1 })
+        pages.push({ width_mm: viewport.width / 72 * 25.4, height_mm: viewport.height / 72 * 25.4 })
+      }
+      item.pages = pages
+      await doc.destroy()
+    } catch (e) {
+      toast.error(`读取发票信息失败：${(e as Error).message}`)
+    }
   }
 }
 
@@ -138,9 +225,9 @@ function itemMeta(item: InvoiceItem) {
 
 function openEditor(item: InvoiceItem) {
   if (item.kind !== 'image') return
-  if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
-  item.previewUrl = URL.createObjectURL(item.file)
-  editorSrc.value = item.previewUrl
+  if (item.previewUrl.startsWith('blob:')) URL.revokeObjectURL(item.previewUrl)
+  item.previewUrl = item.sourceUrl
+  editorSrc.value = item.sourceUrl
   editingId.value = item.id
 }
 
@@ -148,7 +235,7 @@ function onCropConfirm(blob: Blob) {
   const item = editingItem.value
   if (!item) return
   item.blob = blob
-  if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+  if (item.previewUrl.startsWith('blob:')) URL.revokeObjectURL(item.previewUrl)
   item.previewUrl = URL.createObjectURL(blob)
   editingId.value = null
 }
@@ -158,19 +245,22 @@ function onCropCancel() {
 }
 
 function removeItem(item: InvoiceItem) {
-  if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+  if (item.previewUrl.startsWith('blob:')) URL.revokeObjectURL(item.previewUrl)
+  if (item.sourceUrl.startsWith('blob:') && item.sourceUrl !== item.previewUrl) URL.revokeObjectURL(item.sourceUrl)
   items.value = items.value.filter((candidate) => candidate.id !== item.id)
 }
 
 async function compose() {
   if (!items.value.length) {
     previewId.value = ''
+    outputPages.value = 0
     previewLoading.value = false
     composeError.value = ''
     return
   }
   if (items.value.some((item) => item.kind === 'image' && !item.blob)) {
     previewId.value = ''
+    outputPages.value = 0
     previewLoading.value = false
     composeError.value = '请先裁剪所有图片发票'
     return
@@ -181,22 +271,42 @@ async function compose() {
   try {
     const form = new FormData()
     const sizes: PageSize[] = []
+    const nasPaths: string[] = []
+    const itemSources: string[] = []
     for (const item of items.value) {
-      const file = item.kind === 'image' ? (item.blob || item.file) : item.file
-      form.append('files', file, item.name)
       if (item.kind === 'image') {
+        if (!item.blob) throw new Error('请先裁剪所有图片发票')
+        form.append('files', item.blob, item.name)
+        nasPaths.push('')
+        itemSources.push('upload')
         const preset = presetOf(item)
         sizes.push({ width_mm: preset.width, height_mm: preset.height })
-      } else {
-        sizes.push({ width_mm: 0, height_mm: 0 })
+        continue
       }
+      // PDF: a NAS file is read server-side; a local file is uploaded once.
+      if (item.nasPath) {
+        nasPaths.push(item.nasPath)
+        itemSources.push('nas')
+      } else if (item.file) {
+        nasPaths.push('')
+        itemSources.push('upload')
+        form.append('files', item.file, item.name)
+      } else {
+        throw new Error(`发票文件不可用：${item.name}`)
+      }
+      sizes.push({ width_mm: 0, height_mm: 0 })
     }
+    form.append('nas_paths', JSON.stringify(nasPaths))
+    form.append('item_sources', JSON.stringify(itemSources))
     form.append('image_sizes', JSON.stringify(sizes))
     form.append('per_sheet', String(perSheet.value))
     form.append('trim', trim.value ? '1' : '0')
     form.append('cut_lines', cutLines.value ? '1' : '0')
-    const result = await api.upload<{ preview_id: string }>('/api/printmode/invoice', form)
-    if (request === composeToken) previewId.value = result.preview_id
+    const result = await api.upload<{ preview_id: string; page_count: number }>('/api/printmode/invoice', form)
+    if (request === composeToken) {
+      previewId.value = result.preview_id
+      outputPages.value = result.page_count
+    }
   } catch (e) {
     if (request === composeToken) {
       previewId.value = ''
@@ -240,6 +350,7 @@ async function submit() {
           <h2 class="card-title">发票</h2>
           <p class="card-desc">支持 PDF 电子发票和 JPG / PNG 图片，按原始尺寸排版，不缩放。</p>
         </div>
+        <button v-if="nasEnabled" class="btn btn-ghost btn-sm" type="button" @click="pickNasFiles">从 NAS 选择</button>
       </div>
 
       <div class="invoice-list">
@@ -262,7 +373,7 @@ async function submit() {
         <div class="invoice-preview-head">打印预览</div>
         <div v-if="previewLoading" class="invoice-preview-state">正在合成 A4 版面…</div>
         <div v-else-if="composeError" class="invoice-preview-state error">{{ composeError }}</div>
-        <ModePreview v-else :src="previewSrc" label="发票" :max-width="520" />
+        <ModePreview v-else :key="previewId" :src="previewSrc" label="发票" :max-width="520" />
       </div>
     </section>
 
@@ -305,7 +416,9 @@ async function submit() {
       <button class="btn btn-primary invoice-print" type="button" :disabled="!canPrint" @click="submit">
         {{ submitting ? '提交中…' : `打印 ${items.length} 张发票` }}
       </button>
-      <p class="card-desc" style="text-align: center; margin-top: 10px">提交后即可离开，任务在后台排队处理</p>
+      <p class="card-desc" style="text-align: center; margin-top: 6px">
+        <template v-if="outputPages > 0">将输出 {{ outputPages }} 张 A4 · </template>提交后即可离开，任务在后台排队处理
+      </p>
     </section>
 
     <input ref="fileInput" class="hidden-file" type="file" multiple accept=".pdf,.jpg,.jpeg,.png" @change="onFilesPicked" />

@@ -226,11 +226,17 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	}
 	printMode := normalizePrintMode(r.FormValue("print_mode"))
 	pageRange := strings.TrimSpace(r.FormValue("page_range"))
+	pageParity := normalizePageParity(r.FormValue("page_parity"))
+	outputOrder := normalizeOutputOrder(r.FormValue("output_order"))
 	duplex := defaultStr(r.FormValue("duplex"), "one-sided")
 	if printMode != "document" {
 		// The print mode composer has already produced the final A4 pages.
 		pageRange = ""
-		duplex = "one-sided"
+		// Booklet mode needs the duplex setting the user selected; ID card,
+		// invoice and photo modes are always single-sided.
+		if printMode != "booklet" {
+			duplex = "one-sided"
+		}
 	}
 	j := &storage.Job{
 		PrinterID:     printerID,
@@ -238,6 +244,8 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		Filename:      filename,
 		SourceIP:      clientIP(r),
 		PageRange:     pageRange,
+		PageParity:    pageParity,
+		OutputOrder:   outputOrder,
 		Duplex:        duplex,
 		PrintMode:     printMode,
 		Copies:        copies,
@@ -490,6 +498,8 @@ func (s *Server) handlePrintNAS(w http.ResponseWriter, r *http.Request) {
 		PrinterID     int64  `json:"printer_id"`
 		Path          string `json:"path"`
 		PageRange     string `json:"page_range"`
+		PageParity    string `json:"page_parity"`
+		OutputOrder   string `json:"output_order"`
 		Duplex        string `json:"duplex"`
 		Copies        int    `json:"copies"`
 		PaperSize     string `json:"paper_size"`
@@ -571,7 +581,8 @@ func (s *Server) handlePrintNAS(w http.ResponseWriter, r *http.Request) {
 	}
 	j := &storage.Job{
 		PrinterID: body.PrinterID, Source: "web", Filename: filename, SourceIP: clientIP(r),
-		PageRange: strings.TrimSpace(body.PageRange), Duplex: defaultStr(body.Duplex, "one-sided"),
+		PageRange: strings.TrimSpace(body.PageRange), PageParity: normalizePageParity(body.PageParity),
+		OutputOrder: normalizeOutputOrder(body.OutputOrder), Duplex: defaultStr(body.Duplex, "one-sided"),
 		Copies: copies, PaperSize: defaultStr(body.PaperSize, "A4"),
 		Orientation: defaultStr(body.Orientation, "portrait"), ColorMode: defaultStr(body.ColorMode, "monochrome"),
 		Scaling: defaultStr(body.Scaling, "auto"), PPDOptions: normalizePPDOptions(body.PPDOptions),
@@ -868,9 +879,25 @@ func sanitizeFilename(name string) string {
 	return name
 }
 
+func normalizeOutputOrder(v string) string {
+	if strings.ToLower(strings.TrimSpace(v)) == "reverse" {
+		return "reverse"
+	}
+	return "normal"
+}
+
+func normalizePageParity(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "odd", "even":
+		return strings.ToLower(strings.TrimSpace(v))
+	default:
+		return "all"
+	}
+}
+
 func normalizePrintMode(v string) string {
 	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "idcard", "invoice":
+	case "idcard", "invoice", "photos", "booklet":
 		return strings.ToLower(strings.TrimSpace(v))
 	default:
 		return "document"

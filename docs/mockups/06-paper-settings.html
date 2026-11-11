@@ -1,0 +1,61 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+:root{--bg:#f4f6fb;--surface:#fff;--surface-2:#f8fafc;--text:#0f172a;--text-2:#475569;--text-3:#94a3b8;--line:#e2e8f0;--accent:#4f46e5;--accent-soft:#eef2ff;}
+*{box-sizing:border-box}html,body{margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;color:var(--text);background:radial-gradient(1200px 600px at 10% -10%,#e0e7ff 0,transparent 45%),radial-gradient(1000px 500px at 110% 0%,#fce7f3 0,transparent 40%),var(--bg);-webkit-font-smoothing:antialiased}
+.page{width:1440px;height:1000px;padding:34px 120px}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:34px}
+.brand{display:flex;align-items:center;gap:14px}
+.logo{width:46px;height:46px;border-radius:13px;background:linear-gradient(135deg,#8b7cf6,#5b54e8);color:#fff;font-weight:800;font-size:23px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(79,70,229,.28)}
+.brand-title{font-size:20px;font-weight:700}.brand-sub{font-size:12px;color:var(--text-3);margin-top:3px}
+.nav{display:flex;gap:34px;font-size:15px;color:var(--text-2)}.nav .on{color:var(--accent);font-weight:600}
+.layout{display:grid;grid-template-columns:1fr 390px;gap:28px;align-items:start}
+.card{background:var(--surface);border-radius:18px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 16px 40px rgba(15,23,42,.06);padding:28px 30px}
+.card-title{font-size:20px;font-weight:700;margin:0 0 8px}.card-sub{font-size:13px;color:var(--text-2);margin:0 0 20px;line-height:1.6}
+.dropzone{height:360px;border:1.5px dashed #cbd5e1;border-radius:16px;background:#fafbfe;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-3);font-size:14px}
+.dropzone-icon{width:48px;height:48px;border-radius:12px;background:var(--accent-soft);color:var(--accent);font-size:28px;line-height:48px;text-align:center}
+.field{margin-bottom:14px}.field label{display:block;font-size:13px;color:var(--text-2);font-weight:600;margin-bottom:7px}
+.input,.select{width:100%;height:42px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:0 12px;font-size:14px;display:flex;align-items:center;justify-content:space-between;color:var(--text)}
+.select::after{content:"⌄";color:var(--text-3);font-size:15px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.section{border-top:1px solid var(--line);margin-top:20px;padding-top:16px}
+.section-title{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:700;color:var(--text);margin-bottom:14px;cursor:pointer}
+.section-title .arrow{color:var(--text-3);font-size:12px;transform:rotate(180deg)}
+.badge{font-size:11px;color:#15803d;background:#dcfce7;border-radius:999px;padding:3px 8px;font-weight:600;margin-left:8px;vertical-align:middle}
+.hint{font-size:11px;color:var(--text-3);margin-top:6px;line-height:1.5}
+.button{height:46px;border:0;border-radius:10px;width:100%;background:linear-gradient(180deg,#6d63f0,#4f46e5);color:#fff;font-size:14px;font-weight:600;margin-top:18px;box-shadow:0 8px 20px rgba(79,70,229,.25)}
+.footer-note{text-align:center;font-size:12px;color:var(--text-3);margin-top:10px}
+.layout-collapsed{border-top:1px solid var(--line);margin-top:18px;padding-top:16px;color:var(--text-2);font-size:14px;font-weight:600;display:flex;justify-content:space-between}
+</style></head><body><div class="page">
+  <div class="header"><div class="brand"><div class="logo">P</div><div><div class="brand-title">Print Portal</div><div class="brand-sub">局域网打印门户</div></div></div><div class="nav"><span class="on">打印</span><span>扫描</span><span>管理</span><span>新窗口</span></div></div>
+  <div class="layout">
+    <section class="card">
+      <h2 class="card-title">选择文件</h2><p class="card-sub">支持 PDF、图片、Word / Excel / PPT、PostScript，单次一个文件</p>
+      <div class="dropzone"><div class="dropzone-icon">＋</div><div><strong>拖拽文件到这里</strong>，或点击选择</div><div style="font-size:12px;color:#94a3b8">最大 200MB</div></div>
+    </section>
+    <section class="card">
+      <h2 class="card-title">打印设置</h2><p class="card-sub">参数会根据所选打印机的 PPD 能力生效</p>
+      <div class="field"><label>打印机</label><div class="select">Brother DCP-7060D（默认）</div></div>
+      <div class="grid2">
+        <div class="field"><label>页码范围</label><div class="input" style="color:#94a3b8">全部，如 1-2 或 1-5 8</div></div>
+        <div class="field"><label>份数</label><div class="input">1</div></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>双面</label><div class="select">单面</div></div>
+        <div class="field"><label>纸张</label><div class="select">A4</div></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>方向</label><div class="select">纵向</div></div>
+        <div class="field"><label>缩放</label><div class="select">自动</div></div>
+      </div>
+      <div class="section">
+        <div class="section-title"><span>纸张设置 <span class="badge">新增</span></span><span class="arrow">⌃</span></div>
+        <div class="field"><label>待打印张数</label><div class="select">所有张数</div><div class="hint">先在「页码范围」内筛选：全部 / 奇数页 / 偶数页</div></div>
+        <div class="field" style="margin-bottom:0"><label>纸张顺序</label><div class="select">自动</div><div class="hint">自动 / 正序 / 倒序，只影响出纸顺序</div></div>
+      </div>
+      <div class="layout-collapsed"><span>布局</span><span style="color:#94a3b8">⌄</span></div>
+      <button class="button">打印</button>
+      <div class="footer-note">提交后即可离开，任务在后台排队处理</div>
+    </section>
+  </div>
+</div></body></html>

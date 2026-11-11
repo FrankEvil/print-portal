@@ -1,0 +1,59 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>
+:root{--bg:#f4f6fb;--surface:#fff;--surface-2:#f8fafc;--text:#0f172a;--text-2:#475569;--text-3:#94a3b8;--line:#e2e8f0;--accent:#4f46e5;--accent-soft:#eef2ff;}
+*{box-sizing:border-box}html,body{margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;color:var(--text);background:radial-gradient(1200px 600px at 10% -10%,#e0e7ff 0,transparent 45%),radial-gradient(1000px 500px at 110% 0%,#fce7f3 0,transparent 40%),var(--bg);-webkit-font-smoothing:antialiased}
+.page{width:1440px;height:1100px;padding:34px 120px}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+.brand{display:flex;align-items:center;gap:14px}.logo{width:46px;height:46px;border-radius:13px;background:linear-gradient(135deg,#8b7cf6,#5b54e8);color:#fff;font-weight:800;font-size:23px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(79,70,229,.28)}
+.brand-title{font-size:20px;font-weight:700}.brand-sub{font-size:12px;color:var(--text-3);margin-top:3px}
+.nav{display:flex;gap:34px;font-size:15px;color:var(--text-2)}.nav .on{color:var(--accent);font-weight:600}
+.mode-bar{display:inline-flex;gap:2px;background:#f1f5f9;border-radius:14px;padding:4px;margin-bottom:18px}
+.mode-pill{border:0;background:transparent;color:var(--text-2);font-size:14px;font-weight:600;padding:10px 22px;border-radius:11px}
+.mode-pill.active{background:#fff;color:var(--accent);box-shadow:0 1px 2px rgba(15,23,42,.06),0 4px 12px rgba(15,23,42,.08)}
+.layout{display:grid;grid-template-columns:1fr 390px;gap:28px;align-items:start}
+.card{background:var(--surface);border-radius:18px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 16px 40px rgba(15,23,42,.06);padding:26px 30px}
+.card-title{font-size:20px;font-weight:700;margin:0 0 8px}.card-sub{font-size:13px;color:var(--text-2);margin:0 0 18px;line-height:1.6}
+.field{margin-bottom:14px}.field label{display:block;font-size:13px;color:var(--text-2);font-weight:600;margin-bottom:6px}
+.input,.select{width:100%;height:42px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:0 12px;font-size:14px;display:flex;align-items:center;justify-content:space-between;color:var(--text)}
+.select::after{content:"⌄";color:var(--text-3);font-size:15px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hint{font-size:11px;color:var(--text-3);margin-top:6px;line-height:1.5}
+.btn{height:46px;border:0;border-radius:10px;background:linear-gradient(180deg,#6d63f0,#4f46e5);color:#fff;font-size:14px;font-weight:600;width:100%;margin-top:18px;box-shadow:0 8px 20px rgba(79,70,229,.25)}
+.footer-note{text-align:center;font-size:12px;color:var(--text-3);margin-top:10px}
+.pdf-row{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff}
+.pdf-icon{width:44px;height:44px;border-radius:10px;background:#eef2ff;color:#4f46e5;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.pdf-name{font-size:14px;font-weight:600}.pdf-meta{font-size:11px;color:var(--text-3);margin-top:4px}
+.preview-head{display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px}.preview-title{font-size:14px;font-weight:700}
+.pager{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-2)}
+.pager button,.side-btn{border:1px solid var(--line);background:#fff;color:var(--text-2);border-radius:8px;padding:5px 9px;font-size:11px;cursor:pointer}
+.side-tabs{display:flex;gap:4px;justify-content:center;margin-bottom:10px}
+.side-btn.on{background:var(--accent-soft);color:var(--accent);border-color:#c7d2fe;font-weight:600}
+.paper{width:100%;aspect-ratio:297/210;background:#fff;border:1px solid #dbe3ee;box-shadow:0 8px 24px rgba(15,23,42,.12);position:relative;display:flex;padding:16px;gap:14px}
+.paper .slot{flex:1;border:1px solid #eef2f7;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#94a3b8;font-size:13px;background:#fcfdff}
+.paper .slot .num{font-size:20px;color:#64748b;font-weight:600}.paper .slot .cap{font-size:11px;margin-top:6px;color:#94a3b8}
+.paper .fold{position:absolute;left:50%;top:16px;bottom:16px;border-left:1.5px dashed #cbd5e1}
+.paper .paper-cap{position:absolute;left:0;bottom:-22px;width:100%;text-align:center;font-size:10px;color:#94a3b8}
+.thumbs{display:flex;gap:6px;margin-top:30px;overflow:hidden}
+.thumb{width:62px;height:48px;border:1px solid var(--line);border-radius:5px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;color:#94a3b8;flex:0 0 auto}
+.thumb.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.thumb small{display:block;font-size:7px;color:inherit;margin-top:2px}
+.adv{border-top:1px solid var(--line);margin-top:14px;padding-top:12px;font-size:13px;color:var(--text-2);font-weight:600;display:flex;justify-content:space-between}
+.adv-hint{font-size:11px;color:var(--text-3);margin-top:8px;line-height:1.5}
+.info{font-size:12px;color:var(--text-3);background:#f8fafc;border-radius:10px;padding:11px 12px;line-height:1.6;margin-top:12px}
+</style></head><body><div class="page"><div class="header"><div class="brand"><div class="logo">P</div><div><div class="brand-title">Print Portal</div><div class="brand-sub">局域网打印门户</div></div></div><div class="nav"><span class="on">打印</span><span>扫描</span><span>管理</span><span>新窗口</span></div></div><div class="mode-bar"><button class="mode-pill">普通文档</button><button class="mode-pill">身份证</button><button class="mode-pill">发票</button><button class="mode-pill">图片打印</button><button class="mode-pill active">书籍打印</button></div><div class="layout">
+<section class="card"><h2 class="card-title">书籍打印</h2><p class="card-sub">PDF 按 A4 对折成 A5 骑马钉排版，自动补空白页。</p>
+<div class="pdf-row"><div class="pdf-icon">PDF</div><div style="flex:1"><div class="pdf-name">Y3-幼小衔接基本笔画-38个.pdf</div><div class="pdf-meta">原文档 38 页 · 将生成 10 张 A4</div></div></div>
+<div class="preview-head"><div class="preview-title">打印预览</div><div class="pager"><button>上一张</button><span>第 1 张 / 共 10 张</span><button>下一张</button></div></div>
+<div class="side-tabs"><button class="side-btn on">正面</button><button class="side-btn">反面</button></div>
+<div class="paper"><div class="slot"><div class="num">第 40 页</div><div class="cap">空白补页</div></div><div class="slot"><div class="num">第 1 页</div><div class="cap">封面</div></div><div class="fold"></div><div class="paper-cap">A4 纸正面 · 沿中间折线对折后，右页为封面</div></div>
+<div class="thumbs"><div class="thumb on">第1张<small>正面</small></div><div class="thumb">第1张<small>反面</small></div><div class="thumb">第2张<small>正面</small></div><div class="thumb">第2张<small>反面</small></div><div class="thumb">第3张<small>正面</small></div><div class="thumb">第3张<small>反面</small></div><div class="thumb">…</div></div>
+</section><section class="card"><h2 class="card-title">书籍设置</h2><p class="card-sub">默认骑马钉，所有选项都可以改。</p>
+<div class="field"><label>打印机</label><div class="select">Brother DCP-7060D（默认）</div></div>
+<div class="field"><label>纸张</label><div class="select">A4 → A5</div></div>
+<div class="grid2"><div class="field"><label>装订方式</label><div class="select">骑马钉</div></div><div class="field"><label>双面</label><div class="select">自动双面（长边）</div></div></div>
+<div class="field"><label>份数</label><div class="input">1</div></div>
+<div class="adv"><span>高级设置</span><span style="color:#94a3b8">⌄</span></div>
+<div class="adv-hint">分册设置、页码范围等不常用选项收在这里，默认整本装订。</div>
+<div class="info">原文档 38 页 → 补空白后 40 页<br>将输出 10 张 A4，正反面共 20 面</div>
+<button class="btn">打印书籍</button><div class="footer-note">预览在本地完成，只有打印时才会上传 PDF</div>
+</section></div></div></body></html>

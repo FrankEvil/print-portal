@@ -10,10 +10,12 @@ import { formatJobParams } from '../jobDisplay'
 import StatusBadge from '../components/StatusBadge.vue'
 import IdCardPrintPanel from '../components/IdCardPrintPanel.vue'
 import InvoicePrintPanel from '../components/InvoicePrintPanel.vue'
+import ImagePrintPanel from '../components/ImagePrintPanel.vue'
+import BookletPrintPanel from '../components/BookletPrintPanel.vue'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(pdfjsWorker, document.baseURI).href
 
-const printMode = ref<'document' | 'idcard' | 'invoice'>('document')
+const printMode = ref<'document' | 'idcard' | 'invoice' | 'photos' | 'booklet'>('document')
 const printers = ref<Printer[]>([])
 const selectedPrinter = ref<number | null>(null)
 const ppdOptions = ref<PPDOption[]>([])
@@ -42,6 +44,8 @@ let previewSessionPromise: Promise<string> | null = null
 
 const form = ref({
   page_range: '',
+  page_parity: 'all',
+  output_order: 'normal',
   duplex: 'one-sided',
   copies: 1,
   paper_size: 'A4',
@@ -202,6 +206,9 @@ function compactPages(pages: number[]): string {
 
 function syncPageRangeFromSelection() {
   const total = pageCount.value || 0
+  // A manual checkbox selection is an explicit page list; clear the
+  // odd/even filter so it cannot be applied twice.
+  form.value.page_parity = 'all'
   if (!selectedPages.value.length) {
     form.value.page_range = ''
     return
@@ -221,27 +228,36 @@ function togglePage(page: number) {
   syncPageRangeFromSelection()
 }
 
-function parsePageSelection(value: string, total: number): number[] | null {
+function parsePageSelection(value: string, total: number, parity = form.value.page_parity): number[] | null {
   const text = value.trim()
-  if (!text) return Array.from({ length: total }, (_, i) => i + 1)
   const pages = new Set<number>()
-  for (const token of text.split(/[\s,]+/).filter(Boolean)) {
-    const match = token.match(/^(\d+)(?:-(\d+))?$/)
-    if (!match) return null
-    const start = Number(match[1])
-    const end = match[2] ? Number(match[2]) : start
-    if (start < 1 || end < start || end > total) return null
-    for (let page = start; page <= end; page++) pages.add(page)
+  if (!text) {
+    for (let page = 1; page <= total; page++) pages.add(page)
+  } else {
+    for (const token of text.split(/[\s,]+/).filter(Boolean)) {
+      const match = token.match(/^(\d+)(?:-(\d+))?$/)
+      if (!match) return null
+      const start = Number(match[1])
+      const end = match[2] ? Number(match[2]) : start
+      if (start < 1 || end < start || end > total) return null
+      for (let page = start; page <= end; page++) pages.add(page)
+    }
   }
-  return Array.from(pages).sort((a, b) => a - b)
+  return Array.from(pages)
+    .filter((page) => parity === 'all' || (parity === 'odd' ? page % 2 === 1 : page % 2 === 0))
+    .sort((a, b) => a - b)
 }
 
-function onPageRangeInput() {
+function applyPageSelection() {
   if (!isPdf.value && !isNasPdf.value) return
   const total = pageCount.value || 0
   if (!total) return
   const parsed = parsePageSelection(form.value.page_range, total)
   if (parsed) selectedPages.value = parsed
+}
+
+function onPageRangeInput() {
+  applyPageSelection()
 }
 
 const colorOption = computed(() => ppdOptions.value.find((o) => {
@@ -452,6 +468,7 @@ async function fetchGeometry(count: number, aspect: number): Promise<LayoutGeome
       printer_id: selectedPrinter.value || 0,
       layout_options: layoutOptionsPayload.value,
       page_range: form.value.page_range,
+      page_parity: form.value.page_parity,
       paper_size: form.value.paper_size,
       orientation: form.value.orientation,
       page_count: count,
@@ -547,6 +564,7 @@ async function buildPreview(): Promise<void> {
     const { count, aspect } = await measurePreviewDocument(doc)
     if (token !== previewBuildToken) return
     pageCount.value = count
+    applyPageSelection()
     if (!selectedPages.value.length) {
       selectedPages.value = Array.from({ length: count }, (_, index) => index + 1)
     }
@@ -662,12 +680,13 @@ function refreshPreview() {
 }
 
 watch([file, nasPath, selectedPrinter], () => refreshPreview())
+watch(() => form.value.page_parity, () => applyPageSelection())
 
 // Layout, paper and page selection all change the laid-out PDF, so the server
 // has to rebuild it. Colour and scaling are pure presentation and only affect
 // the CSS filter, which keeps those switches instant.
 watch(
-  [() => form.value.paper_size, () => form.value.orientation, () => form.value.page_range,
+  [() => form.value.paper_size, () => form.value.orientation, () => form.value.page_range, () => form.value.page_parity,
     () => layout.value.pages_per_sheet, () => layout.value.direction, () => layout.value.border,
     () => layout.value.reverse, () => layout.value.flip_horizontal],
   () => {
@@ -948,6 +967,8 @@ onUnmounted(() => {
         <button class="mode-pill" :class="{ active: printMode === 'document' }" type="button" @click="printMode = 'document'">普通文档</button>
         <button class="mode-pill" :class="{ active: printMode === 'idcard' }" type="button" @click="printMode = 'idcard'">身份证</button>
         <button class="mode-pill" :class="{ active: printMode === 'invoice' }" type="button" @click="printMode = 'invoice'">发票</button>
+        <button class="mode-pill" :class="{ active: printMode === 'photos' }" type="button" @click="printMode = 'photos'">图片打印</button>
+        <button class="mode-pill" :class="{ active: printMode === 'booklet' }" type="button" @click="printMode = 'booklet'">书籍打印</button>
       </div>
       <div v-if="printMode === 'document'" class="print-layout" :class="{ 'has-preview': file || nasPath }">
       <section class="card">
@@ -1134,6 +1155,28 @@ onUnmounted(() => {
             </select>
           </div>
           <details class="layout-section">
+            <summary>纸张设置</summary>
+            <div class="layout-grid">
+              <div class="field">
+                <label>待打印张数</label>
+                <select v-model="form.page_parity" class="select">
+                  <option value="all">所有张数</option>
+                  <option value="odd">奇数页</option>
+                  <option value="even">偶数页</option>
+                </select>
+                <div class="field-hint">在「页码范围」内筛选，范围为空时作用于全文</div>
+              </div>
+              <div class="field">
+                <label>纸张顺序</label>
+                <select v-model="form.output_order" class="select">
+                  <option value="normal">自动 / 正序</option>
+                  <option value="reverse">倒序</option>
+                </select>
+                <div class="field-hint">只影响出纸顺序，不影响版面</div>
+              </div>
+            </div>
+          </details>
+          <details class="layout-section">
             <summary>布局</summary>
             <div class="layout-grid">
               <div class="field">
@@ -1199,8 +1242,10 @@ onUnmounted(() => {
         <p class="card-desc" style="text-align: center; margin-top: 10px">提交后即可离开，任务在后台排队处理</p>
       </section>
       </div>
-      <IdCardPrintPanel v-else-if="printMode === 'idcard'" :printers="printers" v-model:printer-id="selectedPrinter" @submitted="loadJobs" />
-      <InvoicePrintPanel v-else :printers="printers" v-model:printer-id="selectedPrinter" @submitted="loadJobs" />
+      <IdCardPrintPanel v-else-if="printMode === 'idcard'" :printers="printers" v-model:printer-id="selectedPrinter" :nas-enabled="authMode === 'fnos'" @submitted="loadJobs" />
+      <InvoicePrintPanel v-else-if="printMode === 'invoice'" :printers="printers" v-model:printer-id="selectedPrinter" :nas-enabled="authMode === 'fnos'" @submitted="loadJobs" />
+      <ImagePrintPanel v-else-if="printMode === 'photos'" :printers="printers" v-model:printer-id="selectedPrinter" :paper-choices="paperChoices" :paper-areas="paperAreas" :nas-enabled="authMode === 'fnos'" @submitted="loadJobs" />
+      <BookletPrintPanel v-else :printers="printers" v-model:printer-id="selectedPrinter" :paper-choices="paperChoices" :paper-areas="paperAreas" :duplex-supported="supportsDuplex" :nas-enabled="authMode === 'fnos'" @submitted="loadJobs" />
     </template>
 
     <section class="card" style="margin-top: 20px">

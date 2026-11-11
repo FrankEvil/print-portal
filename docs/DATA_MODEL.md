@@ -65,6 +65,8 @@ CREATE TABLE jobs (
   cups_user       TEXT NOT NULL DEFAULT '',
   pages           INTEGER NOT NULL DEFAULT 0,
   page_range      TEXT NOT NULL DEFAULT '',
+  page_parity     TEXT NOT NULL DEFAULT 'all',   -- all / odd / even
+  output_order    TEXT NOT NULL DEFAULT 'normal', -- normal / reverse
   duplex          TEXT NOT NULL DEFAULT 'one-sided',
   copies          INTEGER NOT NULL DEFAULT 1,
   paper_size      TEXT NOT NULL DEFAULT 'A4',
@@ -73,7 +75,7 @@ CREATE TABLE jobs (
   scaling         TEXT NOT NULL DEFAULT 'auto',
   ppd_options     TEXT NOT NULL DEFAULT '{}',  -- PPD 额外选项，JSON
   layout_options  TEXT NOT NULL DEFAULT '{}',  -- 布局选项，JSON
-  print_mode      TEXT NOT NULL DEFAULT 'document', -- document / idcard / invoice
+  print_mode      TEXT NOT NULL DEFAULT 'document', -- document / idcard / invoice / photos / booklet
   status          TEXT NOT NULL DEFAULT 'pending',
   cups_job_id     TEXT NOT NULL DEFAULT '',
   error_message   TEXT NOT NULL DEFAULT '',

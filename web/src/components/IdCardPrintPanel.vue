@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
+import { TrimApp } from '@trimjs/web-app'
 import { api, apiUrl } from '../api'
 import { toast } from '../toast'
 import type { Printer } from '../types'
@@ -9,6 +10,7 @@ import ModePreview from './ModePreview.vue'
 const props = defineProps<{
   printers: Printer[]
   printerId: number | null
+  nasEnabled?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'update:printerId', value: number): void
@@ -23,6 +25,8 @@ const printer = computed({
 type Side = 'front' | 'back'
 const originals = ref<Record<Side, File | null>>({ front: null, back: null })
 const cropped = ref<Record<Side, Blob | null>>({ front: null, back: null })
+const sources = ref<Record<Side, string>>({ front: '', back: '' })
+const nasSources = ref<Record<Side, string>>({ front: '', back: '' })
 const previews = ref<Record<Side, string>>({ front: '', back: '' })
 const editorSide = ref<Side | null>(null)
 const editorSrc = ref('')
@@ -47,7 +51,12 @@ watch([cropped, layout, border], () => {
 }, { deep: true })
 
 onUnmounted(() => {
-  for (const url of Object.values(previews.value)) URL.revokeObjectURL(url)
+  for (const url of Object.values(previews.value)) {
+    if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+  }
+  for (const url of Object.values(sources.value)) {
+    if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+  }
   window.clearTimeout(composeTimer)
 })
 
@@ -67,28 +76,63 @@ function onFilePicked(event: Event) {
   }
   const side = pendingSide.value
   originals.value[side] = file
+  nasSources.value[side] = ''
   cropped.value[side] = null
-  openEditor(side, file)
+  if (sources.value[side].startsWith('blob:')) URL.revokeObjectURL(sources.value[side])
+  sources.value[side] = URL.createObjectURL(file)
+  previews.value[side] = sources.value[side]
+  openEditor(side, sources.value[side])
 }
 
-function openEditor(side: Side, file: File) {
-  if (previews.value[side]) URL.revokeObjectURL(previews.value[side])
-  previews.value[side] = URL.createObjectURL(file)
-  editorSrc.value = previews.value[side]
+async function pickNas(side: Side) {
+  try {
+    const sdk = new TrimApp()
+    if (sdk.isStandaloneWeb) {
+      toast.error('请从飞牛应用中心打开后选择 NAS 文件')
+      return
+    }
+    const result = await sdk.pickUserFile({
+      directory: false,
+      multiple: false,
+      title: side === 'front' ? '选择身份证正面' : '选择身份证反面',
+      okText: '选择',
+      accept: ['.jpg', '.jpeg', '.png'],
+      sidebarGroup: ['myFiles', 'otherShare', 'favorites'],
+    })
+    const path = result?.data?.[0]
+    if (!path) return
+    if (sources.value[side].startsWith('blob:')) URL.revokeObjectURL(sources.value[side])
+    originals.value[side] = null
+    nasSources.value[side] = path
+    cropped.value[side] = null
+    sources.value[side] = apiUrl(`/api/nas/preview?path=${encodeURIComponent(path)}`)
+    previews.value[side] = sources.value[side]
+    openEditor(side, sources.value[side])
+    toast.success('已从 NAS 选择')
+  } catch (e) {
+    toast.error((e as Error).message || '选择 NAS 文件失败')
+  }
+}
+
+function openEditor(side: Side, src: string) {
+  editorSrc.value = src
   editorSide.value = side
 }
 
 function reCrop(side: Side) {
-  const file = originals.value[side]
-  if (!file) return
-  openEditor(side, file)
+  if (sources.value[side]) openEditor(side, sources.value[side])
 }
 
 function onCropConfirm(blob: Blob) {
   const side = editorSide.value
   if (!side) return
+  const oldPreview = previews.value[side]
   cropped.value[side] = blob
-  if (previews.value[side]) URL.revokeObjectURL(previews.value[side])
+  // Do not revoke sources[side]: it is the original image URL used when the
+  // user clicks "重新裁剪". Only drop an earlier cropped preview blob.
+  if (oldPreview.startsWith('blob:') && oldPreview !== sources.value[side]) {
+    URL.revokeObjectURL(oldPreview)
+  }
   previews.value[side] = URL.createObjectURL(blob)
   editorSide.value = null
 }
@@ -166,16 +210,20 @@ async function submit() {
             <span>身份证{{ side === 'front' ? '正面' : '反面' }}</span>
             <span v-if="cropped[side]" class="id-badge">已裁剪</span>
           </div>
-          <button v-if="!cropped[side]" class="id-drop" type="button" @click="choose(side)">
-            <span class="id-plus">＋</span>
-            <span>点击上传{{ side === 'front' ? '正面' : '反面' }}照片</span>
-            <span class="id-sub">支持 JPG / PNG，建议纯色背景</span>
-          </button>
+          <template v-if="!cropped[side]">
+            <button class="id-drop" type="button" @click="choose(side)">
+              <span class="id-plus">＋</span>
+              <span>点击上传{{ side === 'front' ? '正面' : '反面' }}照片</span>
+              <span class="id-sub">支持 JPG / PNG，建议纯色背景</span>
+            </button>
+            <button v-if="nasEnabled" class="id-nas" type="button" @click="pickNas(side)">从 NAS 选择</button>
+          </template>
           <div v-else class="id-thumb">
             <img :src="previews[side]" alt="身份证预览" />
             <div class="id-thumb-actions">
               <button class="btn btn-ghost btn-sm" type="button" @click="reCrop(side)">重新裁剪</button>
               <button class="btn btn-ghost btn-sm" type="button" @click="choose(side)">重新上传</button>
+              <button v-if="nasEnabled" class="btn btn-ghost btn-sm" type="button" @click="pickNas(side)">从 NAS 选择</button>
             </div>
           </div>
         </div>
@@ -185,7 +233,7 @@ async function submit() {
         <div class="id-preview-head">打印预览</div>
         <div v-if="previewLoading" class="id-preview-state">正在合成 A4 版面…</div>
         <div v-else-if="composeError" class="id-preview-state error">{{ composeError }}</div>
-        <ModePreview v-else :src="previewSrc" label="身份证" :max-width="620" />
+        <ModePreview v-else :key="previewId" :src="previewSrc" label="身份证" :max-width="620" />
       </div>
     </section>
 
@@ -266,6 +314,7 @@ async function submit() {
 .id-toggle.off::after { right: 20px; }
 .print-button { width: 100%; margin-top: 18px; height: 46px; }
 .hidden-file { display: none; }
+.id-nas { width: 100%; margin-top: 8px; border: 1px solid var(--line); background: #fff; color: var(--text-2); border-radius: 9px; font-size: 12px; padding: 8px 0; cursor: pointer; }
 @media (max-width: 760px) {
   .id-slots { grid-template-columns: 1fr; }
 }

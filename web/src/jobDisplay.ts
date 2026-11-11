@@ -16,6 +16,8 @@ const scalingLabels: Record<string, string> = {
 const modeLabels: Record<string, string> = {
   idcard: '身份证',
   invoice: '发票',
+  photos: '图片打印',
+  booklet: '书籍打印',
 }
 
 export function formatJobParams(job: Job): string {
@@ -40,6 +42,9 @@ export function formatJobParams(job: Job): string {
     job.orientation === 'landscape' ? '横向' : '纵向',
   ]
   if (job.page_range) parts.push(`页码 ${job.page_range}`)
+  if (job.page_parity === 'odd') parts.push('奇数页')
+  if (job.page_parity === 'even') parts.push('偶数页')
+  if (job.output_order === 'reverse') parts.push('倒序出纸')
   if (job.pages > 0) parts.push(`${job.pages} 页`)
   if (job.scaling) parts.push(scalingLabels[job.scaling] || job.scaling)
   return parts.join(' · ')

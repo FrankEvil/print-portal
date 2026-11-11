@@ -2,7 +2,7 @@
 import { onUnmounted, ref, watch } from 'vue'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { apiUrl } from '../api'
+import { adminToken, apiUrl } from '../api'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(pdfjsWorker, document.baseURI).href
 
@@ -29,7 +29,16 @@ async function load() {
       doc = null
     }
     const url = props.src.startsWith('http') ? props.src : apiUrl(props.src)
-    const loaded = await pdfjsLib.getDocument({ url }).promise
+    // PDF.js fetches a URL without our X-Admin-Token header. Load the bytes
+    // with fetch first so token-mode deployments do not return 401 here.
+    const response = await fetch(url, {
+      headers: adminToken.value ? { 'X-Admin-Token': adminToken.value } : {},
+    })
+    if (!response.ok) {
+      throw new Error(`加载预览失败：HTTP ${response.status}`)
+    }
+    const data = await response.arrayBuffer()
+    const loaded = await pdfjsLib.getDocument({ data }).promise
     if (request !== token) {
       await loaded.destroy()
       return
@@ -53,6 +62,7 @@ async function load() {
       out.push({ index: i, url: canvas.toDataURL('image/jpeg', 0.88) })
       if (request !== token) return
     }
+    if (request !== token) return
     pages.value = out
   } catch (e) {
     if (request === token) error.value = (e as Error).message

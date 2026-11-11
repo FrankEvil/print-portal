@@ -23,6 +23,7 @@ func (s *Server) handlePreviewGeometry(w http.ResponseWriter, r *http.Request) {
 		PrinterID   int64           `json:"printer_id"`
 		Layout      json.RawMessage `json:"layout_options"`
 		PageRange   string          `json:"page_range"`
+		PageParity  string          `json:"page_parity"`
 		PaperSize   string          `json:"paper_size"`
 		Orientation string          `json:"orientation"`
 		PageCount   int             `json:"page_count"`
@@ -47,9 +48,10 @@ func (s *Server) handlePreviewGeometry(w http.ResponseWriter, r *http.Request) {
 	opts.PaperSize = defaultStr(body.PaperSize, defaultStr(opts.PaperSize, "A4"))
 	opts.Orientation = defaultStr(body.Orientation, defaultStr(opts.Orientation, "portrait"))
 	opts.PageRange = strings.TrimSpace(body.PageRange)
+	opts.PageParity = normalizePageParity(body.PageParity)
 
 	margins := s.paperMargins(r, body.PrinterID, opts.PaperSize, opts.Orientation)
-	pages := expandPageRange(opts.PageRange, body.PageCount)
+	pages := layout.SelectPages(body.PageCount, opts.PageRange, opts.PageParity)
 	aspect := body.PageAspect
 	if aspect <= 0 {
 		aspect = 0.7071
