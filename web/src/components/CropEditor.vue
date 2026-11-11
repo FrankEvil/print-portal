@@ -108,12 +108,12 @@ function fitStage(resetCrop: boolean) {
       h: workH.value * scale.value,
     }
     if (props.aspect) {
-      let w = bounds.w * 0.9
-      let h = w / props.aspect
-      if (h > bounds.h * 0.9) {
-        h = bounds.h * 0.9
-        w = h * props.aspect
-      }
+      // Start at 60% of the largest usable aspect box. A full-width default
+      // leaves almost no room to move the crop box, which feels broken on
+      // phone photos where the card occupies only part of the frame.
+      const fitW = Math.min(bounds.w, bounds.h * props.aspect)
+      const w = fitW * 0.6
+      const h = w / props.aspect
       crop.value = {
         x: bounds.x + (bounds.w - w) / 2,
         y: bounds.y + (bounds.h - h) / 2,
@@ -122,10 +122,10 @@ function fitStage(resetCrop: boolean) {
       }
     } else {
       crop.value = {
-        x: bounds.x + bounds.w * 0.05,
-        y: bounds.y + bounds.h * 0.05,
-        w: bounds.w * 0.9,
-        h: bounds.h * 0.9,
+        x: bounds.x + bounds.w * 0.15,
+        y: bounds.y + bounds.h * 0.15,
+        w: bounds.w * 0.7,
+        h: bounds.h * 0.7,
       }
     }
   }
@@ -286,7 +286,7 @@ const handles = ['nw', 'ne', 'sw', 'se', 'n', 's', 'w', 'e']
       <header class="crop-head">
         <div>
           <div class="crop-title">{{ title || '裁剪图片' }}</div>
-          <div class="crop-sub">拖动裁剪框调整范围，可使用旋转、翻转和比例锁定</div>
+          <div class="crop-sub">拖动框内移动，拖动四角/四边缩放；可使用旋转、翻转和比例锁定</div>
         </div>
         <button class="crop-close" type="button" @click="emit('cancel')">×</button>
       </header>
