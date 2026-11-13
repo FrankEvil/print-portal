@@ -161,7 +161,7 @@ async function compose() {
     if (request === composeToken) previewId.value = result.preview_id
   } catch (e) {
     if (request === composeToken) {
-      previewId.value = ''
+      // Keep the previous preview: a failed recompose must not blank the panel.
       composeError.value = (e as Error).message
     }
   } finally {
@@ -231,9 +231,11 @@ async function submit() {
 
       <div v-if="previewId || previewLoading || composeError" class="id-preview">
         <div class="id-preview-head">打印预览</div>
-        <div v-if="previewLoading" class="id-preview-state">正在合成 A4 版面…</div>
-        <div v-else-if="composeError" class="id-preview-state error">{{ composeError }}</div>
-        <ModePreview v-else :key="previewId" :src="previewSrc" label="身份证" :max-width="620" />
+        <div class="preview-region">
+          <ModePreview v-if="previewId" :src="previewSrc" label="身份证" :max-width="620" />
+          <div v-else class="id-preview-state">正在合成 A4 版面…</div>
+          <div v-if="composeError" class="preview-overlay error">{{ composeError }}</div>
+        </div>
       </div>
     </section>
 

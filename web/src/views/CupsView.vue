@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '../api'
 import { toast } from '../toast'
+import { mergeObject } from '../utils/refresh'
 import type { Printer } from '../types'
 
 const status = ref<{ version: string; state: string; server_name: string; printers: Printer[] } | null>(null)
@@ -23,7 +24,8 @@ const settingLabels: Record<string, string> = {
 
 async function loadStatus() {
   try {
-    status.value = await api.get('/api/admin/cups/status')
+    const data = await api.get<NonNullable<typeof status.value>>('/api/admin/cups/status')
+    status.value = mergeObject(status.value, data)
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -31,7 +33,8 @@ async function loadStatus() {
 
 async function loadSettings() {
   try {
-    settings.value = await api.get('/api/admin/cups/settings')
+    const data = await api.get<Record<string, string>>('/api/admin/cups/settings')
+    settings.value = mergeObject(settings.value, data)
   } catch (e) {
     toast.error((e as Error).message)
   }

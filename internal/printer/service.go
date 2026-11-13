@@ -25,16 +25,24 @@ func NewService(store *storage.Store, cupsClient *cups.Client) *Service {
 }
 
 type CreateInput struct {
-	Name           string `json:"name"`
-	Model          string `json:"model"`
-	PPDQueue       string `json:"ppd_queue"`
-	RAWQueue       string `json:"raw_queue"`
-	DeviceURI      string `json:"device_uri"`
-	PPDFile        string `json:"ppd_file"`
-	IsDefault      bool   `json:"is_default"`
-	IsShared       bool   `json:"is_shared"`        // allow LAN access
-	AllowDiscovery bool   `json:"allow_discovery"`  // advertise via DNS-SD
-	AirPrint       bool   `json:"airprint_enabled"` // advertise as AirPrint
+	Name           string  `json:"name"`
+	Model          string  `json:"model"`
+	PPDQueue       string  `json:"ppd_queue"`
+	RAWQueue       string  `json:"raw_queue"`
+	DeviceURI      string  `json:"device_uri"`
+	PPDFile        string  `json:"ppd_file"`
+	IPPUser        *string `json:"ipp_user"` // nil = leave unchanged on update
+	IsDefault      bool    `json:"is_default"`
+	IsShared       bool    `json:"is_shared"`        // allow LAN access
+	AllowDiscovery bool    `json:"allow_discovery"`  // advertise via DNS-SD
+	AirPrint       bool    `json:"airprint_enabled"` // advertise as AirPrint
+}
+
+func ippUserValue(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return strings.TrimSpace(*v)
 }
 
 func (in CreateInput) validate() error {
@@ -130,6 +138,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*storage.Printer,
 		RAWQueue:       in.RAWQueue,
 		DeviceURI:      in.DeviceURI,
 		PPDFile:        in.PPDFile,
+		IPPUser:        ippUserValue(in.IPPUser),
 		IsDefault:      in.IsDefault,
 		IsShared:       in.IsShared,
 		AllowDiscovery: in.AllowDiscovery,
@@ -179,6 +188,9 @@ func (s *Service) Update(ctx context.Context, name string, in CreateInput) (*sto
 	}
 	if in.Name != "" && in.Name != p.Name {
 		p.Name = in.Name
+	}
+	if in.IPPUser != nil {
+		p.IPPUser = strings.TrimSpace(*in.IPPUser)
 	}
 	discoveryChanged := p.AllowDiscovery != in.AllowDiscovery
 	p.IsShared = in.IsShared

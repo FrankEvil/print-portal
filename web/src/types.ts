@@ -16,6 +16,7 @@ export interface AdminPrinter {
   raw_queue: string
   device_uri: string
   ppd_file: string
+  ipp_user: string
   is_default: boolean
   is_shared: boolean
   allow_discovery: boolean
@@ -197,6 +198,7 @@ export interface SharingPrinter {
   device_uri: string
   ppd_queue: string
   raw_queue: string
+  ipp_user?: string
   ppd_uri: string
   raw_uri: string
   web_url: string

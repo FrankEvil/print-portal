@@ -6,6 +6,7 @@ import type { AdminPrinter, Device, MaintenanceAction, MaintenanceCapabilities, 
 import StatusBadge from '../components/StatusBadge.vue'
 import SearchableSelect from '../components/SearchableSelect.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { mergeById, createPoller, type TaskOptions } from '../utils/refresh'
 
 const printers = ref<AdminPrinter[]>([])
 const optionsFor = ref('')
@@ -31,14 +32,14 @@ const useEverywhere = ref(false)
 const uploading = ref(false)
 const driverInput = ref<HTMLInputElement | null>(null)
 const saving = ref(false)
-const wizardForm = ref({ name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true, allow_discovery: false, airprint_enabled: false })
+const wizardForm = ref({ name: '', ppd_queue: '', raw_queue: '', ipp_user: '', is_default: false, is_shared: true, allow_discovery: false, airprint_enabled: false })
 
-// Edit dialog: name, driver, default/share only
+// Edit dialog: name, driver, ipp_user and default/share
 const editingPrinter = ref<AdminPrinter | null>(null)
 const editSaving = ref(false)
 const editUploading = ref(false)
 const editDriverInput = ref<HTMLInputElement | null>(null)
-const editForm = ref({ name: '', model: '', is_default: false, is_shared: true, allow_discovery: false, airprint_enabled: false })
+const editForm = ref({ name: '', model: '', ipp_user: '', is_default: false, is_shared: true, allow_discovery: false, airprint_enabled: false })
 const editBrand = ref('')
 const rowMenu = ref<{ printer: AdminPrinter; top: number; left: number } | null>(null)
 const maintenancePrinter = ref<AdminPrinter | null>(null)
@@ -155,18 +156,37 @@ function onEditBrandChange() {
   }
 }
 
-const isNetworkDevice = computed(() => {
-  const uri = selectedDevice.value?.device_uri || ''
-  return uri.startsWith('ipp://') || uri.startsWith('ipps://') || uri.startsWith('dnssd://')
-})
+// Only IPP-based (shared/network) printers can enforce a per-user ACL on
+// job submission. USB-direct printers never need a requesting-user-name.
+function needsIPPUser(uri: string) {
+  const v = (uri || '').toLowerCase()
+  return v.startsWith('ipp://') || v.startsWith('ipps://') || v.startsWith('dnssd://')
+}
 
-async function load() {
+const isNetworkDevice = computed(() => needsIPPUser(selectedDevice.value?.device_uri || ''))
+const editIsNetworkDevice = computed(() => needsIPPUser(editingPrinter.value?.device_uri || ''))
+
+// Polling must not disturb the page: merge into the existing row objects so
+// Vue only patches fields that actually changed, and never blank the table on
+// a transient backend/CUPS hiccup.
+async function load(opts: TaskOptions = { quiet: false, force: true }) {
   try {
     const res = await api.get<{ printers: AdminPrinter[] }>('/api/admin/printers')
-    printers.value = res.printers
+    printers.value = mergeById(printers.value, res.printers || [], { force: opts.force })
+    printersPoller.sync()
   } catch (e) {
-    toast.error((e as Error).message)
+    if (!opts.quiet) toast.error((e as Error).message)
+    throw e
   }
+}
+
+const printersPoller = createPoller(load, {
+  interval: 15000,
+  pauseWhen: () => dialogOpen(),
+})
+
+function refreshPrinters() {
+  printersPoller.refresh()
 }
 
 async function loadModels() {
@@ -262,7 +282,7 @@ function openWizard() {
   selectedBrand.value = ''
   selectedModel.value = ''
   useEverywhere.value = false
-  wizardForm.value = { name: '', ppd_queue: '', raw_queue: '', is_default: false, is_shared: true, allow_discovery: false, airprint_enabled: false }
+  wizardForm.value = { name: '', ppd_queue: '', raw_queue: '', ipp_user: '', is_default: false, is_shared: true, allow_discovery: false, airprint_enabled: false }
   models.value = []
   modelTotal.value = 0
   // Local USB scan is fast; start LAN mDNS scan after it finishes.
@@ -399,6 +419,7 @@ async function savePrinter() {
       ppd_queue: wizardForm.value.ppd_queue.trim(),
       raw_queue: wizardForm.value.raw_queue.trim(),
       device_uri: selectedDevice.value.device_uri,
+      ipp_user: needsIPPUser(selectedDevice.value.device_uri) ? wizardForm.value.ipp_user.trim() : '',
       is_default: wizardForm.value.is_default,
       is_shared: wizardForm.value.is_shared,
       allow_discovery: wizardForm.value.allow_discovery,
@@ -406,7 +427,7 @@ async function savePrinter() {
     })
     toast.success('打印机已创建')
     showWizard.value = false
-    await load()
+    refreshPrinters()
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -423,7 +444,7 @@ function syncEditBrand() {
 
 function openEdit(p: AdminPrinter) {
   editingPrinter.value = p
-  editForm.value = { name: p.name, model: p.model, is_default: p.is_default, is_shared: p.is_shared, allow_discovery: p.allow_discovery, airprint_enabled: p.airprint_enabled }
+  editForm.value = { name: p.name, model: p.model, ipp_user: p.ipp_user || '', is_default: p.is_default, is_shared: p.is_shared, allow_discovery: p.allow_discovery, airprint_enabled: p.airprint_enabled }
   editBrand.value = ''
   if (!models.value.length) loadModels().then(syncEditBrand)
   else syncEditBrand()
@@ -442,6 +463,7 @@ async function saveEdit() {
       ppd_queue: p.ppd_queue,
       raw_queue: p.raw_queue,
       device_uri: p.device_uri,
+      ipp_user: needsIPPUser(p.device_uri) ? editForm.value.ipp_user.trim() : '',
       is_default: editForm.value.is_default,
       is_shared: editForm.value.is_shared,
       allow_discovery: editForm.value.allow_discovery,
@@ -449,7 +471,7 @@ async function saveEdit() {
     })
     toast.success('打印机已更新')
     editingPrinter.value = null
-    await load()
+    refreshPrinters()
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -487,7 +509,7 @@ function remove(p: AdminPrinter) {
       try {
         await api.del(`/api/admin/printers/${encodeURIComponent(p.name)}`)
         toast.success('已删除')
-        await load()
+        refreshPrinters()
       } catch (e) {
         toast.error((e as Error).message)
       }
@@ -499,7 +521,7 @@ async function action(p: AdminPrinter, name: string) {
   try {
     const res = await api.post<{ cups_job_id?: string }>(`/api/admin/printers/${encodeURIComponent(p.name)}/${name}`)
     toast.success(name === 'test' ? `测试页已提交 ${res.cups_job_id || ''}` : '操作成功')
-    await load()
+    refreshPrinters()
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -658,19 +680,26 @@ function prettyDevice(uri: string) {
   return uri.length > 60 ? uri.slice(0, 60) + '…' : uri
 }
 
-let statusTimer: number | undefined
+function dialogOpen() {
+  return !!(
+    showWizard.value ||
+    editingPrinter.value ||
+    maintenancePrinter.value ||
+    rowMenu.value ||
+    confirmState.value
+  )
+}
 
 onMounted(() => {
-  load()
+  printersPoller.refresh()
+  printersPoller.start()
   loadModels()
   document.addEventListener('click', closeRowMenu)
-  // Keep printer states in sync with CUPS.
-  statusTimer = window.setInterval(load, 8000)
 })
 
 onUnmounted(() => {
+  printersPoller.stop()
   document.removeEventListener('click', closeRowMenu)
-  if (statusTimer) window.clearInterval(statusTimer)
 })
 </script>
 
@@ -711,10 +740,8 @@ onUnmounted(() => {
               <div class="row-actions">
                 <button class="btn btn-ghost btn-sm" @click="openEdit(p)">编辑</button>
                 <button class="btn btn-ghost btn-sm" @click="action(p, 'test')">测试页</button>
-                <button v-if="p.state === 'stopped'" class="btn btn-ghost btn-sm" @click="action(p, 'resume')">恢复</button>
-                <button v-else class="btn btn-ghost btn-sm" @click="action(p, 'pause')">暂停</button>
-                <button v-if="p.accepting" class="btn btn-ghost btn-sm" @click="action(p, 'reject')">拒绝任务</button>
-                <button v-else class="btn btn-ghost btn-sm" @click="action(p, 'accept')">接受任务</button>
+                <button class="btn btn-ghost btn-sm" @click="action(p, p.state === 'stopped' ? 'resume' : 'pause')">{{ p.state === 'stopped' ? '恢复' : '暂停' }}</button>
+                <button class="btn btn-ghost btn-sm" @click="action(p, p.accepting ? 'reject' : 'accept')">{{ p.accepting ? '拒绝任务' : '接受任务' }}</button>
                 <button class="row-menu-trigger" data-row-menu title="更多操作" @click.stop="toggleRowMenu(p, $event)">⋮</button>
               </div>
             </td>
@@ -754,10 +781,8 @@ onUnmounted(() => {
         <div class="printer-mobile-actions">
           <button class="btn btn-ghost btn-sm" @click="openEdit(p)">编辑</button>
           <button class="btn btn-ghost btn-sm" @click="action(p, 'test')">测试页</button>
-          <button v-if="p.state === 'stopped'" class="btn btn-ghost btn-sm" @click="action(p, 'resume')">恢复</button>
-          <button v-else class="btn btn-ghost btn-sm" @click="action(p, 'pause')">暂停</button>
-          <button v-if="p.accepting" class="btn btn-ghost btn-sm" @click="action(p, 'reject')">拒绝任务</button>
-          <button v-else class="btn btn-ghost btn-sm" @click="action(p, 'accept')">接受任务</button>
+          <button class="btn btn-ghost btn-sm" @click="action(p, p.state === 'stopped' ? 'resume' : 'pause')">{{ p.state === 'stopped' ? '恢复' : '暂停' }}</button>
+          <button class="btn btn-ghost btn-sm" @click="action(p, p.accepting ? 'reject' : 'accept')">{{ p.accepting ? '拒绝任务' : '接受任务' }}</button>
           <button class="row-menu-trigger" data-row-menu title="更多操作" @click.stop="toggleRowMenu(p, $event)">⋮</button>
         </div>
       </article>
@@ -907,6 +932,7 @@ onUnmounted(() => {
             <div class="field"><label>PPD 队列名</label><input v-model="wizardForm.ppd_queue" class="input" :disabled="!!editingPrinter" /></div>
             <div class="field"><label>RAW 队列名</label><input v-model="wizardForm.raw_queue" class="input" :disabled="!!editingPrinter" /></div>
             <div class="field full"><label>设备地址</label><input :value="selectedDevice?.device_uri" class="input" disabled /></div>
+            <div v-if="isNetworkDevice" class="field full"><label>IPP 提交用户名</label><input v-model="wizardForm.ipp_user" class="input" placeholder="例如 liuzhaojun" /><div class="field-hint">共享/网络打印机会按用户名限制打印；填写目标电脑上允许打印的账户名，任务才不会被卡在「排队中」。留空则使用 CUPS 默认用户。</div></div>
             <div class="field full"><label>驱动</label><input :value="useEverywhere ? 'IPP Everywhere（免驱动）' : selectedModel" class="input" disabled /></div>
             <div class="field"><label><input v-model="wizardForm.is_default" type="checkbox" /> 设为默认打印机</label></div>
             <div class="field"><label><input v-model="wizardForm.is_shared" type="checkbox" @change="onWizardAccessChange" /> 允许局域网访问</label></div>
@@ -951,6 +977,11 @@ onUnmounted(() => {
           <div class="field" style="margin-top: 10px">
             <label>打印机名称</label>
             <input v-model="editForm.name" class="input" />
+          </div>
+          <div v-if="editIsNetworkDevice" class="field" style="margin-top: 10px">
+            <label>IPP 提交用户名</label>
+            <input v-model="editForm.ipp_user" class="input" placeholder="例如 liuzhaojun" />
+            <div class="field-hint">共享/网络打印机会按用户名限制打印；填写目标电脑上允许打印的账户名，否则任务会卡在「排队中」。留空则使用 CUPS 默认用户。</div>
           </div>
         </section>
 

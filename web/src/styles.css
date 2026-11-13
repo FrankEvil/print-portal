@@ -3673,3 +3673,165 @@ table.table {
 .share-printer-tags .status-badge {
   flex: 0 0 auto;
 }
+
+/* ---------- Stable list layout (prevents polling from looking like a flash) ---------- */
+/* A badge's label changes as a job advances. Pin its width so the row does not
+   reflow when "排队中" becomes "打印中". */
+.status-badge {
+  min-width: 76px;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* Conditional actions keep their slot instead of being added/removed from the
+   DOM on every state change. */
+.btn.is-hidden {
+  visibility: hidden;
+}
+
+.job-item {
+  min-height: 68px;
+  box-sizing: border-box;
+}
+
+.job-list {
+  min-height: 68px;
+}
+
+/* Empty states are drawn as an overlay: the list DOM is never torn down, so a
+   transient empty response cannot make the whole card disappear and reappear. */
+.list-region {
+  position: relative;
+  min-height: 96px;
+}
+
+.empty-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: 13.5px;
+  pointer-events: none;
+}
+
+/* Empty state and the list it replaces share a minimum height, so switching
+   between them never changes the card height. Combined with the empty-response
+   guard in refresh.ts, a background poll can no longer make a card jump. */
+.empty {
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.table-wrap,
+.job-list,
+.device-grid {
+  min-height: 96px;
+}
+
+/* Preview panels keep the old PDF on screen while a new one is composed. */
+.preview-region {
+  position: relative;
+  min-height: 120px;
+}
+
+.preview-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 10px;
+  color: var(--text-3);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.preview-overlay.error {
+  color: var(--danger);
+}
+
+.pdf-page-grid {
+  position: relative;
+}
+
+.preview-refresh-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.9);
+  color: #fff;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+/* ---------- Mobile job rows ---------- */
+/* On desktop the action buttons keep their slot (visibility:hidden) so a
+   status change never adds/removes DOM nodes. On a narrow screen that would
+   squeeze the text column to zero width, so hidden actions stop taking space
+   and the actions wrap onto their own row. */
+.job-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.job-sub {
+  overflow-wrap: anywhere;
+}
+
+/* The job row stays a single horizontal flex line only on wide screens.
+   Below 900px the three always-present action buttons would otherwise squeeze
+   the text column down to ~200px (and to nearly zero on phones). */
+@media (max-width: 900px) {
+  .job-item {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .job-main {
+    flex: 1 1 calc(100% - 100px);
+    min-width: 0;
+  }
+
+  .job-item > .status-badge {
+    flex: 0 0 auto;
+  }
+
+  .job-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .job-item > .status-badge {
+    min-width: 72px;
+  }
+
+  /* On phones the hidden placeholder buttons must not consume any width. */
+  .btn.is-hidden {
+    display: none;
+  }
+}
+
+/* Long log lines should wrap on a phone instead of forcing horizontal scroll. */
+@media (max-width: 640px) {
+  .log-body {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}

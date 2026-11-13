@@ -5,15 +5,17 @@ import type { Job, Overview } from '../types'
 import StatusBadge from '../components/StatusBadge.vue'
 import { formatJobParams } from '../jobDisplay'
 import { toast } from '../toast'
+import { mergeById, mergeObject } from '../utils/refresh'
 
 const overview = ref<Overview | null>(null)
 const jobs = ref<Job[]>([])
 
 async function load() {
   try {
-    overview.value = await api.get<Overview>('/api/admin/overview')
+    const data = await api.get<Overview>('/api/admin/overview')
+    overview.value = mergeObject(overview.value, data)
     const res = await api.get<{ jobs: Job[] }>('/api/admin/jobs?limit=8')
-    jobs.value = res.jobs
+    jobs.value = mergeById(jobs.value, res.jobs || [], { force: true })
   } catch (e) {
     toast.error((e as Error).message)
   }

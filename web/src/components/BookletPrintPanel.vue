@@ -197,7 +197,7 @@ async function refreshGeometry() {
     readingPage.value = 1
   } catch (e) {
     if (token !== geometryToken) return
-    geometry.value = null
+    // Keep the previous geometry so a failed recompute does not blank the preview.
     geometryError.value = (e as Error).message
   } finally {
     if (token === geometryToken) geometryLoading.value = false
@@ -295,9 +295,8 @@ async function submit() {
             <button type="button" :class="{ on: previewMode === 'reading' }" @click="previewMode = 'reading'">按阅读顺序</button>
           </div>
         </div>
-        <div v-if="geometryLoading" class="book-state">正在计算版面…</div>
-        <div v-else-if="geometryError" class="book-state error">{{ geometryError }}</div>
-        <div v-else-if="geometry">
+        <div class="preview-region">
+        <div v-if="geometry">
           <template v-if="previewMode === 'sheet' && currentSheet">
             <div class="preview-controls">
               <div class="book-pager">
@@ -337,6 +336,11 @@ async function submit() {
             <div class="book-preview-meta">按阅读顺序预览，仅用于检查内容顺序；实际打印按 A4 纸张排版</div>
           </template>
         </div>
+        <div v-if="geometryLoading && !geometry" class="book-state">正在计算版面…</div>
+        <div v-else-if="!geometry" class="book-state">准备中…</div>
+        <div v-if="geometryLoading && geometry" class="preview-overlay">正在更新版面…</div>
+        <div v-if="geometryError" class="preview-overlay error">{{ geometryError }}</div>
+        </div>
       </div>
     </section>
 
@@ -352,7 +356,7 @@ async function submit() {
           <summary>高级设置</summary>
           <div class="advanced-grid">
             <div class="field full"><label>分册设置</label><select v-model.number="signaturePages" class="select"><option :value="0">整本装订（推荐）</option><option :value="4">每 4 页一叠</option><option :value="8">每 8 页一叠</option><option :value="16">每 16 页一叠</option><option :value="32">每 32 页一叠</option></select><div class="field-hint">书太厚时可分成多叠折叠，再合并装订；一般选整本即可。</div></div>
-            <div class="field full"><label>页码范围</label><input v-model="pageRange" class="input" placeholder="全部，如 1-16" /></div>
+            <div class="field full"><label>页码范围</label><input v-model.lazy="pageRange" class="input" placeholder="全部，如 1-16" /></div>
           </div>
         </details>
         <div class="field full"><div class="book-info">原文档 {{ pageCount }} 页 → 补空白后 {{ geometry?.padded_pages || '—' }} 页<br>{{ geometry?.sheet_count || '—' }} 张 A4 · 分册：{{ signaturePages ? `${signatureGroups} 叠，每叠 ${signaturePages} 页` : '整本（1 叠）' }}<template v-if="duplexMode === 'manual'"> · 手动双面会分两次打印</template></div></div>

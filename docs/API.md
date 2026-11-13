@@ -344,6 +344,7 @@
       "ppd_queue": "Brother-7060d",
       "raw_queue": "Brother-7060d-raw",
       "device_uri": "usb://Brother/DCP-7060D?serial=...",
+      "ipp_user": "",
       "is_default": true
     }
   ]
@@ -361,6 +362,7 @@
   "ppd_queue": "Brother-7060d",
   "raw_queue": "Brother-7060d-raw",
   "device_uri": "usb://Brother/DCP-7060D?serial=...",
+  "ipp_user": "liuzhaojun",
   "is_default": true
 }
 ```

@@ -4,6 +4,7 @@ import { api, apiUrl } from '../api'
 import { toast } from '../toast'
 import type { Job } from '../types'
 import { formatJobParams } from '../jobDisplay'
+import { mergeById, createPoller, type TaskOptions } from '../utils/refresh'
 import StatusBadge from '../components/StatusBadge.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 
@@ -11,19 +12,19 @@ const jobs = ref<Job[]>([])
 const status = ref('')
 const source = ref('')
 const query = ref('')
-let timer: number | undefined
 let searchTimer: number | undefined
+const ACTIVE_STATUSES = ['pending', 'converting', 'submitted', 'queued', 'printing', 'held', 'paused']
 const showClearConfirm = ref(false)
 const clearing = ref(false)
 
 function onSearchInput() {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = window.setTimeout(() => {
-    void load()
+    refreshJobs()
   }, 300)
 }
 
-async function load() {
+async function load(opts: TaskOptions = { quiet: false, force: true }) {
   try {
     const params = new URLSearchParams()
     if (status.value) params.set('status', status.value)
@@ -31,11 +32,43 @@ async function load() {
     if (query.value.trim()) params.set('q', query.value.trim())
     params.set('limit', '200')
     const res = await api.get<{ jobs: Job[] }>(`/api/admin/jobs?${params.toString()}`)
-    jobs.value = res.jobs
+    jobs.value = mergeById(jobs.value, res.jobs || [], { force: opts.force })
+    poller.sync()
   } catch (e) {
-    toast.error((e as Error).message)
+    if (!opts.quiet) toast.error((e as Error).message)
+    throw e
   }
 }
+
+const poller = createPoller(load, {
+  interval: 5000,
+  activeWhen: () => jobs.value.some((j) => ACTIVE_STATUSES.includes(j.status)),
+  pauseWhen: () => showClearConfirm.value,
+})
+
+function refreshJobs() {
+  poller.refresh()
+}
+
+function canFile(j: Job) {
+  return j.source === 'web' && ['submitted','queued','printing','completed','failed'].includes(j.status)
+}
+function canCancel(j: Job) {
+  return ['pending','converting','submitted','queued','printing','held','paused'].includes(j.status)
+}
+function canRetry(j: Job) {
+  return ['failed','cancelled'].includes(j.status) && j.source === 'web'
+}
+function canHold(j: Job) {
+  return !!j.cups_job_id && ['queued','printing'].includes(j.status)
+}
+function canRelease(j: Job) {
+  return !!j.cups_job_id && j.status === 'paused'
+}
+function canRestart(j: Job) {
+  return !!j.cups_job_id && ['failed','completed'].includes(j.status)
+}
+
 
 function openJobFile(id: number) {
   window.open(apiUrl(`/api/jobs/${id}/file`), '_blank')
@@ -48,7 +81,7 @@ async function clearRecords() {
     const res = await api.del<{ cleared: number; cups_cleared?: boolean }>('/api/admin/jobs')
     showClearConfirm.value = false
     toast.success(`已清理 ${res.cleared} 条打印记录，CUPS 历史已同步`)
-    await load()
+    refreshJobs()
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -63,18 +96,18 @@ async function act(j: Job, action: string) {
     else if (action === 'retry') await api.post(`/api/jobs/${j.id}/retry`)
     else await api.post(`/api/admin/jobs/${j.id}/${action}`)
     toast.success('操作成功')
-    await load()
+    refreshJobs()
   } catch (e) {
     toast.error((e as Error).message)
   }
 }
 
 onMounted(() => {
-  load()
-  timer = window.setInterval(load, 3000)
+  poller.refresh()
+  poller.start()
 })
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
+  poller.stop()
   if (searchTimer) clearTimeout(searchTimer)
 })
 </script>
@@ -86,7 +119,7 @@ onUnmounted(() => {
       <p class="admin-sub">网页任务与本地直连任务统一展示；本地任务仅含 CUPS 元数据</p>
     </div>
     <div class="admin-actions">
-      <select v-model="status" class="select" style="width: 140px" @change="load">
+      <select v-model="status" class="select" style="width: 140px" @change="refreshJobs">
         <option value="">全部状态</option>
         <option value="pending">待处理</option>
         <option value="converting">转换中</option>
@@ -98,7 +131,7 @@ onUnmounted(() => {
         <option value="failed">失败</option>
         <option value="cancelled">已取消</option>
       </select>
-      <select v-model="source" class="select" style="width: 120px" @change="load">
+      <select v-model="source" class="select" style="width: 120px" @change="refreshJobs">
         <option value="">全部来源</option>
         <option value="web">网页</option>
         <option value="local">本地</option>
@@ -110,10 +143,10 @@ onUnmounted(() => {
         style="width: 220px"
         placeholder="搜索文件 / 用户 / 状态"
         @input="onSearchInput"
-        @keyup.enter="load"
+        @keyup.enter="refreshJobs"
       />
       <button class="btn btn-ghost btn-sm" @click="showClearConfirm = true">清空打印记录</button>
-      <button class="btn btn-ghost btn-sm" @click="load">刷新</button>
+      <button class="btn btn-ghost btn-sm" @click="refreshJobs">刷新</button>
     </div>
   </div>
 
@@ -141,12 +174,12 @@ onUnmounted(() => {
             <td class="admin-sub" data-label="时间">{{ new Date(j.created_at).toLocaleString('zh-CN', { hour12: false }) }}</td>
             <td data-label="操作">
               <div style="display: flex; gap: 6px; flex-wrap: wrap">
-                <button v-if="j.source === 'web' && ['submitted','queued','printing','completed','failed'].includes(j.status)" class="btn btn-ghost btn-sm" @click="openJobFile(j.id)">查看文件</button>
-                <button v-if="['pending','converting','submitted','queued','printing','held','paused'].includes(j.status)" class="btn btn-ghost btn-sm" @click="act(j, 'cancel')">取消</button>
-                <button v-if="['failed','cancelled'].includes(j.status) && j.source === 'web'" class="btn btn-ghost btn-sm" @click="act(j, 'retry')">重试</button>
-                <button v-if="j.cups_job_id && ['queued','printing'].includes(j.status)" class="btn btn-ghost btn-sm" @click="act(j, 'hold')">暂停</button>
-                <button v-if="j.cups_job_id && j.status === 'paused'" class="btn btn-ghost btn-sm" @click="act(j, 'release')">恢复</button>
-                <button v-if="j.cups_job_id && ['failed','completed'].includes(j.status)" class="btn btn-ghost btn-sm" @click="act(j, 'restart')">重新打印</button>
+                <button class="btn btn-ghost btn-sm" :class="{ 'is-hidden': !canFile(j) }" :disabled="!canFile(j)" @click="openJobFile(j.id)">查看文件</button>
+                <button class="btn btn-ghost btn-sm" :class="{ 'is-hidden': !canCancel(j) }" :disabled="!canCancel(j)" @click="act(j, 'cancel')">取消</button>
+                <button class="btn btn-ghost btn-sm" :class="{ 'is-hidden': !canRetry(j) }" :disabled="!canRetry(j)" @click="act(j, 'retry')">重试</button>
+                <button class="btn btn-ghost btn-sm" :class="{ 'is-hidden': !canHold(j) }" :disabled="!canHold(j)" @click="act(j, 'hold')">暂停</button>
+                <button class="btn btn-ghost btn-sm" :class="{ 'is-hidden': !canRelease(j) }" :disabled="!canRelease(j)" @click="act(j, 'release')">恢复</button>
+                <button class="btn btn-ghost btn-sm" :class="{ 'is-hidden': !canRestart(j) }" :disabled="!canRestart(j)" @click="act(j, 'restart')">重新打印</button>
               </div>
             </td>
           </tr>

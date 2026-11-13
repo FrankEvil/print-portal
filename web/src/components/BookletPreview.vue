@@ -55,9 +55,12 @@ async function render() {
   if (!element || !doc || !sheet) return
   const width = 1200
   const height = Math.max(1, Math.round(width * props.paperHeightMm / props.paperWidthMm))
-  element.width = width
-  element.height = height
-  const ctx = element.getContext('2d')
+  // Draw the whole sheet on an offscreen canvas first; the visible canvas is
+  // only touched once, at the very end, so its previous content never blanks.
+  const offscreen = document.createElement('canvas')
+  offscreen.width = width
+  offscreen.height = height
+  const ctx = offscreen.getContext('2d')
   if (!ctx) return
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, width, height)
@@ -88,18 +91,19 @@ async function render() {
     }
     try {
       const page = await doc.getPage(pageNo)
-      const viewport = page.getViewport({ scale: 1 })
-      const offscreen = document.createElement('canvas')
-      offscreen.width = Math.max(1, Math.floor(viewport.width))
-      offscreen.height = Math.max(1, Math.floor(viewport.height))
-      const offCtx = offscreen.getContext('2d')
-      if (!offCtx) continue
-      await page.render({ canvasContext: offCtx, viewport }).promise
       if (token !== renderToken) return
-      const scale = Math.min(slotW / offscreen.width, slotH / offscreen.height)
-      const drawW = Math.floor(offscreen.width * scale)
-      const drawH = Math.floor(offscreen.height * scale)
-      ctx.drawImage(offscreen, x + Math.floor((slotW - drawW) / 2), margin + Math.floor((slotH - drawH) / 2), drawW, drawH)
+      const viewport = page.getViewport({ scale: 1 })
+      const pageCanvas = document.createElement('canvas')
+      pageCanvas.width = Math.max(1, Math.floor(viewport.width))
+      pageCanvas.height = Math.max(1, Math.floor(viewport.height))
+      const pageCtx = pageCanvas.getContext('2d')
+      if (!pageCtx) continue
+      await page.render({ canvasContext: pageCtx, viewport }).promise
+      if (token !== renderToken) return
+      const scale = Math.min(slotW / pageCanvas.width, slotH / pageCanvas.height)
+      const drawW = Math.floor(pageCanvas.width * scale)
+      const drawH = Math.floor(pageCanvas.height * scale)
+      ctx.drawImage(pageCanvas, x + Math.floor((slotW - drawW) / 2), margin + Math.floor((slotH - drawH) / 2), drawW, drawH)
       if (props.sheetIndex === 0 && props.side === 'front' && index === 1) {
         drawBadge(ctx, '封面', x, margin, slotW, '#dcfce7', '#15803d')
       } else if (props.sheetIndex === props.totalSheets - 1 && props.side === 'back' && index === 0) {
@@ -117,6 +121,12 @@ async function render() {
   ctx.moveTo(width / 2, margin)
   ctx.lineTo(width / 2, height - margin)
   ctx.stroke()
+  if (token !== renderToken) return
+  element.width = width
+  element.height = height
+  const displayCtx = element.getContext('2d')
+  if (!displayCtx) return
+  displayCtx.drawImage(offscreen, 0, 0)
 }
 </script>
 

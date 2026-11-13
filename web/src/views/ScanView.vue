@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api, apiUrl } from '../api'
 import { toast } from '../toast'
+import { mergeArray } from '../utils/refresh'
 import type { ScanJob, Scanner } from '../types'
 import StatusBadge from '../components/StatusBadge.vue'
 
@@ -21,7 +22,7 @@ async function discover() {
   loading.value = true
   try {
     const res = await api.get<{ scanners: Scanner[] }>('/api/scanners')
-    scanners.value = res.scanners || []
+    scanners.value = mergeArray(scanners.value, res.scanners || [], { force: true })
     if (!selected.value && scanners.value.length) selected.value = scanners.value[0].uri
     toast.success(`发现 ${scanners.value.length} 台扫描仪`)
   } catch (e) {

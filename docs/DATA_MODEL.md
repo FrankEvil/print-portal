@@ -21,6 +21,7 @@ CREATE TABLE printers (
   raw_queue     TEXT NOT NULL,
   device_uri    TEXT NOT NULL,
   ppd_file      TEXT NOT NULL DEFAULT '',
+  ipp_user      TEXT NOT NULL DEFAULT '', -- 提交 IPP 作业时的 requesting-user-name
   is_default    INTEGER NOT NULL DEFAULT 0,
   is_shared     INTEGER NOT NULL DEFAULT 1, -- 允许局域网访问（IPP 网关）
   allow_discovery INTEGER NOT NULL DEFAULT 0, -- 允许通过 mDNS/DNS-SD 发现
@@ -28,6 +29,8 @@ CREATE TABLE printers (
   updated_at    TEXT NOT NULL
 );
 ```
+
+`ipp_user` 为提交作业时传给 `lp -U` 的用户名。macOS 共享打印机等按用户 ACL 限制打印的设备需要填写目标机器上的允许账户名，留空则使用 CUPS 默认（root），该类打印机任务会被 hold 在「排队中」。USB 直连打印机留空即可。
 
 `is_shared` 表示是否允许局域网客户端通过 IPP 网关访问；`allow_discovery` 表示是否允许 CUPS/DNS-SD 广播发现。两者都开启时局域网才能自动发现并访问；关闭访问会自动关闭发现。
 

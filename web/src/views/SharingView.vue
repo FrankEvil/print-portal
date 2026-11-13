@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
 import { toast } from '../toast'
+import { mergeObject } from '../utils/refresh'
 import type { SharingInfo, SharingPrinter } from '../types'
 import StatusBadge from '../components/StatusBadge.vue'
 
@@ -20,9 +21,9 @@ async function load() {
   loading.value = true
   try {
     const res = await api.get<SharingInfo>('/api/admin/sharing')
-    info.value = res
+    info.value = mergeObject(info.value, res)
     authMode.value = res.auth_mode || 'token'
-    settings.value = { public_host: res.public_host, cups_port: res.cups_port, web_port: res.web_port }
+    settings.value = mergeObject(settings.value, { public_host: res.public_host, cups_port: res.cups_port, web_port: res.web_port })
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -72,6 +73,7 @@ async function saveSharing(p: SharingPrinter, access: boolean, discovery: boolea
     ppd_queue: p.ppd_queue,
     raw_queue: p.raw_queue,
     device_uri: p.device_uri,
+    ipp_user: p.ipp_user || '',
     is_default: p.is_default,
     is_shared: access,
     allow_discovery: discovery && access,

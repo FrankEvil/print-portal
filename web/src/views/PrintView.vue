@@ -3,10 +3,11 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { TrimApp } from '@trimjs/web-app'
-import { adminToken, api, apiUrl } from '../api'
+import { adminToken, api, apiUrl, ApiRequestError } from '../api'
 import { toast } from '../toast'
 import type { Job, LayoutGeometry, PaperArea, PPDOption, Printer } from '../types'
 import { formatJobParams } from '../jobDisplay'
+import { mergeById, createPoller, type TaskOptions } from '../utils/refresh'
 import StatusBadge from '../components/StatusBadge.vue'
 import IdCardPrintPanel from '../components/IdCardPrintPanel.vue'
 import InvoicePrintPanel from '../components/InvoicePrintPanel.vue'
@@ -61,8 +62,6 @@ const layout = ref({
   reverse: false,
   flip_horizontal: false,
 })
-
-let pollTimer: number | undefined
 
 const nasName = computed(() => nasPath.value.split(/[\\/]/).pop() || '')
 const nasPreviewUrl = computed(() => nasPath.value ? apiUrl(`/api/nas/preview?path=${encodeURIComponent(nasPath.value)}`) : '')
@@ -571,15 +570,29 @@ async function buildPreview(): Promise<void> {
     previewProgress.value = { done: 0, total: 0, stage: '正在计算版面' }
     const geometry = await fetchGeometry(count, aspect)
     if (token !== previewBuildToken) return
-    clearSheets()
-    previewGeometry.value = geometry
+    // Double buffer: the previous sheets stay on screen until every new sheet
+    // is rendered, then geometry and URLs are swapped in one update.
+    const nextUrls: Record<number, string> = {}
     previewProgress.value = { done: 0, total: geometry.sheets.length, stage: '正在渲染版面预览' }
     for (let index = 0; index < geometry.sheets.length; index++) {
-      if (token !== previewBuildToken) return
+      if (token !== previewBuildToken) {
+        for (const url of Object.values(nextUrls)) URL.revokeObjectURL(url)
+        return
+      }
       const blob = await drawSheet(doc, geometry, index)
       if (!blob) continue
-      previewSheetUrls.value = { ...previewSheetUrls.value, [index]: URL.createObjectURL(blob) }
+      nextUrls[index] = URL.createObjectURL(blob)
       previewProgress.value = { done: index + 1, total: geometry.sheets.length, stage: '正在渲染版面预览' }
+    }
+    if (token !== previewBuildToken) {
+      for (const url of Object.values(nextUrls)) URL.revokeObjectURL(url)
+      return
+    }
+    const previousUrls = previewSheetUrls.value
+    previewSheetUrls.value = nextUrls
+    previewGeometry.value = geometry
+    for (const url of Object.values(previousUrls)) {
+      if (url.startsWith('blob:')) URL.revokeObjectURL(url)
     }
   } catch (e) {
     if (token !== previewBuildToken) return
@@ -713,26 +726,38 @@ async function loadPrinters() {
   }
 }
 
-async function loadJobs() {
+const JOBS_ACTIVE_STATUSES = ['pending', 'converting', 'submitted', 'queued', 'printing', 'held', 'paused']
+
+async function loadJobs(opts: TaskOptions = { quiet: false, force: true }) {
   try {
     const res = await api.get<{ jobs: Job[] }>('/api/jobs?limit=8')
-    jobs.value = res.jobs
-    syncPolling()
-  } catch {
-    /* silent */
+    jobs.value = mergeById(jobs.value, res.jobs || [], { force: opts.force })
+    jobsPoller.sync()
+  } catch (e) {
+    if (!opts.quiet) toast.error((e as Error).message)
+    throw e
   }
 }
 
-function syncPolling() {
-  const active = jobs.value.some((j) =>
-    ['pending', 'converting', 'submitted', 'queued', 'printing', 'held', 'paused'].includes(j.status),
-  )
-  if (active && !pollTimer) pollTimer = window.setInterval(loadJobs, 2000)
-  if (!active && pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = undefined
-  }
+const jobsPoller = createPoller(loadJobs, {
+  interval: 5000,
+  activeWhen: () => jobs.value.some((j) => JOBS_ACTIVE_STATUSES.includes(j.status)),
+})
+
+function refreshJobs() {
+  jobsPoller.refresh()
 }
+
+function canViewJobFile(j: Job) {
+  return j.source === 'web' && ['submitted', 'queued', 'printing', 'completed', 'failed'].includes(j.status)
+}
+function canCancelJob(j: Job) {
+  return ['pending', 'converting', 'submitted', 'queued', 'printing', 'held', 'paused'].includes(j.status)
+}
+function canRetryJob(j: Job) {
+  return ['failed', 'cancelled'].includes(j.status) && j.source === 'web'
+}
+
 
 async function setFile(f: File | null) {
   previewSessionId = ''
@@ -859,21 +884,35 @@ async function submit() {
         layout_options: JSON.stringify(layoutOptionsPayload.value),
       })
     } else {
-      const fd = new FormData()
-      // Reuse the document already uploaded for the preview: on a slow link
-      // re-uploading tens of megabytes would delay printing by minutes.
-      if (previewSessionId) fd.append('preview_id', previewSessionId)
-      else fd.append('file', file.value!)
-      fd.append('printer_id', String(selectedPrinter.value))
-      for (const [k, v] of Object.entries(form.value)) fd.append(k, String(v))
-      fd.append('ppd_options', JSON.stringify(extraPPDOptions.value))
-      fd.append('layout_options', JSON.stringify(layoutOptionsPayload.value))
-      res = await api.upload<{ job_id: number; printer: string }>('/api/print', fd)
+      const makeForm = () => {
+        const fd = new FormData()
+        // Reuse the document already uploaded for the preview: on a slow link
+        // re-uploading tens of megabytes would delay printing by minutes.
+        if (previewSessionId) fd.append('preview_id', previewSessionId)
+        else fd.append('file', file.value!)
+        fd.append('printer_id', String(selectedPrinter.value))
+        for (const [k, v] of Object.entries(form.value)) fd.append(k, String(v))
+        fd.append('ppd_options', JSON.stringify(extraPPDOptions.value))
+        fd.append('layout_options', JSON.stringify(layoutOptionsPayload.value))
+        return fd
+      }
+      try {
+        res = await api.upload<{ job_id: number; printer: string }>('/api/print', makeForm())
+      } catch (e) {
+        // The preview cache can expire while the file is still on screen.
+        // Fall back to uploading the original file once, then continue.
+        if (file.value && e instanceof ApiRequestError && e.code === 'preview_not_found') {
+          previewSessionId = ''
+          res = await api.upload<{ job_id: number; printer: string }>('/api/print', makeForm())
+        } else {
+          throw e
+        }
+      }
     }
     toast.success(`已提交打印任务 #${res.job_id}（${res.printer}）`)
-    await setFile(null)
-    nasPath.value = ''
-    await loadJobs()
+    // Keep the selected file and its preview: users often print the same
+    // document again with different settings. They can clear it with the × button.
+    refreshJobs()
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -889,7 +928,7 @@ async function cancelJob(id: number) {
   try {
     await api.del(`/api/jobs/${id}`)
     toast.success(`任务 #${id} 已取消`)
-    await loadJobs()
+    refreshJobs()
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -899,7 +938,7 @@ async function retryJob(id: number) {
   try {
     const res = await api.post<{ job_id: number }>(`/api/jobs/${id}/retry`)
     toast.success(`已重新提交为任务 #${res.job_id}`)
-    await loadJobs()
+    refreshJobs()
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -924,11 +963,12 @@ onMounted(async () => {
   await loadAuthMode()
   await loadPrinters()
   await loadPPDOptions()
-  await loadJobs()
+  jobsPoller.refresh()
+  jobsPoller.start()
 })
 
 onUnmounted(() => {
-  if (pollTimer) clearInterval(pollTimer)
+  jobsPoller.stop()
   if (previewTimer) clearTimeout(previewTimer)
   previewAbort?.abort()
   if (fileUrl.value) URL.revokeObjectURL(fileUrl.value)
@@ -1018,6 +1058,7 @@ onUnmounted(() => {
               </label>
               <div v-else class="pdf-sheet-label">第 {{ sheet.index + 1 }} 张（共 {{ previewSheets.length }} 张）</div>
             </div>
+            <div v-if="previewLoading && previewSheets.length" class="preview-refresh-badge">更新中…</div>
             <div v-if="previewLoading && !previewSheets.length" class="preview-loading">
               <template v-if="previewProgress.stage === '正在上传文件'">
                 正在上传文件 {{ Math.round(uploadProgress * 100) }}%
@@ -1064,6 +1105,7 @@ onUnmounted(() => {
               </label>
               <div v-else class="pdf-sheet-label">第 {{ sheet.index + 1 }} 张（共 {{ previewSheets.length }} 张）</div>
             </div>
+            <div v-if="previewLoading && previewSheets.length" class="preview-refresh-badge">更新中…</div>
             <div v-if="previewLoading && !previewSheets.length" class="preview-loading">
               <template v-if="previewProgress.stage === '正在上传文件'">
                 正在上传文件 {{ Math.round(uploadProgress * 100) }}%
@@ -1242,10 +1284,10 @@ onUnmounted(() => {
         <p class="card-desc" style="text-align: center; margin-top: 10px">提交后即可离开，任务在后台排队处理</p>
       </section>
       </div>
-      <IdCardPrintPanel v-else-if="printMode === 'idcard'" :printers="printers" v-model:printer-id="selectedPrinter" :nas-enabled="authMode === 'fnos'" @submitted="loadJobs" />
-      <InvoicePrintPanel v-else-if="printMode === 'invoice'" :printers="printers" v-model:printer-id="selectedPrinter" :nas-enabled="authMode === 'fnos'" @submitted="loadJobs" />
-      <ImagePrintPanel v-else-if="printMode === 'photos'" :printers="printers" v-model:printer-id="selectedPrinter" :paper-choices="paperChoices" :paper-areas="paperAreas" :nas-enabled="authMode === 'fnos'" @submitted="loadJobs" />
-      <BookletPrintPanel v-else :printers="printers" v-model:printer-id="selectedPrinter" :paper-choices="paperChoices" :paper-areas="paperAreas" :duplex-supported="supportsDuplex" :nas-enabled="authMode === 'fnos'" @submitted="loadJobs" />
+      <IdCardPrintPanel v-else-if="printMode === 'idcard'" :printers="printers" v-model:printer-id="selectedPrinter" :nas-enabled="authMode === 'fnos'" @submitted="refreshJobs" />
+      <InvoicePrintPanel v-else-if="printMode === 'invoice'" :printers="printers" v-model:printer-id="selectedPrinter" :nas-enabled="authMode === 'fnos'" @submitted="refreshJobs" />
+      <ImagePrintPanel v-else-if="printMode === 'photos'" :printers="printers" v-model:printer-id="selectedPrinter" :paper-choices="paperChoices" :paper-areas="paperAreas" :nas-enabled="authMode === 'fnos'" @submitted="refreshJobs" />
+      <BookletPrintPanel v-else :printers="printers" v-model:printer-id="selectedPrinter" :paper-choices="paperChoices" :paper-areas="paperAreas" :duplex-supported="supportsDuplex" :nas-enabled="authMode === 'fnos'" @submitted="refreshJobs" />
     </template>
 
     <section class="card" style="margin-top: 20px">
@@ -1267,15 +1309,11 @@ onUnmounted(() => {
             <div class="job-sub">{{ formatTime(j.created_at) }}</div>
           </div>
           <StatusBadge :status="j.status" />
-          <button v-if="j.source === 'web' && ['submitted', 'queued', 'printing', 'completed', 'failed'].includes(j.status)" class="btn btn-ghost btn-sm" @click="openJobFile(j.id)">
-            查看文件
-          </button>
-          <button v-if="['pending', 'converting', 'submitted', 'queued', 'printing', 'held', 'paused'].includes(j.status)" class="btn btn-ghost btn-sm" @click="cancelJob(j.id)">
-            取消
-          </button>
-          <button v-if="['failed', 'cancelled'].includes(j.status) && j.source === 'web'" class="btn btn-ghost btn-sm" @click="retryJob(j.id)">
-            重试
-          </button>
+          <div class="job-actions">
+            <button class="btn btn-ghost btn-sm" :class="{ 'is-hidden': !canViewJobFile(j) }" :disabled="!canViewJobFile(j)" @click="openJobFile(j.id)">查看文件</button>
+            <button class="btn btn-ghost btn-sm" :class="{ 'is-hidden': !canCancelJob(j) }" :disabled="!canCancelJob(j)" @click="cancelJob(j.id)">取消</button>
+            <button class="btn btn-ghost btn-sm" :class="{ 'is-hidden': !canRetryJob(j) }" :disabled="!canRetryJob(j)" @click="retryJob(j.id)">重试</button>
+          </div>
         </div>
       </div>
     </section>

@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '../api'
 import { toast } from '../toast'
+import { mergeObject } from '../utils/refresh'
 import { applyTheme, getTheme, type ThemeMode } from '../theme'
 
 const settings = ref<Record<string, string>>({})
@@ -18,7 +19,8 @@ const fields: { key: string; label: string; type?: string; hint?: string }[] = [
 
 async function load() {
   try {
-    settings.value = await api.get('/api/admin/settings')
+    const data = await api.get<Record<string, string>>('/api/admin/settings')
+    settings.value = mergeObject(settings.value, data)
   } catch (e) {
     toast.error((e as Error).message)
   }

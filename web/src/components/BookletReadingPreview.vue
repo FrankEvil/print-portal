@@ -23,9 +23,12 @@ async function render() {
   if (!element || !doc) return
   const width = 1200
   const height = Math.max(1, Math.round(width * props.paperHeightMm / props.paperWidthMm))
-  element.width = width
-  element.height = height
-  const ctx = element.getContext('2d')
+  // Compose the spread offscreen and blit it once, keeping the visible
+  // canvas unchanged throughout the async page renders.
+  const offscreen = document.createElement('canvas')
+  offscreen.width = width
+  offscreen.height = height
+  const ctx = offscreen.getContext('2d')
   if (!ctx) return
   ctx.fillStyle = '#f8fafc'
   ctx.fillRect(0, 0, width, height)
@@ -49,18 +52,19 @@ async function render() {
     }
     try {
       const page = await doc.getPage(pageNo)
-      const viewport = page.getViewport({ scale: 1 })
-      const offscreen = document.createElement('canvas')
-      offscreen.width = Math.max(1, Math.floor(viewport.width))
-      offscreen.height = Math.max(1, Math.floor(viewport.height))
-      const offCtx = offscreen.getContext('2d')
-      if (!offCtx) continue
-      await page.render({ canvasContext: offCtx, viewport }).promise
       if (token !== renderToken) return
-      const scale = Math.min(slotW / offscreen.width, slotH / offscreen.height)
-      const drawW = Math.floor(offscreen.width * scale)
-      const drawH = Math.floor(offscreen.height * scale)
-      ctx.drawImage(offscreen, x + Math.floor((slotW - drawW) / 2), margin + Math.floor((slotH - drawH) / 2), drawW, drawH)
+      const viewport = page.getViewport({ scale: 1 })
+      const pageCanvas = document.createElement('canvas')
+      pageCanvas.width = Math.max(1, Math.floor(viewport.width))
+      pageCanvas.height = Math.max(1, Math.floor(viewport.height))
+      const pageCtx = pageCanvas.getContext('2d')
+      if (!pageCtx) continue
+      await page.render({ canvasContext: pageCtx, viewport }).promise
+      if (token !== renderToken) return
+      const scale = Math.min(slotW / pageCanvas.width, slotH / pageCanvas.height)
+      const drawW = Math.floor(pageCanvas.width * scale)
+      const drawH = Math.floor(pageCanvas.height * scale)
+      ctx.drawImage(pageCanvas, x + Math.floor((slotW - drawW) / 2), margin + Math.floor((slotH - drawH) / 2), drawW, drawH)
       ctx.save()
       ctx.font = '18px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif'
       ctx.fillStyle = '#94a3b8'
@@ -78,6 +82,12 @@ async function render() {
   ctx.moveTo(width / 2, margin)
   ctx.lineTo(width / 2, height - margin)
   ctx.stroke()
+  if (token !== renderToken) return
+  element.width = width
+  element.height = height
+  const displayCtx = element.getContext('2d')
+  if (!displayCtx) return
+  displayCtx.drawImage(offscreen, 0, 0)
 }
 </script>
 

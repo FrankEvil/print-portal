@@ -332,6 +332,10 @@ type PrintOptions struct {
 	Scaling      string
 	ExtraOptions map[string]string
 	Layout       layout.Options
+	// IPPUser is sent as the job's requesting-user-name. macOS shared printers
+	// enforce an ACL on this attribute; leaving it empty uses the CUPS default
+	// (root), which those printers reject with "Not allowed to print".
+	IPPUser string
 	// LaidOut reports that the PDF was produced by layout.Apply, so its page
 	// geometry already matches the target paper. Passing orientation or scaling
 	// to CUPS in that case would rotate or resize the content a second time.
@@ -341,6 +345,9 @@ type PrintOptions struct {
 // Submit sends a file to a CUPS queue and returns the CUPS job id.
 func (c *Client) Submit(ctx context.Context, queue, file string, opts PrintOptions) (string, error) {
 	args := []string{"-d", queue}
+	if user := strings.TrimSpace(opts.IPPUser); user != "" {
+		args = append(args, "-U", user)
+	}
 	if opts.PageRange != "" {
 		args = append(args, "-o", "page-ranges="+opts.PageRange)
 	}
@@ -387,8 +394,6 @@ func (c *Client) Submit(ctx context.Context, queue, file string, opts PrintOptio
 }
 
 var ErrNoPPD = errors.New("PPD not found")
-
-var ppdFilterRE = regexp.MustCompile(`(?m)^\*cupsFilter2?:\s+"([^"]+)"`)
 
 // PrintOptionArgsForTest exposes the option list so other packages can assert
 // which flags reach CUPS.
@@ -446,64 +451,45 @@ func printOptionArgs(opts PrintOptions) []string {
 // (outside CUPS' restricted filter user).
 func (c *Client) RenderToRaw(ctx context.Context, ppdQueue, src, dst string, opts PrintOptions) error {
 	ppdPath := filepath.Join("/etc/cups/ppd", ppdQueue+".ppd")
-	ppd, err := os.ReadFile(ppdPath)
-	if err != nil {
+	if _, err := os.Stat(ppdPath); err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("%w: %s", ErrNoPPD, ppdPath)
 		}
 		return fmt.Errorf("read PPD %s: %w", ppdPath, err)
 	}
-	m := ppdFilterRE.FindStringSubmatch(string(ppd))
-	if m == nil {
-		return fmt.Errorf("no cupsFilter found in PPD %s", ppdPath)
-	}
-	fields := strings.Fields(m[1])
-	if len(fields) == 0 {
-		return fmt.Errorf("empty cupsFilter in PPD %s", ppdPath)
-	}
-	filter := fields[len(fields)-1]
-	if !strings.HasPrefix(filter, "/") {
-		filter = filepath.Join("/usr/lib/cups/filter", filter)
-	}
 	optionList := printOptionArgs(opts)
 	if colorArgs := c.colorOptionArgs(ctx, ppdQueue, opts.ColorMode); len(colorArgs) > 0 {
 		optionList = append(optionList, colorArgs...)
 	}
-	cupsArgs := []string{"-p", ppdPath, "-m", "application/vnd.cups-raster"}
-	for _, opt := range optionList {
-		cupsArgs = append(cupsArgs, "-o", opt)
+	// Let cupsfilter run the whole PPD filter chain (pdftopdf -> gstoraster ->
+	// printer filter) instead of invoking the last filter by hand. Filters such
+	// as Epson's escpr-wrapper resolve their PPD through cupsGetPPD(), which
+	// needs the real queue name in PRINTER; a hand-rolled exec only has a PPD
+	// path and fails with "PPD file not found, or PPD file is broken".
+	// -d binds the chain to the actual CUPS queue so that lookup succeeds.
+	finalMIME := "printer/" + ppdQueue
+	buildArgs := func(withDest bool) []string {
+		args := []string{"-e"}
+		if withDest {
+			args = append(args, "-d", ppdQueue)
+		}
+		args = append(args, "-p", ppdPath, "-m", finalMIME)
+		for _, opt := range optionList {
+			args = append(args, "-o", opt)
+		}
+		return append(args, src)
 	}
-	cupsArgs = append(cupsArgs, src)
-	raster, stderr, err := c.runner.Run(ctx, "cupsfilter", cupsArgs...)
+	stream, stderr, err := c.runner.Run(ctx, "cupsfilter", buildArgs(true)...)
 	if err != nil {
-		return fmt.Errorf("cupsfilter: %s: %w", strings.TrimSpace(stderr), err)
+		// -d requires a live CUPS queue. Fall back to a local chain for PPDs
+		// whose filter does not need to resolve the queue (e.g. rastertobrlaser).
+		stream, stderr, err = c.runner.Run(ctx, "cupsfilter", buildArgs(false)...)
+		if err != nil {
+			return fmt.Errorf("cupsfilter: %s: %w", strings.TrimSpace(stderr), err)
+		}
 	}
-	tmp, err := os.CreateTemp("", "print-portal-raster-*.rast")
-	if err != nil {
+	if err := os.WriteFile(dst, []byte(stream), 0o644); err != nil {
 		return err
-	}
-	tmpPath := tmp.Name()
-	_ = tmp.Close()
-	defer os.Remove(tmpPath)
-	if err := os.WriteFile(tmpPath, []byte(raster), 0o600); err != nil {
-		return err
-	}
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	optionString := strings.Join(optionList, " ")
-	if optionString == "" {
-		optionString = "x"
-	}
-	cmd := exec.CommandContext(ctx, filter, "1", "root", "print-portal", "1", optionString, tmpPath)
-	cmd.Env = append(os.Environ(), "PPD="+ppdPath)
-	cmd.Stdout = out
-	var filterErr bytes.Buffer
-	cmd.Stderr = &filterErr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("printer filter %s: %s: %w", filter, strings.TrimSpace(filterErr.String()), err)
 	}
 	return nil
 }

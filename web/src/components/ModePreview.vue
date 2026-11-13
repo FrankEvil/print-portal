@@ -22,7 +22,7 @@ async function load() {
   const request = ++token
   loading.value = true
   error.value = ''
-  pages.value = []
+  // Keep the old pages on screen; `out` is only swapped in once fully rendered.
   try {
     if (doc) {
       await doc.destroy()
@@ -81,20 +81,26 @@ onUnmounted(() => {
 
 <template>
   <div class="mode-preview">
-    <div v-if="loading" class="mode-preview-state">正在生成预览…</div>
-    <div v-else-if="error" class="mode-preview-state error">{{ error }}</div>
-    <div v-else class="mode-preview-grid">
+    <div class="mode-preview-grid">
       <div v-for="page in pages" :key="page.index" class="mode-preview-page">
         <img :src="page.url" :alt="`第 ${page.index} 页预览`" />
         <div class="mode-preview-label">第 {{ page.index }} 页<template v-if="label"> · {{ label }}</template></div>
       </div>
     </div>
+    <div v-if="loading" class="mode-preview-state">
+      <span class="mode-preview-spinner" aria-hidden="true"></span>
+      <span>正在生成预览…</span>
+    </div>
+    <div v-else-if="error" class="mode-preview-state error">{{ error }}</div>
   </div>
 </template>
 
 <style scoped>
-.mode-preview-state { padding: 48px 20px; text-align: center; color: var(--text-3); font-size: 13px; }
+.mode-preview { position: relative; min-height: 88px; }
+.mode-preview-state { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 1; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 8px; background: rgba(255, 255, 255, .92); box-shadow: 0 2px 10px rgba(15, 23, 42, .14); text-align: center; color: var(--text-3); font-size: 13px; pointer-events: none; }
 .mode-preview-state.error { color: var(--danger); }
+.mode-preview-spinner { flex: none; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--text-3); border-radius: 50%; animation: mode-preview-spin .7s linear infinite; }
+@keyframes mode-preview-spin { to { transform: rotate(360deg); } }
 .mode-preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; }
 .mode-preview-page { background: #fff; border-radius: 10px; box-shadow: 0 4px 16px rgba(15, 23, 42, .1); padding: 10px; }
 .mode-preview-page img { width: 100%; display: block; border-radius: 3px; background: #fff; }

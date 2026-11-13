@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '../api'
 import { toast } from '../toast'
+import { mergeArray } from '../utils/refresh'
 
 const kind = ref<'app' | 'cups'>('app')
 const lines = ref<string[]>([])
@@ -13,10 +14,10 @@ async function load() {
   try {
     const res = await api.get<{ path: string; lines: string[] }>(`/api/admin/logs?kind=${kind.value}&lines=300`)
     path.value = res.path
-    lines.value = res.lines
+    lines.value = mergeArray(lines.value, res.lines || [], { force: true })
   } catch (e) {
     toast.error((e as Error).message)
-    lines.value = []
+    // Keep the previous log content: a failed refresh must not blank the view.
   } finally {
     loading.value = false
   }
@@ -47,6 +48,6 @@ onMounted(load)
       </div>
       <span class="admin-sub">{{ path }}</span>
     </div>
-    <pre style="margin: 0; padding: 16px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; max-height: 520px; overflow: auto; font-size: 12px; line-height: 1.6">{{ lines.join('\n') || '暂无日志' }}</pre>
+    <pre class="log-body" style="margin: 0; padding: 16px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; max-height: 520px; overflow: auto; font-size: 12px; line-height: 1.6">{{ lines.join('\n') || '暂无日志' }}</pre>
   </section>
 </template>

@@ -174,6 +174,7 @@ func (m *Manager) process(ctx context.Context, j *storage.Job) {
 		Scaling:      j.Scaling,
 		ExtraOptions: decodePPDOptions(j.PPDOptions),
 		Layout:       decodeLayoutOptions(j.LayoutOptions),
+		IPPUser:      printer.IPPUser,
 	}
 	opts.Layout.PaperSize = j.PaperSize
 	opts.Layout.Orientation = j.Orientation

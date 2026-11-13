@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '../api'
 import { toast } from '../toast'
+import { mergeById, mergeArray } from '../utils/refresh'
 import type { Driver, Model } from '../types'
 import StatusBadge from '../components/StatusBadge.vue'
 
@@ -16,7 +17,7 @@ async function load() {
   loading.value = true
   try {
     const res = await api.get<{ drivers: Driver[] }>('/api/admin/drivers')
-    drivers.value = res.drivers
+    drivers.value = mergeById(drivers.value, res.drivers || [], { force: true })
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -27,7 +28,7 @@ async function load() {
 async function searchModels() {
   try {
     const res = await api.get<{ models: Model[] }>(`/api/admin/drivers/models?q=${encodeURIComponent(query.value)}`)
-    models.value = res.models || []
+    models.value = mergeArray(models.value, res.models || [], { force: true })
   } catch (e) {
     toast.error((e as Error).message)
   }

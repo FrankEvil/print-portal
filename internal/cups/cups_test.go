@@ -210,3 +210,35 @@ func TestColorOptionArgsIgnoresMonoPrinter(t *testing.T) {
 		t.Fatalf("color args = %v, want none", got)
 	}
 }
+
+func TestSubmitIPPUser(t *testing.T) {
+	cases := []struct {
+		user string
+		want bool
+	}{
+		{"", false},
+		{"liuzhaojun", true},
+		{"  liuzhaojun  ", true},
+	}
+	for _, tc := range cases {
+		f := &fakeRunner{stdout: map[string]string{"lp": "request id is q-1 (1 file(s))"}}
+		c := NewClient(f, "")
+		_, err := c.Submit(context.Background(), "q", "/tmp/job.pdf", PrintOptions{IPPUser: tc.user})
+		if err != nil {
+			t.Fatalf("user=%q: %v", tc.user, err)
+		}
+		if len(f.calls) != 1 {
+			t.Fatalf("user=%q: %d calls", tc.user, len(f.calls))
+		}
+		args := f.calls[0]
+		found := false
+		for i := 0; i+1 < len(args); i++ {
+			if args[i] == "-U" && args[i+1] == "liuzhaojun" {
+				found = true
+			}
+		}
+		if found != tc.want {
+			t.Errorf("user=%q: -U present=%v, want %v; args=%v", tc.user, found, tc.want, args)
+		}
+	}
+}
